@@ -1,54 +1,84 @@
-import { View, StyleSheet, ViewStyle } from 'react-native';
-import { BlurView } from 'expo-blur';
-import { Colors, Radii } from '@/constants/theme';
+import { BlurView } from "expo-blur";
+import React from "react";
+import {
+  Image,
+  StyleSheet,
+  TouchableOpacity,
+  View,
+  ViewStyle,
+} from "react-native";
 
-interface GlassCardProps {
+export interface GlassCardProps {
   children: React.ReactNode;
   style?: ViewStyle;
-  intensity?: number;
-  dark?: boolean;
+  onPress?: () => void;
+  flex?: number;
+  minHeight?: number;
+  height?: number;
+  backgroundImageUri?: string;
+  noPadding?: boolean;
 }
 
 export function GlassCard({
   children,
   style,
-  intensity = 40,
-  dark = false,
+  onPress,
+  flex,
+  minHeight,
+  height,
+  backgroundImageUri,
+  noPadding = false,
 }: GlassCardProps) {
-  return (
-    <View style={[styles.wrapper, style]}>
-      <BlurView
-        intensity={intensity}
-        tint={dark ? 'dark' : 'light'}
-        style={StyleSheet.absoluteFill}
-      />
-      <View
-        style={[
-          styles.overlay,
-          {
-            backgroundColor: dark
-              ? Colors.glass.backgroundDark
-              : Colors.glass.background,
-            borderColor: dark
-              ? 'rgba(255,255,255,0.15)'
-              : Colors.glass.border,
-          },
-        ]}
-      />
-      {children}
-    </View>
+  const outerStyle: ViewStyle[] = [
+    styles.outer,
+    height !== undefined
+      ? { height }
+      : { flex: flex ?? 1, flexBasis: 0, minHeight: minHeight ?? 130 },
+    ...(style ? [style] : []),
+  ];
+
+  const content = (
+    <>
+      {backgroundImageUri && (
+        <Image
+          source={{ uri: backgroundImageUri }}
+          style={[StyleSheet.absoluteFill, { opacity: 0.55 }]}
+          resizeMode="cover"
+        />
+      )}
+      <BlurView intensity={20} tint="light" style={StyleSheet.absoluteFill} />
+      <View style={noPadding ? styles.fillNoPadding : styles.fill}>
+        {children}
+      </View>
+    </>
   );
+
+  if (onPress) {
+    return (
+      <TouchableOpacity style={outerStyle} onPress={onPress} activeOpacity={0.85}>
+        {content}
+      </TouchableOpacity>
+    );
+  }
+
+  return <View style={outerStyle}>{content}</View>;
 }
 
 const styles = StyleSheet.create({
-  wrapper: {
-    borderRadius: Radii.lg,
-    overflow: 'hidden',
+  outer: {
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: Colors.glass.border,
+    borderColor: '#FFFFFF',
+    overflow: 'hidden',
   },
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    borderRadius: Radii.lg,
+  fill: {
+    flex: 1,
+    padding: 16,
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(255,255,255,0.35)',
+  },
+  fillNoPadding: {
+    flex: 1,
+    backgroundColor: 'rgba(255,255,255,0.35)',
   },
 });

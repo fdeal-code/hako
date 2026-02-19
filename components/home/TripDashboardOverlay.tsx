@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -21,8 +21,10 @@ import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import MapView, { Marker } from "react-native-maps";
 
-import { Spacing, Radii, Shadows } from '@/constants/theme';
+import { Spacing } from '@/constants/theme';
+import { GlassCard } from '@/components/ui/GlassCard';
 import { NavButton } from '@/components/ui/NavButton';
 import { Trip } from '@/constants/types';
 
@@ -43,31 +45,6 @@ function formatDateLabel(start: string, end: string): string {
     return `${M[s.getMonth()]} ${s.getFullYear()}`;
   }
   return `${M[s.getMonth()]} – ${M[e.getMonth()]} ${e.getFullYear()}`;
-}
-
-/* ─── GlassCard ──────────────────────────────────────────────── */
-function GlassCard({
-  children,
-  onPress,
-  flex = 1,
-  minHeight = 130,
-}: {
-  children: React.ReactNode;
-  onPress?: () => void;
-  flex?: number;
-  minHeight?: number;
-}) {
-  return (
-    <TouchableOpacity
-      style={[styles.glassWrap, { flex, minHeight }]}
-      onPress={onPress}
-      activeOpacity={0.85}
-    >
-      <BlurView intensity={45} tint="light" style={StyleSheet.absoluteFill} />
-      <View style={styles.cardGlassOverlay} />
-      <View style={styles.cardContent}>{children}</View>
-    </TouchableOpacity>
-  );
 }
 
 /* ─── TripDashboardOverlay ───────────────────────────────────── */
@@ -166,7 +143,11 @@ export function TripDashboardOverlay({
                         zIndex: 10 - i,
                       },
                     ]}
-                  />
+                  >
+                    {m.user.avatar_url && (
+                      <Image source={{ uri: m.user.avatar_url }} style={styles.avatarImg} />
+                    )}
+                  </View>
                 ))}
                 <TouchableOpacity style={styles.addMemberBtn} activeOpacity={0.8}>
                   <Ionicons name="add" size={13} color="#fff" />
@@ -188,7 +169,7 @@ export function TripDashboardOverlay({
               {/* Row 1 : Documents + Planning */}
               <View style={styles.row}>
                 <GlassCard
-                  flex={1.5}
+                  flex={1}
                   minHeight={140}
                   onPress={() => router.push(`/trip/${trip.id}/documents`)}
                 >
@@ -217,58 +198,39 @@ export function TripDashboardOverlay({
               </View>
 
               {/* Row 2 : Map */}
-              <TouchableOpacity
-                style={styles.mapCard}
-                onPress={() => router.push(`/trip/${trip.id}/map`)}
-                activeOpacity={0.85}
-              >
-                <BlurView intensity={35} tint="light" style={StyleSheet.absoluteFill} />
-                <View style={styles.cardGlassOverlay} />
-                <View style={styles.mapGrid}>
-                  {[...Array(4)].map((_, i) => (
-                    <View
-                      key={`h${i}`}
-                      style={[styles.mapLine, { top: `${25 * (i + 1)}%` as any, width: '100%', height: 1 }]}
-                    />
-                  ))}
-                  {[...Array(5)].map((_, i) => (
-                    <View
-                      key={`v${i}`}
-                      style={[styles.mapLine, { left: `${20 * (i + 1)}%` as any, height: '100%', width: 1 }]}
-                    />
-                  ))}
-                  <View style={styles.mapRoad1} />
-                  <View style={styles.mapRoad2} />
-                </View>
-                <View style={styles.mapPinWrap}>
-                  <View style={styles.mapPinShadow} />
-                  <Ionicons name="location" size={30} color="#E8453C" />
-                </View>
+              <GlassCard height={145} noPadding onPress={() => router.push(`/trip/${trip.id}/map`)}>
+                <MapView
+                  style={StyleSheet.absoluteFill}
+                  initialRegion={{
+                    latitude: 41.9028,
+                    longitude: 12.4964,
+                    latitudeDelta: 0.5,
+                    longitudeDelta: 0.5,
+                  }}
+                  scrollEnabled={false}
+                  zoomEnabled={false}
+                  rotateEnabled={false}
+                  pitchEnabled={false}
+                >
+                  <Marker coordinate={{ latitude: 41.9028, longitude: 12.4964 }} />
+                </MapView>
                 <View style={styles.mapLabelWrap}>
                   <Ionicons name="map-outline" size={12} color="rgba(255,255,255,0.7)" />
                   <Text style={styles.mapLabel}>Rome, Italie</Text>
                 </View>
-              </TouchableOpacity>
+              </GlassCard>
 
               {/* Row 3 : Envies + Budget */}
               <View style={styles.row}>
-                <TouchableOpacity
-                  style={[styles.glassWrap, { flex: 1, minHeight: 115 }]}
+                <GlassCard
+                  flex={1}
+                  minHeight={115}
+                  backgroundImageUri={ENVIE_IMG}
                   onPress={() => router.push(`/trip/${trip.id}/envies`)}
-                  activeOpacity={0.85}
                 >
-                  <Image
-                    source={{ uri: ENVIE_IMG }}
-                    style={[StyleSheet.absoluteFill, { borderRadius: Radii.lg, opacity: 0.45 }]}
-                    resizeMode="cover"
-                  />
-                  <BlurView intensity={20} tint="light" style={StyleSheet.absoluteFill} />
-                  <View style={[styles.cardGlassOverlay, { backgroundColor: 'rgba(255,255,255,0.08)' }]} />
-                  <View style={styles.cardContent}>
-                    <Text style={styles.cardTitle}>VOS ENVIES</Text>
-                    <Text style={styles.enviesEmpty}>Espace vide</Text>
-                  </View>
-                </TouchableOpacity>
+                  <Text style={styles.cardTitle}>VOS ENVIES</Text>
+                  <Text style={styles.enviesEmpty}>Espace vide</Text>
+                </GlassCard>
 
                 <GlassCard
                   flex={1}
@@ -373,6 +335,11 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 2,
     borderColor: '#fff',
+    overflow: 'hidden',
+  },
+  avatarImg: {
+    width: '100%',
+    height: '100%',
   },
   addMemberBtn: {
     width: 32,
@@ -397,27 +364,11 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
   },
 
-  /* Glass card base */
-  glassWrap: {
-    borderRadius: Radii.lg,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.32)',
-    ...Shadows.md,
-  },
-  cardGlassOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(255,255,255,0.13)',
-  },
-  cardContent: {
-    padding: Spacing.md,
-    flex: 1,
-    justifyContent: 'space-between',
-  },
+  /* Card text styles */
   cardTitle: {
     fontSize: 12,
-    fontWeight: '800',
-    color: '#fff',
+    fontWeight: '700',
+    color: '#FFFFFF',
     letterSpacing: 0.8,
   },
   cardTitleRow: {
@@ -444,68 +395,20 @@ const styles = StyleSheet.create({
   },
   docText: {
     fontSize: 12,
-    color: 'rgba(255,255,255,0.82)',
+    color: '#FFFFFF',
     fontWeight: '500',
   },
 
   /* Planning */
   planningInfo: {
     fontSize: 13,
-    color: 'rgba(255,255,255,0.88)',
+    color: '#FFFFFF',
     fontWeight: '600',
     lineHeight: 20,
     marginTop: Spacing.sm,
   },
 
   /* Map */
-  mapCard: {
-    height: 145,
-    borderRadius: Radii.lg,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.32)',
-    ...Shadows.md,
-  },
-  mapGrid: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(140,185,170,0.30)',
-  },
-  mapLine: {
-    position: 'absolute',
-    backgroundColor: 'rgba(255,255,255,0.18)',
-  },
-  mapRoad1: {
-    position: 'absolute',
-    top: '45%',
-    left: 0,
-    right: 0,
-    height: 3,
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    borderRadius: 2,
-  },
-  mapRoad2: {
-    position: 'absolute',
-    left: '38%',
-    top: 0,
-    bottom: 0,
-    width: 3,
-    backgroundColor: 'rgba(255,255,255,0.20)',
-    borderRadius: 2,
-  },
-  mapPinWrap: {
-    position: 'absolute',
-    top: '28%',
-    left: '40%',
-    alignItems: 'center',
-  },
-  mapPinShadow: {
-    position: 'absolute',
-    bottom: -2,
-    width: 10,
-    height: 5,
-    borderRadius: 5,
-    backgroundColor: 'rgba(0,0,0,0.25)',
-  },
   mapLabelWrap: {
     position: 'absolute',
     bottom: 10,
@@ -519,7 +422,7 @@ const styles = StyleSheet.create({
     borderRadius: 9999,
   },
   mapLabel: {
-    color: 'rgba(255,255,255,0.85)',
+    color: '#FFFFFF',
     fontSize: 11,
     fontWeight: '600',
   },
@@ -527,7 +430,7 @@ const styles = StyleSheet.create({
   /* Envies */
   enviesEmpty: {
     fontSize: 12,
-    color: 'rgba(255,255,255,0.55)',
+    color: '#FFFFFF',
     fontStyle: 'italic',
     marginTop: Spacing.xs,
   },
@@ -547,7 +450,7 @@ const styles = StyleSheet.create({
   },
   budgetSub: {
     fontSize: 10,
-    color: 'rgba(255,255,255,0.60)',
+    color: '#FFFFFF',
     textAlign: 'center',
     fontWeight: '500',
   },
