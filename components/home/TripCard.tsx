@@ -1,7 +1,7 @@
+import { useRef } from 'react';
 import MaskedView from '@react-native-masked-view/masked-view';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated, {
   Easing,
@@ -12,6 +12,7 @@ import Animated, {
 
 import { Colors } from '@/constants/theme';
 import { Trip } from '@/constants/types';
+import { CardLayout } from './ExpandedDashboard';
 
 /* ─── Tokens ─────────────────────────────────────────────────── */
 const BADGE_COLORS: [string, string] = [
@@ -53,14 +54,22 @@ function Badge({ label }: { label: string }) {
 }
 
 /* ─── TripCard ───────────────────────────────────────────────── */
-export function TripCard({ trip }: { trip: Trip }) {
+export function TripCard({
+  trip,
+  onExpand,
+}: {
+  trip: Trip;
+  onExpand: (layout: CardLayout) => void;
+}) {
   const dateLabel = formatDateLabel(trip.start_date, trip.end_date);
   const isNext    = trip.status === 'future';
   const members   = trip.members.slice(0, 3);
 
-  const cardScale      = useSharedValue(1);
+  /* ref sur la View native pour mesurer la position écran */
+  const cardRef = useRef<View>(null);
+
+  const cardScale       = useSharedValue(1);
   const elementsOpacity = useSharedValue(1);
-  const darkOpacity    = useSharedValue(0);
 
   const cardStyle = useAnimatedStyle(() => ({
     transform: [{ scale: cardScale.value }],
@@ -68,100 +77,89 @@ export function TripCard({ trip }: { trip: Trip }) {
   const elementsStyle = useAnimatedStyle(() => ({
     opacity: elementsOpacity.value,
   }));
-  const darkStyle = useAnimatedStyle(() => ({
-    opacity: darkOpacity.value,
-  }));
 
   const handlePress = () => {
-    /* Fade out badges / avatars */
-    elementsOpacity.value = withTiming(0, { duration: 200 });
+    /* Feedback tactile : légère scale + fade des badges */
+    elementsOpacity.value = withTiming(0, { duration: 180 });
+    cardScale.value = withTiming(1.04, { duration: 220, easing: PRESS_EASING });
 
-    /* Scale card up + fade to black */
-    cardScale.value   = withTiming(1.1, { duration: 300, easing: PRESS_EASING });
-    darkOpacity.value = withTiming(1,   { duration: 300 });
-
-    /* Navigate after animation is mostly done, then reset */
-    setTimeout(() => {
-      router.push(`/trip/${trip.id}/dashboard`);
-      cardScale.value      = 1;
-      darkOpacity.value    = 0;
-      elementsOpacity.value = 1;
-    }, 280);
+    /* Mesure la position de la card sur l'écran puis ouvre l'overlay */
+    cardRef.current?.measureInWindow((x, y, width, height) => {
+      onExpand({ x, y, width, height });
+      /* Reset après que l'overlay couvre la card */
+      setTimeout(() => {
+        cardScale.value       = 1;
+        elementsOpacity.value = 1;
+      }, 300);
+    });
   };
 
   return (
-    <Animated.View style={[styles.card, cardStyle]}>
-      <TouchableOpacity onPress={handlePress} activeOpacity={1} style={StyleSheet.absoluteFill}>
+    /* View native pour measureInWindow */
+    <View ref={cardRef}>
+      <Animated.View style={[styles.card, cardStyle]}>
+        <TouchableOpacity onPress={handlePress} activeOpacity={1} style={StyleSheet.absoluteFill}>
 
-        {/* Cover image */}
-        <Image
-          source={
-            trip.cover_url
-              ? { uri: trip.cover_url }
-              : require('@/assets/images/icon.png')
-          }
-          style={StyleSheet.absoluteFill}
-          resizeMode="cover"
-        />
+          {/* Cover image */}
+          <Image
+            source={
+              trip.cover_url
+                ? { uri: trip.cover_url }
+                : require('@/assets/images/icon.png')
+            }
+            style={StyleSheet.absoluteFill}
+            resizeMode="cover"
+          />
 
-        {/* Fading elements : overlay, badges, destination, avatars */}
-        <Animated.View style={[StyleSheet.absoluteFill, elementsStyle]}>
-          <View style={styles.overlay} />
+          {/* Badges, destination, avatars — fondent lors du press */}
+          <Animated.View style={[StyleSheet.absoluteFill, elementsStyle]}>
+            <View style={styles.overlay} />
+            <View style={styles.content}>
+              <View style={styles.topRow}>
+                {isNext && <Badge label="Prochain voyage" />}
+                <View style={{ flex: 1 }} />
+                <Badge label={dateLabel} />
+              </View>
 
-          <View style={styles.content}>
-            {/* Badges haut */}
-            <View style={styles.topRow}>
-              {isNext && <Badge label="Prochain voyage" />}
               <View style={{ flex: 1 }} />
-              <Badge label={dateLabel} />
+
+              <MaskedView
+                style={styles.destinationMask}
+                maskElement={
+                  <LinearGradient
+                    colors={DEST_GRADIENT}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 0, y: 1 }}
+                    style={StyleSheet.absoluteFill}
+                  />
+                }
+              >
+                <Text style={styles.destination} adjustsFontSizeToFit numberOfLines={1}>
+                  {trip.destination.toUpperCase()}
+                </Text>
+              </MaskedView>
+
+              <View style={styles.avatarsRow}>
+                {members.map((m, i) => (
+                  <View
+                    key={m.user_id}
+                    style={[
+                      styles.avatar,
+                      {
+                        marginLeft: i > 0 ? -10 : 0,
+                        zIndex: members.length - i,
+                        backgroundColor: AVATAR_BG[i % AVATAR_BG.length],
+                      },
+                    ]}
+                  />
+                ))}
+              </View>
             </View>
+          </Animated.View>
 
-            <View style={{ flex: 1 }} />
-
-            {/* Destination avec gradient fade top → bottom */}
-            <MaskedView
-              style={styles.destinationMask}
-              maskElement={
-                <LinearGradient
-                  colors={DEST_GRADIENT}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 0, y: 1 }}
-                  style={StyleSheet.absoluteFill}
-                />
-              }
-            >
-              <Text style={styles.destination} adjustsFontSizeToFit numberOfLines={1}>
-                {trip.destination.toUpperCase()}
-              </Text>
-            </MaskedView>
-
-            {/* Avatars bas-gauche */}
-            <View style={styles.avatarsRow}>
-              {members.map((m, i) => (
-                <View
-                  key={m.user_id}
-                  style={[
-                    styles.avatar,
-                    {
-                      marginLeft: i > 0 ? -10 : 0,
-                      zIndex: members.length - i,
-                      backgroundColor: AVATAR_BG[i % AVATAR_BG.length],
-                    },
-                  ]}
-                />
-              ))}
-            </View>
-          </View>
-        </Animated.View>
-
-        {/* Overlay noir pour la transition — s'anime de transparent à opaque */}
-        <Animated.View
-          style={[StyleSheet.absoluteFill, styles.darkOverlay, darkStyle]}
-          pointerEvents="none"
-        />
-
-      </TouchableOpacity>
-    </Animated.View>
+        </TouchableOpacity>
+      </Animated.View>
+    </View>
   );
 }
 
@@ -181,18 +179,8 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.20)',
   },
-  darkOverlay: {
-    backgroundColor: '#000',
-  },
-  content: {
-    flex: 1,
-    padding: 20,
-  },
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-  },
+  content: { flex: 1, padding: 20 },
+  topRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
   badge: {
     overflow: 'hidden',
     borderRadius: 99,
@@ -201,15 +189,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,1)',
   },
-  badgeText: {
-    color: Colors.white,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  destinationMask: {
-    alignSelf: 'stretch',
-    marginBottom: 16,
-  },
+  badgeText: { color: Colors.white, fontSize: 14, fontWeight: '600' },
+  destinationMask: { alignSelf: 'stretch', marginBottom: 16 },
   destination: {
     fontSize: 100,
     fontWeight: '900',
@@ -217,10 +198,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     letterSpacing: 3,
   },
-  avatarsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
+  avatarsRow: { flexDirection: 'row', alignItems: 'center' },
   avatar: {
     width: 40,
     height: 40,
