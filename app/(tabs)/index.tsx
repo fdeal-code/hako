@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Modal, Pressable, ActivityIndicator } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 import { router } from 'expo-router';
 import { withTiming, Easing, runOnJS } from 'react-native-reanimated';
 
@@ -10,63 +12,63 @@ import { ExpandedDashboard, CardLayout } from '@/components/home/ExpandedDashboa
 import { FilterTabs, TripFilter } from '@/components/home/FilterTabs';
 import { Avatar } from '@/components/ui/Avatar';
 import { useHomeExpand } from '@/contexts/HomeExpandContext';
-import { Colors, Spacing } from '@/constants/theme';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/services/supabase';
+import { Colors, Spacing, Radii, Shadows } from '@/constants/theme';
 import { Trip } from '@/constants/types';
+import { tripEvents } from '@/utils/events';
 
-// ─── Mock data ────────────────────────────────────────────────
-const MOCK_USER = { name: 'Alex', avatar_url: undefined };
+/* ── Helpers Supabase → Trip ───────────────────────────────── */
+function dbRowToTrip(row: any): Trip {
+  const now   = new Date();
+  const start = new Date(row.start_date);
+  const end   = new Date(row.end_date);
+  let status: Trip['status'] = 'future';
+  if (now > end)   status = 'past';
+  else if (now >= start) status = 'active';
 
-const MOCK_TRIPS: Trip[] = [
-  {
-    id: '1',
-    name: 'Road trip Italie',
-    destination: 'Italie',
-    cover_url: 'https://images.unsplash.com/photo-1516483638261-f4dbaf036963?w=800&q=80',
-    start_date: '2026-06-10',
-    end_date: '2026-06-24',
-    status: 'future',
-    created_by: 'user-1',
-    created_at: '2025-12-01',
-    members: [
-      { user_id: 'u1', trip_id: '1', role: 'organizer', user: { id: 'u1', email: '', name: 'Alex',  created_at: '' } },
-      { user_id: 'u2', trip_id: '1', role: 'member',    user: { id: 'u2', email: '', name: 'Léa',   created_at: '' } },
-      { user_id: 'u3', trip_id: '1', role: 'member',    user: { id: 'u3', email: '', name: 'Tom',   created_at: '' } },
-      { user_id: 'u4', trip_id: '1', role: 'member',    user: { id: 'u4', email: '', name: 'Chloé', created_at: '' } },
-    ],
-  },
-  {
-    id: '2',
-    name: 'Week-end Barcelone',
-    destination: 'Barcelone',
-    cover_url: 'https://images.unsplash.com/photo-1511527661048-7fe73d85e9a4?w=800&q=80',
-    start_date: '2025-10-03',
-    end_date: '2025-10-06',
-    status: 'past',
-    created_by: 'user-1',
-    created_at: '2025-08-01',
-    members: [
-      { user_id: 'u1', trip_id: '2', role: 'organizer', user: { id: 'u1', email: '', name: 'Alex', created_at: '' } },
-      { user_id: 'u2', trip_id: '2', role: 'member',    user: { id: 'u2', email: '', name: 'Léa',  created_at: '' } },
-    ],
-  },
-];
+  return {
+    id:          row.id,
+    name:        row.name,
+    destination: row.destination,
+    cover_url:   row.cover_image_url ?? undefined,
+    start_date:  row.start_date,
+    end_date:    row.end_date,
+    status,
+    created_by:  row.owner_id,
+    members:     [],
+    created_at:  row.created_at,
+  };
+}
 // ─────────────────────────────────────────────────────────────
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
-  const [filter, setFilter]             = useState<TripFilter>('all');
-  const [expandedTrip, setExpandedTrip] = useState<Trip | null>(null);
-  const [cardLayout, setCardLayout]     = useState<CardLayout>({ x: 0, y: 0, width: 0, height: 0 });
+  const { session, signOut } = useAuth();
+  const nickname   = session?.user?.user_metadata?.nickname  || 'Voyageur';
+  const avatarUrl  = session?.user?.user_metadata?.avatar_url as string | undefined;
+
+  const [trips,         setTrips]         = useState<Trip[]>([]);
+  const [loadingTrips,  setLoadingTrips]  = useState(true);
+  const [filter,        setFilter]        = useState<TripFilter>('all');
+  const [expandedTrip,  setExpandedTrip]  = useState<Trip | null>(null);
+  const [cardLayout,    setCardLayout]    = useState<CardLayout>({ x: 0, y: 0, width: 0, height: 0 });
+  const [showSettings,  setShowSettings]  = useState(false);
 
   /* SharedValue et callback partagés avec la TabBar via le contexte */
   const { expandProgress, triggerCollapse } = useHomeExpand();
 
-  const filteredTrips = MOCK_TRIPS.filter((t) => {
+  const filteredTrips = trips.filter((t) => {
     if (filter === 'all')    return true;
     if (filter === 'future') return t.status === 'future';
     if (filter === 'past')   return t.status === 'past';
     return true;
   });
+
+  const now = new Date();
+  const nextTripId = trips
+    .filter((t) => new Date(t.start_date) > now)
+    .sort((a, b) => new Date(a.start_date).getTime() - new Date(b.start_date).getTime())[0]?.id;
 
   /* Wrapper nommé pour éviter l'overload déprécié de runOnJS */
   const unmountDashboard = useCallback(() => { setExpandedTrip(null); }, []);
@@ -84,6 +86,30 @@ export default function HomeScreen() {
   useEffect(() => {
     triggerCollapse.current = handleCollapse;
   }, [handleCollapse, triggerCollapse]);
+
+  /* Fetch des voyages depuis Supabase */
+  const fetchTrips = useCallback(() => {
+    if (!session?.user?.id) return;
+    setLoadingTrips(true);
+    supabase
+      .from('trip_members')
+      .select('trip:trips(*)')
+      .eq('user_id', session.user.id)
+      .then(({ data, error }) => {
+        if (!error && data) {
+          setTrips(data.map((row: any) => dbRowToTrip(row.trip)));
+        }
+        setLoadingTrips(false);
+      });
+  }, [session?.user?.id]);
+
+  /* Relance à chaque retour sur l'écran */
+  useFocusEffect(fetchTrips);
+
+  /* Relance sur événement (création / modif / suppression) */
+  useEffect(() => {
+    return tripEvents.subscribe(fetchTrips);
+  }, [fetchTrips]);
 
   /* Ouvre le dashboard */
   const handleExpand = (trip: Trip, layout: CardLayout) => {
@@ -105,11 +131,11 @@ export default function HomeScreen() {
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.headerLeft}>
-              <Avatar name={MOCK_USER.name} uri={MOCK_USER.avatar_url} size={40} />
-              <Text style={styles.greeting}>Hello, {MOCK_USER.name} !</Text>
+              <Avatar name={nickname} uri={avatarUrl} size={40} />
+              <Text style={styles.greeting}>Hello, {nickname} !</Text>
             </View>
             <TouchableOpacity
-              onPress={() => router.push('/(tabs)/profile')}
+              onPress={() => setShowSettings(true)}
               style={styles.settingsBtn}
               activeOpacity={0.7}
             >
@@ -125,7 +151,9 @@ export default function HomeScreen() {
 
           {/* Trip list */}
           <View style={styles.tripList}>
-            {filteredTrips.length === 0 ? (
+            {loadingTrips ? (
+              <ActivityIndicator size="large" color={Colors.primary} style={{ marginTop: Spacing.xxl }} />
+            ) : filteredTrips.length === 0 ? (
               <EmptyState onCreatePress={() => router.push('/trip/create')} />
             ) : (
               filteredTrips.map((trip) => (
@@ -133,6 +161,7 @@ export default function HomeScreen() {
                   key={trip.id}
                   trip={trip}
                   onExpand={(layout) => handleExpand(trip, layout)}
+                  isNextTrip={trip.id === nextTripId}
                 />
               ))
             )}
@@ -148,6 +177,50 @@ export default function HomeScreen() {
           progress={expandProgress}
         />
       )}
+
+      {/* ── Settings modal ── */}
+      <Modal
+        visible={showSettings}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowSettings(false)}
+      >
+        <Pressable style={styles.modalBackdrop} onPress={() => setShowSettings(false)}>
+          <Pressable
+            style={[styles.settingsMenu, { top: insets.top + 52 }]}
+            onPress={() => {}}
+          >
+            <BlurView intensity={60} tint="light" style={StyleSheet.absoluteFill} />
+            <View style={styles.settingsMenuInner}>
+              {/* Profil */}
+              <View style={styles.menuProfile}>
+                <Avatar name={nickname} uri={avatarUrl} size={36} />
+                <View>
+                  <Text style={styles.menuName}>{nickname}</Text>
+                  <Text style={styles.menuEmail} numberOfLines={1}>
+                    {session?.user?.email}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.menuDivider} />
+
+              {/* Se déconnecter */}
+              <TouchableOpacity
+                style={styles.menuItem}
+                activeOpacity={0.7}
+                onPress={async () => {
+                  setShowSettings(false);
+                  await signOut();
+                }}
+              >
+                <Ionicons name="log-out-outline" size={18} color="#E53935" />
+                <Text style={styles.menuItemTextDanger}>Se déconnecter</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
     </View>
   );
@@ -191,4 +264,57 @@ const styles = StyleSheet.create({
   emptySubtitle: { fontSize: 14, color: Colors.textSecondary, textAlign: 'center' },
   emptyButton:   { marginTop: Spacing.md, backgroundColor: Colors.primary, paddingHorizontal: Spacing.xl, paddingVertical: Spacing.md, borderRadius: 999 },
   emptyButtonText: { color: Colors.white, fontWeight: '700', fontSize: 15 },
+
+  /* Settings modal */
+  modalBackdrop: {
+    flex: 1,
+  },
+  settingsMenu: {
+    position: 'absolute',
+    right: 16,
+    width: 240,
+    borderRadius: Radii.lg,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: Colors.border,
+    ...Shadows.lg,
+  },
+  settingsMenuInner: {
+    paddingVertical: Spacing.sm,
+  },
+  menuProfile: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+  },
+  menuName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+  },
+  menuEmail: {
+    fontSize: 12,
+    color: Colors.textTertiary,
+    maxWidth: 150,
+  },
+  menuDivider: {
+    height: 1,
+    backgroundColor: Colors.border,
+    marginVertical: Spacing.xs,
+    marginHorizontal: Spacing.md,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 12,
+  },
+  menuItemTextDanger: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#E53935',
+  },
 });

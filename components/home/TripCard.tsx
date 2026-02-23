@@ -27,14 +27,12 @@ const AVATAR_BG = ['#E8C5A5', '#A5B8E0', '#A8D5B5', '#F0B0B0'];
 const PRESS_EASING = Easing.bezier(0.25, 0.1, 0.25, 1);
 
 /* ─── Helpers ────────────────────────────────────────────────── */
-function formatDateLabel(start: string, end: string): string {
-  const s = new Date(start);
-  const e = new Date(end);
-  const M = ['Jan','Fév','Mar','Avr','Mai','Juin','Juil','Août','Sep','Oct','Nov','Déc'];
-  if (s.getMonth() === e.getMonth() && s.getFullYear() === e.getFullYear()) {
-    return `${M[s.getMonth()]} ${s.getFullYear()}`;
-  }
-  return `${M[s.getMonth()]} – ${M[e.getMonth()]} ${e.getFullYear()}`;
+function formatDateLabel(start: string): string {
+  const monthYear = new Date(start).toLocaleDateString('fr-FR', {
+    month: 'long',
+    year: 'numeric',
+  });
+  return monthYear.charAt(0).toUpperCase() + monthYear.slice(1);
 }
 
 /* ─── Badge ──────────────────────────────────────────────────── */
@@ -57,12 +55,14 @@ function Badge({ label }: { label: string }) {
 export function TripCard({
   trip,
   onExpand,
+  isNextTrip = false,
 }: {
   trip: Trip;
   onExpand: (layout: CardLayout) => void;
+  isNextTrip?: boolean;
 }) {
-  const dateLabel = formatDateLabel(trip.start_date, trip.end_date);
-  const isNext    = trip.status === 'future';
+  const dateLabel = formatDateLabel(trip.start_date);
+  const isNext    = isNextTrip;
   const members   = trip.members.slice(0, 3);
 
   /* ref sur la View native pour mesurer la position écran */

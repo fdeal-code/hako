@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   Image,
   StyleSheet,
   Modal,
+  PanResponder,
   useWindowDimensions,
 } from 'react-native';
 import Animated, {
@@ -17,9 +18,12 @@ import Animated, {
   Easing,
   runOnJS,
 } from 'react-native-reanimated';
-import MapView, { Marker } from "react-native-maps";
+import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
+import MapView, { Marker } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { NavButton } from '@/components/ui/NavButton';
 
 /* ─── Types ──────────────────────────────────────────────────── */
 type ActivityStatus = 'validated' | 'debate' | 'pending';
@@ -67,6 +71,36 @@ const STATUS_LABEL: Record<ActivityStatus, string> = {
   pending:   '⚪ En attente',
 };
 
+/* ─── Filter definitions ─────────────────────────────────────── */
+type CategoryKey = 'restaurant' | 'monument' | 'photo' | 'cafe' | 'hotel';
+type StatusKey   = 'validated' | 'debate' | 'pending';
+
+const CATEGORY_FILTERS: { key: CategoryKey; icon: string; label: string; emoji: string }[] = [
+  { key: 'restaurant', icon: '🍽️', label: 'Restaurants', emoji: '🍽️' },
+  { key: 'monument',   icon: '🏛️', label: 'Monuments',   emoji: '🏛️' },
+  { key: 'photo',      icon: '📸', label: 'Photo spots',  emoji: '📸' },
+  { key: 'cafe',       icon: '☕', label: 'Cafés',        emoji: '☕' },
+  { key: 'hotel',      icon: '🏨', label: 'Hôtels',       emoji: '🏨' },
+];
+
+const STATUS_FILTERS: { key: StatusKey; icon: string; label: string }[] = [
+  { key: 'validated', icon: '🟢', label: 'Validées'   },
+  { key: 'debate',    icon: '🟠', label: 'En débat'   },
+  { key: 'pending',   icon: '⚪', label: 'En attente' },
+];
+
+const CATEGORY_EMOJI_MAP: Record<string, CategoryKey> = {
+  '🍽️': 'restaurant',
+  '🏛️': 'monument',
+  '📸': 'photo',
+  '☕':  'cafe',
+  '🏨': 'hotel',
+};
+
+/* ─── NavButton tokens ───────────────────────────────────────── */
+const BTN_FILL:   [string, string] = ['rgba(255,255,255,0.70)', 'rgba(255,255,255,0.30)'];
+const BTN_STROKE: [string, string] = ['rgba(255,255,255,0.95)', 'rgba(180,202,222,0.60)'];
+
 const EASE_OUT = Easing.out(Easing.cubic);
 const EASE_IN  = Easing.in(Easing.cubic);
 
@@ -75,16 +109,23 @@ export function ExpandedMapView({ cardLayout, onClose }: Props) {
   const insets = useSafeAreaInsets();
   const { width: SCREEN_W, height: SCREEN_H } = useWindowDimensions();
 
-  const progress       = useSharedValue(0);
-  const headerProgress = useSharedValue(0);
-  const sheetProgress  = useSharedValue(0);
+  const progress        = useSharedValue(0);
+  const navProgress     = useSharedValue(0);
+  const sheetProgress   = useSharedValue(0);
+  const sheetTranslateY = useSharedValue(0);
 
   const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null);
-  const [filters, setFilters] = useState({ validated: true, debate: false, pending: false });
+  const [showFilters, setShowFilters] = useState(false);
+  const [categories, setCategories] = useState<Record<CategoryKey, boolean>>({
+    restaurant: true, monument: true, photo: true, cafe: true, hotel: true,
+  });
+  const [statusFilters, setStatusFilters] = useState<Record<StatusKey, boolean>>({
+    validated: true, debate: true, pending: true,
+  });
 
   useEffect(() => {
-    progress.value       = withTiming(1, { duration: 400, easing: EASE_OUT });
-    headerProgress.value = withDelay(260, withTiming(1, { duration: 280 }));
+    progress.value    = withTiming(1, { duration: 400, easing: EASE_OUT });
+    navProgress.value = withDelay(260, withTiming(1, { duration: 280 }));
   }, []);
 
   /* ── Animated styles ── */
@@ -100,51 +141,82 @@ export function ExpandedMapView({ cardLayout, onClose }: Props) {
     };
   });
 
-  const headerStyle = useAnimatedStyle(() => ({
-    opacity:   headerProgress.value,
-    transform: [{ translateY: interpolate(headerProgress.value, [0, 1], [-14, 0]) }],
+  const bottomNavStyle = useAnimatedStyle(() => ({
+    opacity:   navProgress.value,
+    transform: [{ translateY: interpolate(navProgress.value, [0, 1], [20, 0]) }],
   }));
 
-  const sheetStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: interpolate(sheetProgress.value, [0, 1], [400, 0]) }],
-  }));
+  const sheetStyle = useAnimatedStyle(() => {
+    'worklet';
+    const slideBase = interpolate(sheetProgress.value, [0, 1], [500, 0]);
+    const swipeOffset = sheetTranslateY.value > 0 ? sheetTranslateY.value : 0;
+    return {
+      transform: [{ translateY: slideBase + swipeOffset }],
+    };
+  });
 
   /* ── Handlers ── */
   const clearSelectedActivity = () => setSelectedActivity(null);
 
   const handleMarkerPress = (activity: Activity) => {
     setSelectedActivity(activity);
+    sheetTranslateY.value = 0;
     sheetProgress.value = withTiming(1, { duration: 320, easing: EASE_OUT });
   };
 
-  const handleSheetClose = () => {
+  const dismissSheet = () => {
     sheetProgress.value = withTiming(0, { duration: 220, easing: EASE_IN }, () => {
+      sheetTranslateY.value = 0;
       runOnJS(clearSelectedActivity)();
     });
   };
 
   const handleClose = () => {
+    setShowFilters(false);
     sheetProgress.value  = withTiming(0, { duration: 150 });
-    headerProgress.value = withTiming(0, { duration: 180 });
-    progress.value = withTiming(0, { duration: 360, easing: EASE_IN }, (finished) => {
+    navProgress.value    = withTiming(0, { duration: 180 });
+    progress.value = withTiming(0, { duration: 360, easing: EASE_IN }, (finished?: boolean) => {
       if (finished) runOnJS(onClose)();
     });
   };
 
-  const toggleFilter = (key: keyof typeof filters) => {
-    setFilters(prev => ({ ...prev, [key]: !prev[key] }));
-  };
+  /* ── Swipe-to-dismiss (PanResponder — works inside Modal without GestureHandlerRootView) ── */
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gs) =>
+        gs.dy > 4 && Math.abs(gs.dy) > Math.abs(gs.dx),
+      onPanResponderMove: (_, gs) => {
+        if (gs.dy > 0) sheetTranslateY.value = gs.dy;
+      },
+      onPanResponderRelease: (_, gs) => {
+        if (gs.dy > 80 || gs.vy > 0.8) {
+          dismissSheet();
+        } else {
+          sheetTranslateY.value = withTiming(0, { duration: 200 });
+        }
+      },
+    })
+  ).current;
 
-  const filteredActivities = MOCK_ACTIVITIES.filter(a =>
-    a.status === 'validated' ? filters.validated :
-    a.status === 'debate'    ? filters.debate    : filters.pending
-  );
+  /* ── Filter helpers ── */
+  const toggleCategory = (key: CategoryKey) =>
+    setCategories(prev => ({ ...prev, [key]: !prev[key] }));
 
-  const FILTER_BUTTONS: { key: keyof typeof filters; icon: string }[] = [
-    { key: 'validated', icon: '🟢' },
-    { key: 'debate',    icon: '🟠' },
-    { key: 'pending',   icon: '⚪' },
-  ];
+  const toggleStatus = (key: StatusKey) =>
+    setStatusFilters(prev => ({ ...prev, [key]: !prev[key] }));
+
+  const filteredActivities = MOCK_ACTIVITIES.filter(a => {
+    const catKey = CATEGORY_EMOJI_MAP[a.category];
+    const categoryMatch = catKey ? categories[catKey] : true;
+    const statusMatch =
+      (a.status === 'validated' && statusFilters.validated) ||
+      (a.status === 'debate'    && statusFilters.debate)    ||
+      (a.status === 'pending'   && statusFilters.pending);
+    return categoryMatch && statusMatch;
+  });
+
+  const BOTTOM = Math.max(insets.bottom, 10) + 16;
 
   return (
     <Modal visible transparent animationType="none" statusBarTranslucent>
@@ -177,29 +249,71 @@ export function ExpandedMapView({ cardLayout, onClose }: Props) {
           ))}
         </MapView>
 
-        {/* ── Header ── */}
-        <Animated.View style={[styles.header, { paddingTop: insets.top + 8 }, headerStyle]}>
-          <TouchableOpacity style={styles.backBtn} onPress={handleClose} activeOpacity={0.8}>
-            <Ionicons name="chevron-back" size={20} color="#fff" />
-          </TouchableOpacity>
+        {/* ── Tap-outside to close filters ── */}
+        {showFilters && (
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => setShowFilters(false)}
+          />
+        )}
 
-          <View style={styles.filtersRow}>
-            {FILTER_BUTTONS.map(({ key, icon }) => (
-              <TouchableOpacity
-                key={key}
-                style={[styles.filterBtn, filters[key] && styles.filterBtnActive]}
-                onPress={() => toggleFilter(key)}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.filterBtnIcon}>{icon}</Text>
-              </TouchableOpacity>
-            ))}
+        {/* ── Filter panel (glassmorphism) ── */}
+        {showFilters && (
+          <View style={[styles.filterPanel, { bottom: BOTTOM + 64 + 12 }]}>
+            <BlurView intensity={20} tint="light" style={StyleSheet.absoluteFill} />
+            <LinearGradient
+              colors={['rgba(255,255,255,0.55)', 'rgba(255,255,255,0.30)']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={StyleSheet.absoluteFill}
+            />
+
+            {/* Section : Catégories */}
+            <Text style={styles.filterSectionTitle}>Catégories</Text>
+            <View style={styles.filterChipsWrap}>
+              {CATEGORY_FILTERS.map(({ key, icon, label }) => (
+                <TouchableOpacity
+                  key={key}
+                  style={[styles.filterChip, categories[key] && styles.filterChipActive]}
+                  onPress={() => toggleCategory(key)}
+                  activeOpacity={0.75}
+                >
+                  <Text style={[styles.filterChipText, categories[key] && styles.filterChipTextActive]}>
+                    {icon} {label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Séparateur */}
+            <View style={styles.filterSep} />
+
+            {/* Section : Statut */}
+            <Text style={styles.filterSectionTitle}>Statut</Text>
+            <View style={styles.filterChipsWrap}>
+              {STATUS_FILTERS.map(({ key, icon, label }) => (
+                <TouchableOpacity
+                  key={key}
+                  style={[styles.filterChip, statusFilters[key] && styles.filterChipActive]}
+                  onPress={() => toggleStatus(key)}
+                  activeOpacity={0.75}
+                >
+                  <Text style={[styles.filterChipText, statusFilters[key] && styles.filterChipTextActive]}>
+                    {icon} {label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
-        </Animated.View>
+        )}
 
         {/* ── Bottom sheet ── */}
-        {selectedActivity !== null && (
-          <Animated.View style={[styles.sheet, { paddingBottom: insets.bottom + 16 }, sheetStyle]}>
+        {selectedActivity != null && (
+          <Animated.View
+            style={[styles.sheet, { paddingBottom: insets.bottom + 16 }, sheetStyle]}
+            {...panResponder.panHandlers}
+          >
             <View style={styles.sheetHandle} />
             <Image
               source={{ uri: selectedActivity.image }}
@@ -212,15 +326,46 @@ export function ExpandedMapView({ cardLayout, onClose }: Props) {
                 <Text style={styles.sheetName}>{selectedActivity.name}</Text>
                 <Text style={styles.sheetStatus}>{STATUS_LABEL[selectedActivity.status]}</Text>
               </View>
-              <TouchableOpacity style={styles.sheetCloseBtn} onPress={handleSheetClose} activeOpacity={0.8}>
-                <Ionicons name="close" size={16} color="#666" />
-              </TouchableOpacity>
             </View>
             <TouchableOpacity style={styles.sheetActionBtn} activeOpacity={0.85}>
               <Text style={styles.sheetActionText}>Voir dans le planning</Text>
             </TouchableOpacity>
           </Animated.View>
         )}
+
+        {/* ── Bottom nav — même layout que le Dashboard ── */}
+        {/*    gap: 92 = 14 + 64 + 14 → back et filtre aux mêmes x que Dashboard */}
+        <Animated.View
+          style={[styles.bottomNav, { bottom: BOTTOM }, bottomNavStyle]}
+          pointerEvents="box-none"
+        >
+          <NavButton icon="arrow-back-outline" onPress={handleClose} />
+
+          {/* Spacer invisible — même slot que le bouton add du Dashboard */}
+          <View style={styles.navSpacer} />
+
+          {/* Bouton filtre — même style NavButton */}
+          <TouchableOpacity onPress={() => setShowFilters(v => !v)} activeOpacity={0.75}>
+            <View style={styles.filterBtnShadow}>
+              <LinearGradient
+                colors={BTN_STROKE}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={[StyleSheet.absoluteFill, { borderRadius: 99 }]}
+              />
+              <View style={styles.filterBtnInner}>
+                <BlurView intensity={20} tint="light" style={StyleSheet.absoluteFill} />
+                <LinearGradient
+                  colors={BTN_FILL}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={StyleSheet.absoluteFill}
+                />
+                <Ionicons name="options-outline" size={24} color="#424242" />
+              </View>
+            </View>
+          </TouchableOpacity>
+        </Animated.View>
 
       </Animated.View>
     </Modal>
@@ -235,66 +380,22 @@ const styles = StyleSheet.create({
     backgroundColor: '#1C2B3A',
   },
 
-  /* Header */
-  header: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    paddingHorizontal: 16,
-    zIndex: 10,
-  },
-  backBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: 'rgba(0,0,0,0.40)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.22)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  filtersRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  filterBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: 'rgba(0,0,0,0.40)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.22)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  filterBtnActive: {
-    backgroundColor: 'rgba(255,255,255,0.28)',
-    borderColor: 'rgba(255,255,255,0.55)',
-  },
-  filterBtnIcon: {
-    fontSize: 18,
-  },
-
-  /* Markers */
+  /* ── Markers ── */
   markerWrapper: {
     alignItems: 'center',
   },
   markerPhoto: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 3,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    borderWidth: 4,
   },
   markerEmoji: {
     fontSize: 14,
     marginTop: 2,
   },
 
-  /* Bottom sheet */
+  /* ── Bottom sheet ── */
   sheet: {
     position: 'absolute',
     bottom: 0,
@@ -304,6 +405,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     overflow: 'hidden',
+    zIndex: 20,
   },
   sheetHandle: {
     width: 36,
@@ -343,14 +445,6 @@ const styles = StyleSheet.create({
     color: '#888',
     marginTop: 2,
   },
-  sheetCloseBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: 'rgba(0,0,0,0.07)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   sheetActionBtn: {
     marginHorizontal: 16,
     marginTop: 12,
@@ -364,5 +458,97 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 15,
     letterSpacing: 0.2,
+  },
+
+  /* ── Bottom nav ── */
+  bottomNav: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 14,
+    zIndex: 10,
+  },
+  navSpacer: {
+    width: 64,
+    height: 64,
+  },
+
+  /* ── Bouton filtre (style identique à NavButton) ── */
+  filterBtnShadow: {
+    width: 64,
+    height: 64,
+    borderRadius: 99,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 15,
+    elevation: 12,
+  },
+  filterBtnInner: {
+    margin: 1,
+    width: 62,
+    height: 62,
+    borderRadius: 99,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  /* ── Filter panel ── */
+  filterPanel: {
+    position: 'absolute',
+    right: 16,
+    width: 260,
+    borderRadius: 20,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.55)',
+    padding: 16,
+    zIndex: 30,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 20,
+    elevation: 14,
+  },
+  filterSectionTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.75)',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    marginBottom: 10,
+  },
+  filterChipsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  filterChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 99,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.25)',
+  },
+  filterChipActive: {
+    backgroundColor: 'rgba(255,255,255,0.90)',
+    borderColor: 'rgba(255,255,255,0.95)',
+  },
+  filterChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.75)',
+  },
+  filterChipTextActive: {
+    color: '#1A1A2E',
+  },
+  filterSep: {
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    marginVertical: 12,
   },
 });

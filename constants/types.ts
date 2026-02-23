@@ -11,7 +11,7 @@ export interface User {
 
 // ─── Trip ────────────────────────────────────────────────────────────────────
 export type TripStatus = 'future' | 'active' | 'past';
-export type UserRole = 'organizer' | 'member';
+export type UserRole = 'owner' | 'organizer' | 'member';
 
 export interface Trip {
   id: string;
