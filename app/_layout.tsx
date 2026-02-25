@@ -1,11 +1,11 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack, useRouter, useSegments } from 'expo-router';
+import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 
 import { Colors } from '@/constants/theme';
-import { AuthProvider, useAuth } from '@/contexts/AuthContext';
+import { AuthProvider } from '@/contexts/AuthContext';
 
 const hakoTheme = {
   ...DefaultTheme,
@@ -19,27 +19,6 @@ const hakoTheme = {
   },
 };
 
-/* ─── Garde de navigation ────────────────────────────────────── */
-function AuthGate() {
-  const { user, loading } = useAuth();
-  const segments          = useSegments();
-  const router            = useRouter();
-
-  useEffect(() => {
-    if (loading) return;
-
-    const inAuth = segments[0] === '(auth)';
-
-    if (!user && !inAuth) {
-      router.replace('/(auth)/login');
-    } else if (user && inAuth) {
-      router.replace('/(tabs)');
-    }
-  }, [user, loading]);
-
-  return null;
-}
-
 /* ─── Root layout ────────────────────────────────────────────── */
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -49,7 +28,6 @@ export default function RootLayout() {
   return (
     <AuthProvider>
       <ThemeProvider value={hakoTheme}>
-        <AuthGate />
         <Stack>
           <Stack.Screen name="(tabs)"          options={{ headerShown: false }} />
           <Stack.Screen name="(auth)/login"    options={{ headerShown: false }} />

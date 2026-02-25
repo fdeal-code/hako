@@ -306,10 +306,10 @@ export default function CreateTripScreen() {
   };
 
   const handleCreate = async () => {
-    if (creating || !session?.user?.id) return;
+    if (creating) return;
     setCreating(true);
     try {
-      const userId = session.user.id;
+      const userId = session?.user?.id ?? '00000000-0000-0000-0000-000000000000';
       let coverImageUrl: string | null = null;
 
       if (coverUri) {
@@ -330,26 +330,26 @@ export default function CreateTripScreen() {
       const startIso = startDate?.toISOString().split('T')[0] ?? null;
       const endIso   = endDate?.toISOString().split('T')[0]   ?? null;
 
+      const tripPayload: Record<string, unknown> = {
+        name:            tripName.trim(),
+        destination:     destination.trim(),
+        start_date:      startIso,
+        end_date:        endIso,
+        cover_image_url: coverImageUrl,
+      };
+      if (session?.user?.id) tripPayload.owner_id = session.user.id;
+
       const { data: tripData, error: tripError } = await supabase
         .from('trips')
-        .insert({
-          name:            tripName.trim(),
-          destination:     destination.trim(),
-          start_date:      startIso,
-          end_date:        endIso,
-          cover_image_url: coverImageUrl,
-          owner_id:        userId,
-        })
+        .insert(tripPayload)
         .select()
         .single();
 
       if (tripError) throw tripError;
 
-      const { error: memberError } = await supabase
+      await supabase
         .from('trip_members')
-        .insert({ trip_id: tripData.id, user_id: userId, role: 'owner' });
-
-      if (memberError) throw memberError;
+        .insert({ trip_id: tripData.id, user_id: session?.user?.id ?? null, role: 'owner' });
 
       /* Invitations — table trip_invites (silent fail si pas encore créée) */
       if (inviteEmails.length > 0) {
@@ -368,7 +368,10 @@ export default function CreateTripScreen() {
       tripEvents.emit();
       router.back();
     } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : 'Erreur lors de la création.';
+      const message =
+        e instanceof Error
+          ? e.message
+          : (e as any)?.message ?? JSON.stringify(e) ?? 'Erreur lors de la création.';
       Alert.alert('Erreur', message);
     } finally {
       setCreating(false);

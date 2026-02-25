@@ -118,12 +118,12 @@ export default function HomeScreen() {
 
   /* ── Fetch voyages ── */
   const fetchTrips = useCallback(() => {
-    if (!session?.user?.id) return;
+    const userId = session?.user?.id ?? '00000000-0000-0000-0000-000000000000';
     setLoadingTrips(true);
     supabase
       .from('trip_members')
       .select('trip:trips(*)')
-      .eq('user_id', session.user.id)
+      .eq('user_id', userId)
       .then(({ data, error }) => {
         if (!error && data) {
           setTrips(data.map((row: any) => dbRowToTrip(row.trip)));

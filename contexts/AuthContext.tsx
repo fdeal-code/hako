@@ -29,11 +29,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const DEV_EMAIL    = process.env.EXPO_PUBLIC_DEV_EMAIL;
+    const DEV_PASSWORD = process.env.EXPO_PUBLIC_DEV_PASSWORD;
+
     // Session existante au démarrage
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (session) {
+        setSession(session);
+        setUser(session.user);
+        setLoading(false);
+      } else if (DEV_EMAIL && DEV_PASSWORD) {
+        // Auto-login dev
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email:    DEV_EMAIL,
+          password: DEV_PASSWORD,
+        });
+        if (!error && data.session) {
+          setSession(data.session);
+          setUser(data.session.user);
+        }
+        setLoading(false);
+      } else {
+        setLoading(false);
+      }
     });
 
     // Changements d'état auth en temps réel
