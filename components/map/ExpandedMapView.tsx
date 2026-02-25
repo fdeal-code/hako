@@ -16,13 +16,12 @@ import Animated, {
   withDelay,
   interpolate,
   Easing,
-  runOnJS,
+
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import MapView, { Marker } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 import { NavButton } from '@/components/ui/NavButton';
 
 /* ─── Types ──────────────────────────────────────────────────── */
@@ -48,6 +47,8 @@ export interface CardLayout {
 interface Props {
   cardLayout: CardLayout;
   onClose: () => void;
+  destination: string;
+  region: { latitude: number; longitude: number; latitudeDelta: number; longitudeDelta: number };
 }
 
 /* ─── Mock data ──────────────────────────────────────────────── */
@@ -97,15 +98,12 @@ const CATEGORY_EMOJI_MAP: Record<string, CategoryKey> = {
   '🏨': 'hotel',
 };
 
-/* ─── NavButton tokens ───────────────────────────────────────── */
-const BTN_FILL:   [string, string] = ['rgba(255,255,255,0.70)', 'rgba(255,255,255,0.30)'];
-const BTN_STROKE: [string, string] = ['rgba(255,255,255,0.95)', 'rgba(180,202,222,0.60)'];
 
 const EASE_OUT = Easing.out(Easing.cubic);
 const EASE_IN  = Easing.in(Easing.cubic);
 
 /* ─── Component ──────────────────────────────────────────────── */
-export function ExpandedMapView({ cardLayout, onClose }: Props) {
+export function ExpandedMapView({ cardLayout, onClose, destination, region }: Props) {
   const insets = useSafeAreaInsets();
   const { width: SCREEN_W, height: SCREEN_H } = useWindowDimensions();
 
@@ -165,19 +163,19 @@ export function ExpandedMapView({ cardLayout, onClose }: Props) {
   };
 
   const dismissSheet = () => {
-    sheetProgress.value = withTiming(0, { duration: 220, easing: EASE_IN }, () => {
+    sheetProgress.value = withTiming(0, { duration: 220, easing: EASE_IN });
+    setTimeout(() => {
       sheetTranslateY.value = 0;
-      runOnJS(clearSelectedActivity)();
-    });
+      clearSelectedActivity();
+    }, 230);
   };
 
   const handleClose = () => {
     setShowFilters(false);
-    sheetProgress.value  = withTiming(0, { duration: 150 });
-    navProgress.value    = withTiming(0, { duration: 180 });
-    progress.value = withTiming(0, { duration: 360, easing: EASE_IN }, (finished?: boolean) => {
-      if (finished) runOnJS(onClose)();
-    });
+    sheetProgress.value = withTiming(0, { duration: 150 });
+    navProgress.value   = withTiming(0, { duration: 180 });
+    progress.value      = withTiming(0, { duration: 360, easing: EASE_IN });
+    setTimeout(onClose, 370);
   };
 
   /* ── Swipe-to-dismiss (PanResponder — works inside Modal without GestureHandlerRootView) ── */
@@ -222,10 +220,16 @@ export function ExpandedMapView({ cardLayout, onClose }: Props) {
     <Modal visible transparent animationType="none" statusBarTranslucent>
       <Animated.View style={[styles.hero, heroStyle]}>
 
+        {/* ── Label destination (top-center) ── */}
+        <Animated.View style={[styles.destLabel, { top: insets.top + 16 }, bottomNavStyle]} pointerEvents="none">
+          <BlurView intensity={20} tint="dark" style={StyleSheet.absoluteFill} />
+          <Text style={styles.destLabelText}>{destination}</Text>
+        </Animated.View>
+
         {/* ── Map ── */}
         <MapView
           style={StyleSheet.absoluteFill}
-          initialRegion={{ latitude: 41.9028, longitude: 12.4964, latitudeDelta: 0.3, longitudeDelta: 0.3 }}
+          initialRegion={{ ...region, latitudeDelta: 0.3, longitudeDelta: 0.3 }}
           scrollEnabled
           zoomEnabled
           rotateEnabled
@@ -344,27 +348,7 @@ export function ExpandedMapView({ cardLayout, onClose }: Props) {
           {/* Spacer invisible — même slot que le bouton add du Dashboard */}
           <View style={styles.navSpacer} />
 
-          {/* Bouton filtre — même style NavButton */}
-          <TouchableOpacity onPress={() => setShowFilters(v => !v)} activeOpacity={0.75}>
-            <View style={styles.filterBtnShadow}>
-              <LinearGradient
-                colors={BTN_STROKE}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={[StyleSheet.absoluteFill, { borderRadius: 99 }]}
-              />
-              <View style={styles.filterBtnInner}>
-                <BlurView intensity={20} tint="light" style={StyleSheet.absoluteFill} />
-                <LinearGradient
-                  colors={BTN_FILL}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={StyleSheet.absoluteFill}
-                />
-                <Ionicons name="options-outline" size={24} color="#424242" />
-              </View>
-            </View>
-          </TouchableOpacity>
+          <NavButton icon="options-outline" onPress={() => setShowFilters(v => !v)} />
         </Animated.View>
 
       </Animated.View>
@@ -378,6 +362,23 @@ const styles = StyleSheet.create({
     position: 'absolute',
     overflow: 'hidden',
     backgroundColor: '#1C2B3A',
+  },
+
+  /* ── Label destination ── */
+  destLabel: {
+    position: 'absolute',
+    alignSelf: 'center',
+    overflow: 'hidden',
+    borderRadius: 99,
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    zIndex: 20,
+  },
+  destLabelText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
 
   /* ── Markers ── */
@@ -471,30 +472,9 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   navSpacer: {
-    width: 64,
-    height: 64,
+    width: 116,
   },
 
-  /* ── Bouton filtre (style identique à NavButton) ── */
-  filterBtnShadow: {
-    width: 64,
-    height: 64,
-    borderRadius: 99,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.25,
-    shadowRadius: 15,
-    elevation: 12,
-  },
-  filterBtnInner: {
-    margin: 1,
-    width: 62,
-    height: 62,
-    borderRadius: 99,
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
 
   /* ── Filter panel ── */
   filterPanel: {

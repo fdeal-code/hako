@@ -1,5 +1,5 @@
 import { TouchableOpacity, Text, StyleSheet, ViewStyle } from 'react-native';
-import { Colors, Radii, Spacing } from '@/constants/theme';
+import { Colors, Radii } from '@/constants/theme';
 
 interface ChipProps {
   label: string;
@@ -24,21 +24,21 @@ export function Chip({ label, active = false, onPress, style }: ChipProps) {
 
 const styles = StyleSheet.create({
   chip: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm - 2,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     borderRadius: Radii.full,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    backgroundColor: '#F0F0F0',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   chipActive: {
     backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
   },
   label: {
     fontSize: 14,
-    fontWeight: '500',
-    color: Colors.textSecondary,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+    textAlign: 'center',
   },
   labelActive: {
     color: Colors.white,

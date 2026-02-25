@@ -5,11 +5,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { router } from 'expo-router';
-import { withTiming, Easing, runOnJS } from 'react-native-reanimated';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, Easing } from 'react-native-reanimated';
 
 import { TripCard } from '@/components/home/TripCard';
 import { ExpandedDashboard, CardLayout } from '@/components/home/ExpandedDashboard';
-import { FilterTabs, TripFilter } from '@/components/home/FilterTabs';
+import { FilterTabs, TripFilter, SortBy } from '@/components/home/FilterTabs';
 import { Avatar } from '@/components/ui/Avatar';
 import { useHomeExpand } from '@/contexts/HomeExpandContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -24,7 +24,7 @@ function dbRowToTrip(row: any): Trip {
   const start = new Date(row.start_date);
   const end   = new Date(row.end_date);
   let status: Trip['status'] = 'future';
-  if (now > end)   status = 'past';
+  if (now > end)         status = 'past';
   else if (now >= start) status = 'active';
 
   return {
@@ -40,54 +40,83 @@ function dbRowToTrip(row: any): Trip {
     created_at:  row.created_at,
   };
 }
-// ─────────────────────────────────────────────────────────────
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { session, signOut } = useAuth();
-  const nickname   = session?.user?.user_metadata?.nickname  || 'Voyageur';
-  const avatarUrl  = session?.user?.user_metadata?.avatar_url as string | undefined;
+  const nickname  = session?.user?.user_metadata?.nickname   || 'Voyageur';
+  const avatarUrl = session?.user?.user_metadata?.avatar_url as string | undefined;
 
-  const [trips,         setTrips]         = useState<Trip[]>([]);
-  const [loadingTrips,  setLoadingTrips]  = useState(true);
-  const [filter,        setFilter]        = useState<TripFilter>('all');
-  const [expandedTrip,  setExpandedTrip]  = useState<Trip | null>(null);
-  const [cardLayout,    setCardLayout]    = useState<CardLayout>({ x: 0, y: 0, width: 0, height: 0 });
-  const [showSettings,  setShowSettings]  = useState(false);
+  const [trips,        setTrips]        = useState<Trip[]>([]);
+  const [loadingTrips, setLoadingTrips] = useState(true);
+  const [filter,       setFilter]       = useState<TripFilter>('all');
+  const [sortBy,       setSortBy]       = useState<SortBy>('recent');
+  const [showSortMenu, setShowSortMenu] = useState(false);
+  const [expandedTrip, setExpandedTrip] = useState<Trip | null>(null);
+  const [cardLayout,   setCardLayout]   = useState<CardLayout>({ x: 0, y: 0, width: 0, height: 0 });
+  const [showSettings, setShowSettings] = useState(false);
 
-  /* SharedValue et callback partagés avec la TabBar via le contexte */
+  /* ── Animation fade liste ── */
+  const listOpacity = useSharedValue(1);
+  const listStyle   = useAnimatedStyle(() => ({ opacity: listOpacity.value }));
+
   const { expandProgress, triggerCollapse } = useHomeExpand();
 
-  const filteredTrips = trips.filter((t) => {
-    if (filter === 'all')    return true;
-    if (filter === 'future') return t.status === 'future';
-    if (filter === 'past')   return t.status === 'past';
+  /* ── Date locale YYYY-MM-DD (timezone-safe, partagée par filtre + badge) ── */
+  const todayISO = (() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  })();
+
+  /* ── Filtre par dates réelles ── */
+  const filtered = trips.filter((t) => {
+    if (filter === 'all') return true;
+    if (filter === 'future') return !!t.start_date && t.start_date > todayISO;
+    if (filter === 'past')   return !!t.end_date   && t.end_date   < todayISO;
     return true;
   });
 
-  const now = new Date();
-  const nextTripId = trips
-    .filter((t) => new Date(t.start_date) > now)
-    .sort((a, b) => new Date(a.start_date).getTime() - new Date(b.start_date).getTime())[0]?.id;
+  /* ── Tri ── */
+  const displayedTrips = [...filtered].sort((a, b) => {
+    if (sortBy === 'recent')    return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+    if (sortBy === 'departure') return new Date(a.start_date || '9999-12-31').getTime() - new Date(b.start_date || '9999-12-31').getTime();
+    return 0;
+  });
 
-  /* Wrapper nommé pour éviter l'overload déprécié de runOnJS */
+  /* ── Prochain voyage : voyage actif ou futur avec le départ le plus proche ── */
+  const nextTripId = [...trips]
+    .filter((t) => !!t.end_date && t.end_date >= todayISO)
+    .sort((a, b) => (a.start_date > b.start_date ? 1 : -1))[0]?.id;
+
+  /* ── Changement de filtre avec fade ── */
+  const handleFilterChange = (f: TripFilter) => {
+    console.log('FILTER PRESSED:', f);
+    setFilter(f);
+    listOpacity.value = withTiming(0, { duration: 80 }, () => {
+      listOpacity.value = withTiming(1, { duration: 200 });
+    });
+  };
+
+  const handleSortChange = (s: SortBy) => {
+    console.log('SORT PRESSED:', s);
+    setSortBy(s);
+    listOpacity.value = withTiming(0, { duration: 80 }, () => {
+      listOpacity.value = withTiming(1, { duration: 200 });
+    });
+  };
+
   const unmountDashboard = useCallback(() => { setExpandedTrip(null); }, []);
 
-  /* Animation de fermeture — utilisée par ExpandedDashboard ET la TabBar */
   const handleCollapse = useCallback(() => {
-    expandProgress.value = withTiming(
-      0,
-      { duration: 400, easing: Easing.in(Easing.cubic) },
-      (finished) => { if (finished) runOnJS(unmountDashboard)(); }
-    );
+    expandProgress.value = withTiming(0, { duration: 400, easing: Easing.in(Easing.cubic) });
+    setTimeout(unmountDashboard, 420);
   }, [expandProgress, unmountDashboard]);
 
-  /* Enregistre handleCollapse dans le ref partagé dès qu'il change */
   useEffect(() => {
     triggerCollapse.current = handleCollapse;
   }, [handleCollapse, triggerCollapse]);
 
-  /* Fetch des voyages depuis Supabase */
+  /* ── Fetch voyages ── */
   const fetchTrips = useCallback(() => {
     if (!session?.user?.id) return;
     setLoadingTrips(true);
@@ -103,15 +132,12 @@ export default function HomeScreen() {
       });
   }, [session?.user?.id]);
 
-  /* Relance à chaque retour sur l'écran */
   useFocusEffect(fetchTrips);
 
-  /* Relance sur événement (création / modif / suppression) */
   useEffect(() => {
     return tripEvents.subscribe(fetchTrips);
   }, [fetchTrips]);
 
-  /* Ouvre le dashboard */
   const handleExpand = (trip: Trip, layout: CardLayout) => {
     setCardLayout(layout);
     setExpandedTrip(trip);
@@ -120,7 +146,7 @@ export default function HomeScreen() {
   };
 
   return (
-    <View style={styles.root}>
+    <Pressable style={styles.root} onPress={() => showSortMenu && setShowSortMenu(false)}>
 
       {/* ── Contenu home ── */}
       <View style={[styles.home, { paddingTop: insets.top }]}>
@@ -146,17 +172,25 @@ export default function HomeScreen() {
           {/* Title */}
           <Text style={styles.title}>{'Prêt pour votre\nprochaine aventure ?'}</Text>
 
-          {/* Filter tabs */}
-          <FilterTabs active={filter} onChange={setFilter} style={styles.filters} />
+          {/* Filter tabs + tri */}
+          <FilterTabs
+            active={filter}
+            onChange={handleFilterChange}
+            sortBy={sortBy}
+            onSortChange={handleSortChange}
+            showSortMenu={showSortMenu}
+            onToggleSortMenu={() => setShowSortMenu(v => !v)}
+            style={styles.filters}
+          />
 
-          {/* Trip list */}
-          <View style={styles.tripList}>
+          {/* Trip list avec fade */}
+          <Animated.View style={[styles.tripList, listStyle]}>
             {loadingTrips ? (
               <ActivityIndicator size="large" color={Colors.primary} style={{ marginTop: Spacing.xxl }} />
-            ) : filteredTrips.length === 0 ? (
+            ) : displayedTrips.length === 0 ? (
               <EmptyState onCreatePress={() => router.push('/trip/create')} />
             ) : (
-              filteredTrips.map((trip) => (
+              displayedTrips.map((trip) => (
                 <TripCard
                   key={trip.id}
                   trip={trip}
@@ -165,11 +199,11 @@ export default function HomeScreen() {
                 />
               ))
             )}
-          </View>
+          </Animated.View>
         </ScrollView>
       </View>
 
-      {/* ── Dashboard overlay — zéro Modal, position absolute ── */}
+      {/* ── Dashboard overlay ── */}
       {expandedTrip && (
         <ExpandedDashboard
           trip={expandedTrip}
@@ -192,7 +226,6 @@ export default function HomeScreen() {
           >
             <BlurView intensity={60} tint="light" style={StyleSheet.absoluteFill} />
             <View style={styles.settingsMenuInner}>
-              {/* Profil */}
               <View style={styles.menuProfile}>
                 <Avatar name={nickname} uri={avatarUrl} size={36} />
                 <View>
@@ -205,7 +238,6 @@ export default function HomeScreen() {
 
               <View style={styles.menuDivider} />
 
-              {/* Se déconnecter */}
               <TouchableOpacity
                 style={styles.menuItem}
                 activeOpacity={0.7}
@@ -222,7 +254,7 @@ export default function HomeScreen() {
         </Pressable>
       </Modal>
 
-    </View>
+    </Pressable>
   );
 }
 
@@ -259,16 +291,13 @@ const styles = StyleSheet.create({
   filters: { marginBottom: Spacing.lg },
   tripList: { gap: Spacing.md },
   empty: { alignItems: 'center', paddingVertical: Spacing.xxl, gap: Spacing.sm },
-  emptyIcon:     { fontSize: 48, marginBottom: Spacing.sm },
-  emptyTitle:    { fontSize: 18, fontWeight: '700', color: Colors.textPrimary },
-  emptySubtitle: { fontSize: 14, color: Colors.textSecondary, textAlign: 'center' },
-  emptyButton:   { marginTop: Spacing.md, backgroundColor: Colors.primary, paddingHorizontal: Spacing.xl, paddingVertical: Spacing.md, borderRadius: 999 },
+  emptyIcon:       { fontSize: 48, marginBottom: Spacing.sm },
+  emptyTitle:      { fontSize: 18, fontWeight: '700', color: Colors.textPrimary },
+  emptySubtitle:   { fontSize: 14, color: Colors.textSecondary, textAlign: 'center' },
+  emptyButton:     { marginTop: Spacing.md, backgroundColor: Colors.primary, paddingHorizontal: Spacing.xl, paddingVertical: Spacing.md, borderRadius: 999 },
   emptyButtonText: { color: Colors.white, fontWeight: '700', fontSize: 15 },
 
-  /* Settings modal */
-  modalBackdrop: {
-    flex: 1,
-  },
+  modalBackdrop: { flex: 1 },
   settingsMenu: {
     position: 'absolute',
     right: 16,
@@ -279,9 +308,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
     ...Shadows.lg,
   },
-  settingsMenuInner: {
-    paddingVertical: Spacing.sm,
-  },
+  settingsMenuInner: { paddingVertical: Spacing.sm },
   menuProfile: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -289,16 +316,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
   },
-  menuName: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-  },
-  menuEmail: {
-    fontSize: 12,
-    color: Colors.textTertiary,
-    maxWidth: 150,
-  },
+  menuName:  { fontSize: 14, fontWeight: '700', color: Colors.textPrimary },
+  menuEmail: { fontSize: 12, color: Colors.textTertiary, maxWidth: 150 },
   menuDivider: {
     height: 1,
     backgroundColor: Colors.border,
@@ -312,9 +331,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
     paddingVertical: 12,
   },
-  menuItemTextDanger: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#E53935',
-  },
+  menuItemTextDanger: { fontSize: 14, fontWeight: '600', color: '#E53935' },
 });

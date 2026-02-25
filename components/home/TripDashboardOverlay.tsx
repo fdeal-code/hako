@@ -15,7 +15,7 @@ import Animated, {
   withDelay,
   interpolate,
   Easing,
-  runOnJS,
+
 } from 'react-native-reanimated';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -88,7 +88,7 @@ export function TripDashboardOverlay({
       0,
       { duration: 380, easing: EASE_IN },
       (finished) => {
-        if (finished) runOnJS(onClose)();
+        if (finished) onClose();
       }
     );
   };

@@ -36,7 +36,23 @@ function formatDateLabel(start: string): string {
 }
 
 /* ─── Badge ──────────────────────────────────────────────────── */
-function Badge({ label }: { label: string }) {
+type BadgeVariant = 'future' | 'ongoing' | 'past';
+
+function Badge({ label, variant = 'future' }: { label: string; variant?: BadgeVariant }) {
+  if (variant === 'ongoing') {
+    return (
+      <View style={[styles.badge, styles.badgeOngoing]}>
+        <Text style={styles.badgeText}>{label}</Text>
+      </View>
+    );
+  }
+  if (variant === 'past') {
+    return (
+      <View style={[styles.badge, styles.badgePast]}>
+        <Text style={[styles.badgeText, styles.badgeTextPast]}>{label}</Text>
+      </View>
+    );
+  }
   return (
     <View style={styles.badge}>
       <BlurView intensity={20} tint="light" style={StyleSheet.absoluteFill} />
@@ -51,6 +67,20 @@ function Badge({ label }: { label: string }) {
   );
 }
 
+/* ─── Helpers statut ─────────────────────────────────────────── */
+function getTodayISO(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function getDateBadgeVariant(trip: Trip): BadgeVariant {
+  if (!trip.start_date || !trip.end_date) return 'future';
+  const today = getTodayISO();
+  if (trip.end_date < today) return 'past';
+  if (trip.start_date <= today) return 'ongoing';
+  return 'future';
+}
+
 /* ─── TripCard ───────────────────────────────────────────────── */
 export function TripCard({
   trip,
@@ -61,9 +91,11 @@ export function TripCard({
   onExpand: (layout: CardLayout) => void;
   isNextTrip?: boolean;
 }) {
-  const dateLabel = formatDateLabel(trip.start_date);
-  const isNext    = isNextTrip;
-  const members   = trip.members.slice(0, 3);
+  const dateLabel       = formatDateLabel(trip.start_date);
+  const isNext          = isNextTrip;
+  const members         = trip.members.slice(0, 3);
+  const dateBadgeVariant = getDateBadgeVariant(trip);
+  const isPast          = dateBadgeVariant === 'past';
 
   /* ref sur la View native pour mesurer la position écran */
   const cardRef = useRef<View>(null);
@@ -96,7 +128,7 @@ export function TripCard({
 
   return (
     /* View native pour measureInWindow */
-    <View ref={cardRef}>
+    <View ref={cardRef} style={isPast ? { opacity: 0.6 } : undefined}>
       <Animated.View style={[styles.card, cardStyle]}>
         <TouchableOpacity onPress={handlePress} activeOpacity={1} style={StyleSheet.absoluteFill}>
 
@@ -118,7 +150,7 @@ export function TripCard({
               <View style={styles.topRow}>
                 {isNext && <Badge label="Prochain voyage" />}
                 <View style={{ flex: 1 }} />
-                <Badge label={dateLabel} />
+                <Badge label={dateLabel} variant={dateBadgeVariant} />
               </View>
 
               <View style={{ flex: 1 }} />
@@ -135,7 +167,7 @@ export function TripCard({
                 }
               >
                 <Text style={styles.destination} adjustsFontSizeToFit numberOfLines={1}>
-                  {trip.destination.toUpperCase()}
+                  {trip.name.toUpperCase()}
                 </Text>
               </MaskedView>
 
@@ -189,7 +221,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,1)',
   },
-  badgeText: { color: Colors.white, fontSize: 14, fontWeight: '600' },
+  badgeText:     { color: Colors.white, fontSize: 14, fontWeight: '600' },
+  badgeOngoing:  { backgroundColor: 'rgba(34,197,94,0.35)',  borderColor: 'rgba(34,197,94,0.25)'  },
+  badgePast:     { backgroundColor: 'rgba(110,110,110,0.65)', borderColor: 'rgba(110,110,110,0.4)' },
+  badgeTextPast: { opacity: 0.75 },
   destinationMask: { alignSelf: 'stretch', marginBottom: 16 },
   destination: {
     fontSize: 100,

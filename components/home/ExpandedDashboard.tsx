@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useRef, useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -19,6 +19,8 @@ import Animated, {
   interpolate,
 } from 'react-native-reanimated';
 import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
+import MaskedView from '@react-native-masked-view/masked-view';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -92,6 +94,26 @@ export function ExpandedDashboard({ trip, cardLayout, progress }: Props) {
   const [mapCardLayout, setMapCardLayout] = useState<CardLayout>({ x: 0, y: 0, width: 0, height: 145 });
   const [showSettings, setShowSettings] = useState(false);
 
+  /* ── Géocodage de la destination ── */
+  const [region, setRegion] = useState({
+    latitude: 48.8566, longitude: 2.3522,
+    latitudeDelta: 0.5, longitudeDelta: 0.5,
+  });
+
+  useEffect(() => {
+    const key = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ?? '';
+    if (!key || !trip.destination) return;
+    fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(trip.destination)}&key=${key}`)
+      .then(r => r.json())
+      .then(json => {
+        if (json.status === 'OK' && json.results.length > 0) {
+          const { lat, lng } = json.results[0].geometry.location;
+          setRegion({ latitude: lat, longitude: lng, latitudeDelta: 0.5, longitudeDelta: 0.5 });
+        }
+      })
+      .catch(() => {});
+  }, [trip.destination]);
+
   const isOwner = session?.user?.id === trip.created_by;
 
   const handleMapPress = useCallback(() => {
@@ -154,7 +176,21 @@ export function ExpandedDashboard({ trip, cardLayout, progress }: Props) {
 
         {/* Header */}
         <Animated.View style={[styles.header, headerStyle]}>
-          <Text style={styles.destText}>{trip.destination.toUpperCase()}</Text>
+          <MaskedView
+            style={styles.destinationMask}
+            maskElement={
+              <LinearGradient
+                colors={['rgba(255,255,255,1.0)', 'rgba(255,255,255,0.10)']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 0, y: 1 }}
+                style={StyleSheet.absoluteFill}
+              />
+            }
+          >
+            <Text style={styles.destText} adjustsFontSizeToFit numberOfLines={1}>
+              {trip.name.toUpperCase()}
+            </Text>
+          </MaskedView>
 
           <View style={styles.headerMeta}>
             <BlurView intensity={50} tint="dark" style={styles.dateBadge}>
@@ -233,22 +269,18 @@ export function ExpandedDashboard({ trip, cardLayout, progress }: Props) {
               <GlassCard height={145} noPadding onPress={handleMapPress}>
                 <MapView
                   style={StyleSheet.absoluteFill}
-                  initialRegion={{
-                    latitude: 41.9028,
-                    longitude: 12.4964,
-                    latitudeDelta: 0.5,
-                    longitudeDelta: 0.5,
-                  }}
+                  initialRegion={region}
+                  region={region}
                   scrollEnabled={false}
                   zoomEnabled={false}
                   rotateEnabled={false}
                   pitchEnabled={false}
                 >
-                  <Marker coordinate={{ latitude: 41.9028, longitude: 12.4964 }} />
+                  <Marker coordinate={{ latitude: region.latitude, longitude: region.longitude }} />
                 </MapView>
                 <View style={styles.mapLabelWrap}>
                   <Ionicons name="map-outline" size={12} color="rgba(255,255,255,0.7)" />
-                  <Text style={styles.mapLabel}>Rome, Italie</Text>
+                  <Text style={styles.mapLabel}>{trip.destination}</Text>
                 </View>
               </GlassCard>
             </View>
@@ -282,6 +314,8 @@ export function ExpandedDashboard({ trip, cardLayout, progress }: Props) {
         <ExpandedMapView
           cardLayout={mapCardLayout}
           onClose={() => setIsMapExpanded(false)}
+          destination={trip.destination}
+          region={region}
         />
       )}
 
@@ -755,15 +789,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
     paddingTop: Spacing.xs,
   },
+  destinationMask: {
+    alignSelf: 'stretch',
+    marginBottom: 8,
+  },
   destText: {
-    fontSize: 68,
+    fontSize: 100,
     fontWeight: '900',
-    color: 'rgba(255,255,255,0.90)',
-    letterSpacing: 4,
-    lineHeight: 72,
-    textShadowColor: 'rgba(0,0,0,0.45)',
-    textShadowOffset: { width: 0, height: 3 },
-    textShadowRadius: 10,
+    color: '#FFFFFF',
+    textAlign: 'center',
+    letterSpacing: 3,
   },
   headerMeta: {
     flexDirection: 'row',
