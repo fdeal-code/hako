@@ -219,6 +219,7 @@ export default function DashboardScreen() {
         <ExpandedMapView
           cardLayout={mapCardLayout}
           onClose={() => setIsMapExpanded(false)}
+          tripId={id}
         />
       )}
 

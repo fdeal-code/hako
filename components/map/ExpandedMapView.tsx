@@ -9,6 +9,7 @@ import {
   PanResponder,
   useWindowDimensions,
 } from 'react-native';
+import { supabase } from '@/services/supabase';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -25,18 +26,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavButton } from '@/components/ui/NavButton';
 
 /* ─── Types ──────────────────────────────────────────────────── */
-type ActivityStatus = 'validated' | 'debate' | 'pending';
-
-interface Activity {
-  id: number;
-  name: string;
-  category: string;
-  lat: number;
-  lng: number;
-  status: ActivityStatus;
-  image: string;
-}
-
 export interface CardLayout {
   x: number;
   y: number;
@@ -47,29 +36,22 @@ export interface CardLayout {
 interface Props {
   cardLayout: CardLayout;
   onClose: () => void;
-  destination: string;
-  region: { latitude: number; longitude: number; latitudeDelta: number; longitudeDelta: number };
+  tripId?: string;
+  destination?: string;
+  region?: { latitude: number; longitude: number; latitudeDelta: number; longitudeDelta: number };
 }
 
-/* ─── Mock data ──────────────────────────────────────────────── */
-const MOCK_ACTIVITIES: Activity[] = [
-  { id: 1, name: 'Colisée',             category: '🏛️', lat: 41.8902, lng: 12.4922, status: 'validated', image: 'https://picsum.photos/200/200?random=1' },
-  { id: 2, name: 'Trattoria Da Enzo',   category: '🍽️', lat: 41.8898, lng: 12.4767, status: 'validated', image: 'https://picsum.photos/200/200?random=2' },
-  { id: 3, name: 'Fontaine de Trevi',   category: '📸', lat: 41.9009, lng: 12.4833, status: 'validated', image: 'https://picsum.photos/200/200?random=3' },
-  { id: 4, name: 'Café Sant Eustachio', category: '☕',  lat: 41.8986, lng: 12.4768, status: 'debate',    image: 'https://picsum.photos/200/200?random=4' },
-  { id: 5, name: 'Vatican',             category: '🏛️', lat: 41.9029, lng: 12.4534, status: 'pending',   image: 'https://picsum.photos/200/200?random=5' },
-];
-
-const STATUS_COLOR: Record<ActivityStatus, string> = {
-  validated: '#22C55E',
-  debate:    '#F97316',
-  pending:   '#9CA3AF',
-};
-
-const STATUS_LABEL: Record<ActivityStatus, string> = {
-  validated: '🟢 Validé',
-  debate:    '🟠 En débat',
-  pending:   '⚪ En attente',
+/* ─── Category → emoji ───────────────────────────────────────── */
+const CATEGORY_EMOJI: Record<string, string> = {
+  restaurant: '🍽️',
+  monument:   '🏛️',
+  hotel:      '🏨',
+  photo_spot: '📸',
+  activity:   '🎯',
+  bar:        '🍸',
+  shop:       '🛍️',
+  transport:  '✈️',
+  autre:      '📍',
 };
 
 /* ─── Filter definitions ─────────────────────────────────────── */
@@ -90,29 +72,23 @@ const STATUS_FILTERS: { key: StatusKey; icon: string; label: string }[] = [
   { key: 'pending',   icon: '⚪', label: 'En attente' },
 ];
 
-const CATEGORY_EMOJI_MAP: Record<string, CategoryKey> = {
-  '🍽️': 'restaurant',
-  '🏛️': 'monument',
-  '📸': 'photo',
-  '☕':  'cafe',
-  '🏨': 'hotel',
-};
-
 
 const EASE_OUT = Easing.out(Easing.cubic);
 const EASE_IN  = Easing.in(Easing.cubic);
 
 /* ─── Component ──────────────────────────────────────────────── */
-export function ExpandedMapView({ cardLayout, onClose, destination, region }: Props) {
+export function ExpandedMapView({ cardLayout, onClose, tripId, destination, region }: Props) {
   const insets = useSafeAreaInsets();
   const { width: SCREEN_W, height: SCREEN_H } = useWindowDimensions();
+  const mapRef = useRef<MapView>(null);
 
   const progress        = useSharedValue(0);
   const navProgress     = useSharedValue(0);
   const sheetProgress   = useSharedValue(0);
   const sheetTranslateY = useSharedValue(0);
 
-  const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null);
+  const [wishes,       setWishes]       = useState<any[]>([]);
+  const [selectedWish, setSelectedWish] = useState<any | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [categories, setCategories] = useState<Record<CategoryKey, boolean>>({
     restaurant: true, monument: true, photo: true, cafe: true, hotel: true,
@@ -125,6 +101,35 @@ export function ExpandedMapView({ cardLayout, onClose, destination, region }: Pr
     progress.value    = withTiming(1, { duration: 400, easing: EASE_OUT });
     navProgress.value = withDelay(260, withTiming(1, { duration: 280 }));
   }, []);
+
+  /* ── Load wishes with coordinates from Supabase (type='place' only) ── */
+  const loadWishes = async () => {
+    const { data, error } = await supabase
+      .from('wishes')
+      .select('*')
+      .eq('trip_id', tripId)
+      .eq('type', 'place')
+      .not('latitude', 'is', null)
+      .not('longitude', 'is', null);
+    if (error) console.warn('[MAP] loadWishes error:', JSON.stringify(error));
+    if (data) setWishes(data);
+  };
+
+  useEffect(() => {
+    if (tripId) loadWishes();
+  }, [tripId]);
+
+  /* ── Centre la carte sur les markers ── */
+  useEffect(() => {
+    if (wishes.length === 0) return;
+    const coords = wishes.map(w => ({ latitude: w.latitude, longitude: w.longitude }));
+    setTimeout(() => {
+      mapRef.current?.fitToCoordinates(coords, {
+        edgePadding: { top: 100, right: 50, bottom: 100, left: 50 },
+        animated: true,
+      });
+    }, 600);
+  }, [wishes]);
 
   /* ── Animated styles ── */
   const heroStyle = useAnimatedStyle(() => {
@@ -154,10 +159,8 @@ export function ExpandedMapView({ cardLayout, onClose, destination, region }: Pr
   });
 
   /* ── Handlers ── */
-  const clearSelectedActivity = () => setSelectedActivity(null);
-
-  const handleMarkerPress = (activity: Activity) => {
-    setSelectedActivity(activity);
+  const handleMarkerPress = (wish: any) => {
+    setSelectedWish(wish);
     sheetTranslateY.value = 0;
     sheetProgress.value = withTiming(1, { duration: 320, easing: EASE_OUT });
   };
@@ -166,7 +169,7 @@ export function ExpandedMapView({ cardLayout, onClose, destination, region }: Pr
     sheetProgress.value = withTiming(0, { duration: 220, easing: EASE_IN });
     setTimeout(() => {
       sheetTranslateY.value = 0;
-      clearSelectedActivity();
+      setSelectedWish(null);
     }, 230);
   };
 
@@ -204,14 +207,12 @@ export function ExpandedMapView({ cardLayout, onClose, destination, region }: Pr
   const toggleStatus = (key: StatusKey) =>
     setStatusFilters(prev => ({ ...prev, [key]: !prev[key] }));
 
-  const filteredActivities = MOCK_ACTIVITIES.filter(a => {
-    const catKey = CATEGORY_EMOJI_MAP[a.category];
-    const categoryMatch = catKey ? categories[catKey] : true;
+  const filteredWishes = wishes.filter(w => {
     const statusMatch =
-      (a.status === 'validated' && statusFilters.validated) ||
-      (a.status === 'debate'    && statusFilters.debate)    ||
-      (a.status === 'pending'   && statusFilters.pending);
-    return categoryMatch && statusMatch;
+      (w.status === 'validated' && statusFilters.validated) ||
+      (w.status === 'debate'    && statusFilters.debate)    ||
+      (w.status === 'pending'   && statusFilters.pending);
+    return statusMatch;
   });
 
   const BOTTOM = Math.max(insets.bottom, 10) + 16;
@@ -228,29 +229,64 @@ export function ExpandedMapView({ cardLayout, onClose, destination, region }: Pr
 
         {/* ── Map ── */}
         <MapView
+          ref={mapRef}
           style={StyleSheet.absoluteFill}
-          initialRegion={{ ...region, latitudeDelta: 0.3, longitudeDelta: 0.3 }}
+          initialRegion={{
+            latitude:      region?.latitude  ?? 48.8566,
+            longitude:     region?.longitude ?? 2.3522,
+            latitudeDelta:  0.3,
+            longitudeDelta: 0.3,
+          }}
           scrollEnabled
           zoomEnabled
           rotateEnabled
           pitchEnabled
         >
-          {filteredActivities.map(activity => (
-            <Marker
-              key={activity.id}
-              coordinate={{ latitude: activity.lat, longitude: activity.lng }}
-              onPress={() => handleMarkerPress(activity)}
-              tracksViewChanges={false}
-            >
-              <View style={styles.markerWrapper}>
-                <Image
-                  source={{ uri: activity.image }}
-                  style={[styles.markerPhoto, { borderColor: STATUS_COLOR[activity.status] }]}
-                />
-                <Text style={styles.markerEmoji}>{activity.category}</Text>
-              </View>
-            </Marker>
-          ))}
+          {filteredWishes.map(wish => {
+            const borderColor =
+              wish.status === 'validated' ? '#22C55E' :
+              wish.status === 'debate'    ? '#F97316' : '#9CA3AF';
+            const emoji =
+              wish.category === 'restaurant' ? '🍽️' :
+              wish.category === 'monument'   ? '🏛️' :
+              wish.category === 'cafe'       ? '☕'  :
+              wish.category === 'hotel'      ? '🏨' :
+              wish.category === 'activity'   ? '🎭' :
+              wish.category === 'photo_spot' ? '📸' :
+              wish.category === 'bar'        ? '🍺' : '📍';
+            return (
+              <Marker
+                key={wish.id}
+                coordinate={{ latitude: wish.latitude, longitude: wish.longitude }}
+                onPress={() => handleMarkerPress(wish)}
+                tracksViewChanges={false}
+              >
+                <View style={{ alignItems: 'center' }}>
+                  <View style={{
+                    width: 52, height: 52, borderRadius: 26,
+                    borderWidth: 4, borderColor,
+                    overflow: 'hidden', backgroundColor: '#E5E7EB',
+                  }}>
+                    {wish.image_url ? (
+                      <Image source={{ uri: wish.image_url }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                    ) : (
+                      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                        <Text style={{ fontSize: 20 }}>{emoji}</Text>
+                      </View>
+                    )}
+                  </View>
+                  <View style={{
+                    backgroundColor: 'white', paddingHorizontal: 8, paddingVertical: 3,
+                    borderRadius: 10, marginTop: 4,
+                    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
+                    shadowOpacity: 0.2, shadowRadius: 2,
+                  }}>
+                    <Text style={{ fontSize: 11, fontWeight: '600' }} numberOfLines={1}>{wish.title}</Text>
+                  </View>
+                </View>
+              </Marker>
+            );
+          })}
         </MapView>
 
         {/* ── Tap-outside to close filters ── */}
@@ -313,26 +349,38 @@ export function ExpandedMapView({ cardLayout, onClose, destination, region }: Pr
         )}
 
         {/* ── Bottom sheet ── */}
-        {selectedActivity != null && (
+        {selectedWish != null && (
           <Animated.View
             style={[styles.sheet, { paddingBottom: insets.bottom + 16 }, sheetStyle]}
             {...panResponder.panHandlers}
           >
             <View style={styles.sheetHandle} />
-            <Image
-              source={{ uri: selectedActivity.image }}
-              style={styles.sheetImage}
-              resizeMode="cover"
-            />
+            {(selectedWish.image_url ?? selectedWish.cover_url) ? (
+              <Image
+                source={{ uri: selectedWish.image_url ?? selectedWish.cover_url }}
+                style={styles.sheetImage}
+                resizeMode="cover"
+              />
+            ) : null}
             <View style={styles.sheetBody}>
-              <Text style={styles.sheetEmoji}>{selectedActivity.category}</Text>
+              <Text style={styles.sheetEmoji}>
+                {CATEGORY_EMOJI[selectedWish.category ?? ''] ?? '📍'}
+              </Text>
               <View style={styles.sheetInfo}>
-                <Text style={styles.sheetName}>{selectedActivity.name}</Text>
-                <Text style={styles.sheetStatus}>{STATUS_LABEL[selectedActivity.status]}</Text>
+                <Text style={styles.sheetName}>{selectedWish.title}</Text>
+                <Text style={styles.sheetStatus}>
+                  {selectedWish.status === 'validated' ? '🟢 Validée' :
+                   selectedWish.status === 'debate'    ? '🟠 En débat' : '⚪ En attente'}
+                </Text>
+                {selectedWish.address ? (
+                  <Text style={[styles.sheetStatus, { marginTop: 2 }]} numberOfLines={1}>
+                    📍 {selectedWish.address}
+                  </Text>
+                ) : null}
               </View>
             </View>
-            <TouchableOpacity style={styles.sheetActionBtn} activeOpacity={0.85}>
-              <Text style={styles.sheetActionText}>Voir dans le planning</Text>
+            <TouchableOpacity style={styles.sheetActionBtn} onPress={dismissSheet} activeOpacity={0.85}>
+              <Text style={styles.sheetActionText}>Fermer</Text>
             </TouchableOpacity>
           </Animated.View>
         )}

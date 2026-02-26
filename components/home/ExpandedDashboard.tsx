@@ -314,6 +314,7 @@ export function ExpandedDashboard({ trip, cardLayout, progress }: Props) {
         <ExpandedMapView
           cardLayout={mapCardLayout}
           onClose={() => setIsMapExpanded(false)}
+          tripId={trip.id}
           destination={trip.destination}
           region={region}
         />
