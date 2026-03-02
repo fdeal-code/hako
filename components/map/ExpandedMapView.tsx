@@ -9,6 +9,7 @@ import {
   PanResponder,
   useWindowDimensions,
 } from 'react-native';
+import { router } from 'expo-router';
 import { supabase } from '@/services/supabase';
 import Animated, {
   useSharedValue,
@@ -24,6 +25,7 @@ import { BlurView } from 'expo-blur';
 import MapView, { Marker } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavButton } from '@/components/ui/NavButton';
+import { AddToPlanningSheet } from '@/components/planning/AddToPlanningSheet';
 
 /* ─── Types ──────────────────────────────────────────────────── */
 export interface CardLayout {
@@ -96,6 +98,7 @@ export function ExpandedMapView({ cardLayout, onClose, tripId, destination, regi
   const [statusFilters, setStatusFilters] = useState<Record<StatusKey, boolean>>({
     validated: true, debate: true, pending: true,
   });
+  const [showPlanSheet, setShowPlanSheet] = useState(false);
 
   useEffect(() => {
     progress.value    = withTiming(1, { duration: 400, easing: EASE_OUT });
@@ -218,6 +221,7 @@ export function ExpandedMapView({ cardLayout, onClose, tripId, destination, regi
   const BOTTOM = Math.max(insets.bottom, 10) + 16;
 
   return (
+    <>
     <Modal visible transparent animationType="none" statusBarTranslucent>
       <Animated.View style={[styles.hero, heroStyle]}>
 
@@ -379,9 +383,24 @@ export function ExpandedMapView({ cardLayout, onClose, tripId, destination, regi
                 ) : null}
               </View>
             </View>
-            <TouchableOpacity style={styles.sheetActionBtn} onPress={dismissSheet} activeOpacity={0.85}>
-              <Text style={styles.sheetActionText}>Fermer</Text>
-            </TouchableOpacity>
+            <View style={styles.sheetButtons}>
+              {selectedWish.status === 'validated' && (
+                <TouchableOpacity
+                  style={[styles.sheetActionBtn, styles.sheetPlanBtn]}
+                  onPress={() => setShowPlanSheet(true)}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.sheetActionText}>📅 Ajouter au planning</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity
+                style={[styles.sheetActionBtn, styles.sheetCloseBtn]}
+                onPress={dismissSheet}
+                activeOpacity={0.85}
+              >
+                <Text style={[styles.sheetActionText, { color: '#1A1A2E' }]}>Fermer</Text>
+              </TouchableOpacity>
+            </View>
           </Animated.View>
         )}
 
@@ -401,6 +420,23 @@ export function ExpandedMapView({ cardLayout, onClose, tripId, destination, regi
 
       </Animated.View>
     </Modal>
+
+    <AddToPlanningSheet
+      visible={showPlanSheet}
+      onClose={() => setShowPlanSheet(false)}
+      onAdded={(day, itemId) => {
+        setShowPlanSheet(false);
+        if (tripId) {
+          router.push({
+            pathname: '/trip/[id]/planning',
+            params: { id: tripId, highlightDay: day, highlightId: itemId ?? '' },
+          } as any);
+        }
+      }}
+      tripId={tripId ?? ''}
+      defaultWish={selectedWish ? { id: selectedWish.id, title: selectedWish.title } : null}
+    />
+  </>
   );
 }
 
@@ -494,13 +530,23 @@ const styles = StyleSheet.create({
     color: '#888',
     marginTop: 2,
   },
-  sheetActionBtn: {
+  sheetButtons: {
     marginHorizontal: 16,
     marginTop: 12,
-    backgroundColor: '#1A1A2E',
+    gap: 8,
+  },
+  sheetActionBtn: {
     borderRadius: 14,
     paddingVertical: 14,
     alignItems: 'center',
+  },
+  sheetPlanBtn: {
+    backgroundColor: '#1A1A2E',
+  },
+  sheetCloseBtn: {
+    backgroundColor: '#F5F4F1',
+    borderWidth: 1,
+    borderColor: '#EBEBEB',
   },
   sheetActionText: {
     color: '#fff',

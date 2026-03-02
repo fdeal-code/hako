@@ -16,7 +16,15 @@ import {
   PanResponder,
   Dimensions,
   Linking,
+  Keyboard,
+  useWindowDimensions,
 } from 'react-native';
+import ReAnimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  Easing,
+} from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
@@ -29,6 +37,7 @@ import { Colors, Spacing, Radii, Shadows } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/services/supabase';
 import { NavButton } from '@/components/ui/NavButton';
+import { AddToPlanningSheet } from '@/components/planning/AddToPlanningSheet';
 
 const { width: SW } = Dimensions.get('window');
 const COL_GAP   = 10;
@@ -458,16 +467,17 @@ function WishCard({
 /* ─── DetailSheet ────────────────────────────────────────────── */
 function DetailSheet({
   wish, currentUserId, isAuthor,
-  onVote, onUpdate, onArchive, onDelete, onClose,
+  onVote, onUpdate, onArchive, onDelete, onClose, onAddToPlanning,
 }: {
-  wish:          Wish | null;
-  currentUserId: string;
-  isAuthor:      boolean;
-  onVote:        (wishId: string, vote: VoteType) => void;
-  onUpdate:      (wishId: string, patch: Partial<Wish>) => void;
-  onArchive:     (wishId: string) => void;
-  onDelete:      (wishId: string) => void;
-  onClose:       () => void;
+  wish:            Wish | null;
+  currentUserId:   string;
+  isAuthor:        boolean;
+  onVote:          (wishId: string, vote: VoteType) => void;
+  onUpdate:        (wishId: string, patch: Partial<Wish>) => void;
+  onArchive:       (wishId: string) => void;
+  onDelete:        (wishId: string) => void;
+  onClose:         () => void;
+  onAddToPlanning: (w: { id: string; title: string }) => void;
 }) {
   const insets = useSafeAreaInsets();
 
@@ -492,6 +502,7 @@ function DetailSheet({
   const [addingVideo,    setAddingVideo]    = useState(false);
   const [videoInput,     setVideoInput]     = useState('');
   const [isFetchingVid,  setIsFetchingVid]  = useState(false);
+
 
   const addrTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -1099,7 +1110,7 @@ function DetailSheet({
                 {wish.status === 'validated' && !isOrga && (
                   <TouchableOpacity
                     style={[ds.actionBtn, { backgroundColor: Colors.primary }]}
-                    onPress={() => Alert.alert('Planning', 'Fonctionnalité à venir !')}
+                    onPress={() => onAddToPlanning({ id: wish.id, title: wish.title })}
                     activeOpacity={0.85}
                   >
                     <Ionicons name="calendar-outline" size={17} color={Colors.white} />
@@ -1152,106 +1163,136 @@ function DetailSheet({
   );
 }
 
-/* ─── TypePickerModal ────────────────────────────────────────── */
-function TypePickerModal({
-  visible, onSelect, onClose,
-}: {
-  visible:  boolean;
-  onSelect: (type: WishType) => void;
-  onClose:  () => void;
-}) {
-  const insets = useSafeAreaInsets();
-  return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={tp.overlay}>
-        <TouchableOpacity style={StyleSheet.absoluteFill} onPress={onClose} activeOpacity={1} />
-        <View style={[tp.sheet, { paddingBottom: Math.max(insets.bottom, 20) }]}>
-          <View style={tp.handle} />
-          <Text style={tp.title}>Ajouter une envie</Text>
-          <Text style={tp.subtitle}>Quel type d'envie veux-tu ajouter ?</Text>
-          {TYPE_PICKER_OPTIONS.map(opt => (
-            <TouchableOpacity
-              key={opt.type}
-              style={tp.card}
-              onPress={() => onSelect(opt.type)}
-              activeOpacity={0.85}
-            >
-              <View style={[tp.cardIconWrap, {
-                backgroundColor:
-                  opt.type === 'place'       ? '#EFF6FF' :
-                  opt.type === 'inspiration' ? '#FFF7ED' : '#F0FDF4',
-              }]}>
-                <Text style={tp.cardIcon}>{opt.emoji}</Text>
-              </View>
-              <View style={tp.cardText}>
-                <Text style={tp.cardTitle}>{opt.title}</Text>
-                <Text style={tp.cardSubtitle}>{opt.subtitle}</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color="#C0C0C0" />
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
-/* ─── AddWishModal ───────────────────────────────────────────── */
-function AddWishModal({
-  visible, tripId, userId, wishType, onClose, onAdded,
+/* ─── AddWishFlow ────────────────────────────────────────────── */
+function AddWishFlow({
+  visible, tripId, userId, onClose, onAdded,
 }: {
   visible:  boolean;
   tripId:   string;
   userId:   string;
-  wishType: WishType;
   onClose:  () => void;
   onAdded:  () => void;
 }) {
-  const insets = useSafeAreaInsets();
+  const insets    = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
 
+  /* ── Step management ── */
+  const [step,     setStep]     = useState(0);
+  const [wishType, setWishType] = useState<WishType | null>(null);
+
+  const offset = useSharedValue(0);
+  const containerStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: offset.value }],
+  }));
+
+  const goToStep = (n: number) => {
+    Keyboard.dismiss();
+    offset.value = withTiming(-n * width, { duration: 340, easing: Easing.out(Easing.cubic) });
+    setStep(n);
+  };
+
+  const handleBack = () => {
+    Keyboard.dismiss();
+    if (step === 0) handleClose();
+    else goToStep(step - 1);
+  };
+
+  const handleClose = () => {
+    Keyboard.dismiss();
+    onClose();
+    setTimeout(() => {
+      offset.value = 0;
+      setStep(0);
+      setWishType(null);
+      resetForm();
+    }, 350);
+  };
+
+  const handleSelectType = (type: WishType) => {
+    setWishType(type);
+    goToStep(1);
+  };
+
+  /* ── Form state ── */
   const [title,       setTitle]       = useState('');
   const [description, setDescription] = useState('');
+  const [category,    setCategory]    = useState<Category | null>(null);
   const [isSaving,    setIsSaving]    = useState(false);
 
-  /* ── Place state ── */
+  /* Place */
   const [placeQuery,       setPlaceQuery]       = useState('');
   const [placeSuggestions, setPlaceSuggestions] = useState<PlaceSuggestion[]>([]);
   const [selectedPlace,    setSelectedPlace]    = useState<PlaceDetails | null>(null);
   const [videoLinks,       setVideoLinks]       = useState<WishLink[]>([]);
   const [videoUrl,         setVideoUrl]         = useState('');
   const [isFetchingVideo,  setIsFetchingVideo]  = useState(false);
-  const placeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const placeTimer      = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const placeSearchRef  = useRef<TextInput>(null);
 
-  /* ── Inspiration state ── */
+  useEffect(() => {
+    if (step === 1 && wishType === 'place') {
+      const t = setTimeout(() => placeSearchRef.current?.focus(), 380);
+      return () => clearTimeout(t);
+    }
+  }, [step, wishType]);
+
+  /* Inspiration */
   const [insLink,          setInsLink]          = useState('');
   const [linkPreview,      setLinkPreview]      = useState<LinkPreviewData | null>(null);
   const [isFetchingLink,   setIsFetchingLink]   = useState(false);
-  const [category,         setCategory]         = useState<Category | null>(null);
   const [showPlaceSearch,  setShowPlaceSearch]  = useState(false);
   const [insPlaceQuery,    setInsPlaceQuery]    = useState('');
   const [insPlaceSugs,     setInsPlaceSugs]     = useState<PlaceSuggestion[]>([]);
   const [insSelectedPlace, setInsSelectedPlace] = useState<PlaceDetails | null>(null);
   const insPlaceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  /* Orga */
+  const [assignees, setAssignees] = useState<string[]>([]);
+
+  /* Orga animated placeholder */
+  const ORGA_PH = ['Prendre un adaptateur', 'Réserver le restaurant', 'Acheter la crème solaire', 'Vérifier les passeports'];
+  const [phIndex,    setPhIndex]    = useState(0);
+  const phIdxSV      = useSharedValue(0);
+  const phOpacity    = useSharedValue(1);
+  const phAnimStyle  = useAnimatedStyle(() => ({ opacity: phOpacity.value }));
+
   useEffect(() => {
-    if (visible) {
-      setTitle(''); setDescription(''); setIsSaving(false);
-      setPlaceQuery(''); setPlaceSuggestions([]); setSelectedPlace(null);
-      setVideoLinks([]); setVideoUrl(''); setIsFetchingVideo(false);
-      setInsLink(''); setLinkPreview(null); setIsFetchingLink(false);
-      setCategory(null); setShowPlaceSearch(false);
-      setInsPlaceQuery(''); setInsPlaceSugs([]); setInsSelectedPlace(null);
+    if (!visible || wishType !== 'orga' || step !== 1) return;
+    phIdxSV.value = 0; setPhIndex(0); phOpacity.value = 1;
+    const id = setInterval(() => {
+      phOpacity.value = withTiming(0, { duration: 300 });
+      setTimeout(() => {
+        const next = (phIdxSV.value + 1) % ORGA_PH.length;
+        phIdxSV.value = next; setPhIndex(next);
+        phOpacity.value = withTiming(1, { duration: 300 });
+      }, 310);
+    }, 3000);
+    return () => clearInterval(id);
+  }, [visible, wishType, step]);
+
+  const resetForm = () => {
+    setTitle(''); setDescription(''); setCategory(null); setIsSaving(false);
+    setPlaceQuery(''); setPlaceSuggestions([]); setSelectedPlace(null);
+    setVideoLinks([]); setVideoUrl(''); setIsFetchingVideo(false);
+    setInsLink(''); setLinkPreview(null); setIsFetchingLink(false);
+    setShowPlaceSearch(false); setInsPlaceQuery(''); setInsPlaceSugs([]); setInsSelectedPlace(null);
+    setAssignees([]);
+  };
+
+  useEffect(() => {
+    if (!visible) {
+      setTimeout(() => { offset.value = 0; setStep(0); setWishType(null); resetForm(); }, 350);
     }
   }, [visible]);
 
-  const handlePlaceSearch = useCallback((text: string) => {
-    setPlaceQuery(text);
-    setSelectedPlace(null);
+  /* ── Place handlers ── */
+  const handlePlaceSearch = (text: string) => {
+    setPlaceQuery(text); setSelectedPlace(null);
     if (placeTimer.current) clearTimeout(placeTimer.current);
     placeTimer.current = setTimeout(async () => {
       setPlaceSuggestions(await fetchPlaces(text));
     }, 400);
-  }, []);
+  };
 
   const selectPlace = async (sug: PlaceSuggestion) => {
     setPlaceSuggestions([]);
@@ -1260,11 +1301,11 @@ function AddWishModal({
       setSelectedPlace(details);
       setPlaceQuery(details.name ?? sug.description);
       if (!title) setTitle(details.name ?? '');
-      // Auto-detect category from Google types
       if (details.googleTypes) {
         const detected = detectCategory(details.googleTypes);
         if (detected) setCategory(detected);
       }
+      setTimeout(() => goToStep(2), 400);
     }
   };
 
@@ -1274,53 +1315,43 @@ function AddWishModal({
     setIsFetchingVideo(true);
     const data = await fetchLinkData(url);
     setIsFetchingVideo(false);
-    const link: WishLink = {
-      url,
-      thumbnail: data?.thumbnail ?? undefined,
-      title:     data?.title     ?? undefined,
-    };
-    setVideoLinks(prev => [...prev, link]);
+    setVideoLinks(prev => [...prev, { url, thumbnail: data?.thumbnail ?? undefined, title: data?.title ?? undefined }]);
     setVideoUrl('');
   };
 
   const handlePasteVideo = async () => {
     try {
       const text = await Clipboard.getStringAsync();
-      if (text.includes('tiktok.com') || text.includes('instagram.com')) {
-        setVideoUrl(text);
-      } else {
-        Alert.alert('Presse-papier', 'Aucun lien TikTok ou Instagram détecté.');
-      }
-    } catch { Alert.alert('Erreur', 'Impossible de lire le presse-papier.'); }
+      if (text.includes('tiktok.com') || text.includes('instagram.com')) setVideoUrl(text);
+      else Alert.alert('Presse-papier', 'Aucun lien TikTok ou Instagram détecté.');
+    } catch {}
   };
 
-  const handleInsLinkChange = useCallback(async (url: string) => {
+  /* ── Inspiration handlers ── */
+  const handleInsLinkChange = async (url: string) => {
     setInsLink(url); setLinkPreview(null);
     if (!url.includes('tiktok.com') && !url.includes('instagram.com')) return;
     setIsFetchingLink(true);
     const data = await fetchLinkData(url);
     setIsFetchingLink(false);
     if (data) { setLinkPreview(data); setTitle(t => t || data.title); }
-  }, []);
+  };
 
-  const handlePaste = useCallback(async () => {
+  const handlePaste = async () => {
     try {
       const text = await Clipboard.getStringAsync();
-      if (text.includes('tiktok.com') || text.includes('instagram.com')) {
-        handleInsLinkChange(text);
-      } else {
-        Alert.alert('Presse-papier', 'Aucun lien TikTok ou Instagram détecté.');
-      }
-    } catch { Alert.alert('Erreur', 'Impossible de lire le presse-papier.'); }
-  }, [handleInsLinkChange]);
+      if (text.includes('tiktok.com') || text.includes('instagram.com')) handleInsLinkChange(text);
+      else Alert.alert('Presse-papier', 'Aucun lien TikTok ou Instagram détecté.');
+    } catch {}
+  };
 
-  const handleInsPlaceSearch = useCallback((text: string) => {
+  const handleInsPlaceSearch = (text: string) => {
     setInsPlaceQuery(text); setInsSelectedPlace(null);
     if (insPlaceTimer.current) clearTimeout(insPlaceTimer.current);
     insPlaceTimer.current = setTimeout(async () => {
       setInsPlaceSugs(await fetchPlaces(text));
     }, 400);
-  }, []);
+  };
 
   const selectInsPlace = async (sug: PlaceSuggestion) => {
     setInsPlaceSugs([]);
@@ -1328,13 +1359,14 @@ function AddWishModal({
     if (details) { setInsSelectedPlace(details); setInsPlaceQuery(details.name ?? sug.description); }
   };
 
+  /* ── Submit ── */
   const handleSubmit = async () => {
     if (wishType === 'place' && !selectedPlace) {
-      Alert.alert('Lieu requis', 'Recherche et sélectionne un lieu Google');
+      Alert.alert('Lieu requis', 'Sélectionne un lieu depuis les suggestions.');
       return;
     }
     if (!title.trim() && wishType !== 'place') {
-      Alert.alert('Titre requis', 'Donne un titre à ton envie');
+      Alert.alert('Titre requis', 'Donne un titre à ton envie.');
       return;
     }
     setIsSaving(true);
@@ -1347,7 +1379,6 @@ function AddWishModal({
         status:      'pending',
         type:        wishType,
       };
-
       if (wishType === 'place' && selectedPlace) {
         base.address       = selectedPlace.address;
         base.latitude      = selectedPlace.lat;
@@ -1357,7 +1388,6 @@ function AddWishModal({
         base.category      = category ?? null;
         base.links         = videoLinks.length > 0 ? videoLinks : null;
       }
-
       if (wishType === 'inspiration') {
         base.link_url  = insLink.trim() || null;
         base.image_url = linkPreview?.thumbnail ?? null;
@@ -1366,342 +1396,431 @@ function AddWishModal({
           base.address   = insSelectedPlace.address;
           base.latitude  = insSelectedPlace.lat;
           base.longitude = insSelectedPlace.lng;
+          base.type      = 'place';
         }
       }
-
       const { error } = await supabase.from('wishes').insert(base);
       if (error) throw error;
-      onAdded(); onClose();
+      onAdded();
+      handleClose();
     } catch (e: any) {
       Alert.alert('Erreur', e?.message ?? "Impossible d'ajouter l'envie");
     }
     setIsSaving(false);
   };
 
-  const FORM_TITLES: Record<WishType, string> = {
-    place:       '📍 Ajouter un lieu',
-    inspiration: '✨ Ajouter une inspiration',
-    orga:        '📋 Ajouter une tâche',
-  };
+  const canNext1Ins  = !!insLink.trim() || !!title.trim();
+  const canNext1Orga = !!title.trim();
+
+  /* ── Shared category grid ── */
+  const CatGrid = ({ label }: { label: string }) => (
+    <>
+      <Text style={wf.sectionLabel}>{label}</Text>
+      <View style={wf.catGrid}>
+        {ADD_CATEGORIES.map(cat => (
+          <TouchableOpacity
+            key={cat.key}
+            style={[wf.catBtn, category === cat.key && wf.catBtnActive]}
+            onPress={() => setCategory(prev => prev === cat.key ? null : cat.key as Category)}
+            activeOpacity={0.75}
+          >
+            <Text style={wf.catEmoji}>{cat.emoji}</Text>
+            <Text style={[wf.catLabel, category === cat.key && wf.catLabelActive]}>{cat.label}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </>
+  );
+
+  /* ── Bottom bar ── */
+  const BottomBar = ({
+    onSubmit, submitLabel, disabled,
+  }: { onSubmit?: () => void; submitLabel?: string; disabled?: boolean }) => (
+    <View style={[wf.bottomBar, { paddingBottom: Math.max(insets.bottom, Spacing.lg) }]}>
+      <NavButton icon="arrow-back" onPress={handleBack} />
+      <TouchableOpacity
+        style={[wf.nextBtn, (isSaving || disabled) && wf.nextBtnDisabled]}
+        onPress={onSubmit ?? handleSubmit}
+        disabled={isSaving || disabled}
+        activeOpacity={0.85}
+      >
+        {isSaving
+          ? <ActivityIndicator size="small" color={Colors.white} />
+          : <Text style={wf.nextBtnText}>{submitLabel ?? 'Suivant'}</Text>
+        }
+      </TouchableOpacity>
+    </View>
+  );
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+    <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={handleClose}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-        <View style={[am.container, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-          <View style={am.header}>
-            <Text style={am.headerTitle}>{FORM_TITLES[wishType]}</Text>
-            <TouchableOpacity onPress={onClose} style={am.closeBtn} activeOpacity={0.7}>
-              <Ionicons name="close" size={22} color={Colors.textPrimary} />
+        <View style={[wf.root, { paddingTop: insets.top }]}>
+
+          {/* ── Fixed header ── */}
+          <View style={wf.header}>
+            <View style={wf.headerBtn} />
+            {step > 0 ? (
+              <View style={wf.dots}>
+                {[1, 2].map(i => (
+                  <View key={i} style={[wf.dot, step === i && wf.dotActive]} />
+                ))}
+              </View>
+            ) : <View />}
+            <TouchableOpacity onPress={handleClose} style={wf.headerBtn} activeOpacity={0.7} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Ionicons name="close" size={22} color={Colors.textSecondary} />
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={{ flex: 1 }} contentContainerStyle={am.scrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+          {/* ── Slides ── */}
+          <ReAnimated.View style={[wf.stepsRow, containerStyle, { width: width * 3 }]}>
 
-            {/* ══ LIEU ══ */}
-            {wishType === 'place' && (
-              <>
-                <View style={am.section}>
-                  <Text style={am.label}>🔍 Rechercher un lieu *</Text>
-                  <TextInput
-                    style={am.input}
-                    placeholder="Fontaine de Trevi, restaurant..."
-                    placeholderTextColor={Colors.textTertiary}
-                    value={placeQuery}
-                    onChangeText={handlePlaceSearch}
-                    autoCorrect={false}
-                    autoFocus
-                  />
-                  {placeSuggestions.length > 0 && (
-                    <View style={am.suggestBox}>
-                      {placeSuggestions.slice(0, 5).map((sug, i) => (
-                        <TouchableOpacity
-                          key={sug.place_id}
-                          style={[am.suggestItem, i < placeSuggestions.length - 1 && am.suggestBorder]}
-                          onPress={() => selectPlace(sug)}
-                          activeOpacity={0.7}
-                        >
-                          <Ionicons name="location-outline" size={14} color={Colors.textSecondary} />
-                          <Text style={am.suggestText} numberOfLines={1}>{sug.description}</Text>
-                        </TouchableOpacity>
-                      ))}
+            {/* ═══ STEP 0 — Choix du type ═══ */}
+            <View style={[wf.step, { width }]}>
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={wf.typeScroll}>
+                <Text style={wf.stepTitle}>Quelle envie{'\n'}veux-tu ajouter ?</Text>
+                {TYPE_PICKER_OPTIONS.map(opt => (
+                  <TouchableOpacity
+                    key={opt.type}
+                    style={wf.typeCard}
+                    onPress={() => handleSelectType(opt.type)}
+                    activeOpacity={0.82}
+                  >
+                    <View style={[wf.typeCardIcon, {
+                      backgroundColor:
+                        opt.type === 'place'       ? '#EFF6FF' :
+                        opt.type === 'inspiration' ? '#FFF7ED' : '#F0FDF4',
+                    }]}>
+                      <Text style={wf.typeCardIconText}>{opt.emoji}</Text>
                     </View>
-                  )}
-                </View>
-
-                {selectedPlace && (
-                  <View style={am.placePreviewCard}>
-                    {selectedPlace.photoUrl && (
-                      <Image source={{ uri: selectedPlace.photoUrl }} style={am.placePreviewImage} resizeMode="cover" />
-                    )}
-                    <View style={am.placePreviewBody}>
-                      {!!selectedPlace.name && <Text style={am.placePreviewName}>{selectedPlace.name}</Text>}
-                      <Text style={am.placePreviewAddr} numberOfLines={2}>{selectedPlace.address}</Text>
-                      {!!selectedPlace.rating && (
-                        <Text style={am.placePreviewRating}>⭐ {selectedPlace.rating.toFixed(1)}</Text>
-                      )}
+                    <View style={wf.typeCardBody}>
+                      <Text style={wf.typeCardTitle}>{opt.title}</Text>
+                      <Text style={wf.typeCardSub}>{opt.subtitle}</Text>
                     </View>
-                  </View>
-                )}
-
-                <View style={am.section}>
-                  <Text style={am.label}>Titre</Text>
-                  <TextInput
-                    style={am.input}
-                    placeholder="Nom du lieu"
-                    placeholderTextColor={Colors.textTertiary}
-                    value={title}
-                    onChangeText={setTitle}
-                  />
-                </View>
-
-                {/* Catégorie (pré-sélectionnée par Google, modifiable) */}
-                <View style={am.section}>
-                  <Text style={am.label}>Catégorie</Text>
-                  <View style={am.catGrid}>
-                    {ADD_CATEGORIES.map(cat => (
-                      <TouchableOpacity
-                        key={cat.key}
-                        style={[am.catBtn, category === cat.key && am.catBtnActive]}
-                        onPress={() => setCategory(prev => prev === cat.key ? null : cat.key as Category)}
-                        activeOpacity={0.75}
-                      >
-                        <Text style={am.catEmoji}>{cat.emoji}</Text>
-                        <Text style={[am.catLabel, category === cat.key && am.catLabelActive]}>{cat.label}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </View>
-
-                {/* Section vidéos */}
-                <View style={am.section}>
-                  <Text style={am.label}>🎬 Ajouter des vidéos</Text>
-                  <Text style={am.videoHint}>Montre aux autres à quoi ça ressemble !</Text>
-                  <View style={am.videoInputRow}>
-                    <TextInput
-                      style={[am.input, { flex: 1 }]}
-                      placeholder="Lien TikTok ou Reel..."
-                      placeholderTextColor={Colors.textTertiary}
-                      value={videoUrl}
-                      onChangeText={setVideoUrl}
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      keyboardType="url"
-                      returnKeyType="done"
-                      onSubmitEditing={handleAddVideo}
-                    />
-                    <TouchableOpacity style={am.videoPasteBtn} onPress={handlePasteVideo} activeOpacity={0.75}>
-                      <Ionicons name="clipboard-outline" size={18} color={Colors.textSecondary} />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[am.videoAddBtn, (!videoUrl.trim() || isFetchingVideo) && { opacity: 0.5 }]}
-                      onPress={handleAddVideo}
-                      disabled={!videoUrl.trim() || isFetchingVideo}
-                      activeOpacity={0.85}
-                    >
-                      {isFetchingVideo
-                        ? <ActivityIndicator size="small" color={Colors.white} />
-                        : <Text style={am.videoAddBtnText}>Ajouter</Text>
-                      }
-                    </TouchableOpacity>
-                  </View>
-                  {/* Liste des vidéos ajoutées */}
-                  {videoLinks.map((vl, i) => (
-                    <View key={i} style={am.videoItem}>
-                      {vl.thumbnail ? (
-                        <Image source={{ uri: vl.thumbnail }} style={am.videoThumb} resizeMode="cover" />
-                      ) : (
-                        <View style={[am.videoThumb, { backgroundColor: '#E5E7EB', alignItems: 'center', justifyContent: 'center' }]}>
-                          <Ionicons name="play-circle-outline" size={22} color="#9CA3AF" />
-                        </View>
-                      )}
-                      <Text style={am.videoItemTitle} numberOfLines={2}>{vl.title ?? vl.url}</Text>
-                      <TouchableOpacity onPress={() => setVideoLinks(prev => prev.filter((_, j) => j !== i))} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                        <Ionicons name="close-circle" size={20} color="#9CA3AF" />
-                      </TouchableOpacity>
-                    </View>
-                  ))}
-                </View>
-
-                <View style={am.section}>
-                  <Text style={am.label}>Note (optionnelle)</Text>
-                  <TextInput
-                    style={[am.input, am.inputMultiline]}
-                    placeholder="Ajoute une note..."
-                    placeholderTextColor={Colors.textTertiary}
-                    value={description}
-                    onChangeText={setDescription}
-                    multiline
-                    numberOfLines={3}
-                    textAlignVertical="top"
-                  />
-                </View>
-              </>
-            )}
-
-            {/* ══ INSPIRATION ══ */}
-            {wishType === 'inspiration' && (
-              <>
-                <View style={am.section}>
-                  <Text style={am.label}>🔗 Coller un lien TikTok ou Reels</Text>
-                  <View style={am.linkRow}>
-                    <TextInput
-                      style={[am.input, { flex: 1 }]}
-                      placeholder="https://www.tiktok.com/..."
-                      placeholderTextColor={Colors.textTertiary}
-                      value={insLink}
-                      onChangeText={handleInsLinkChange}
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      keyboardType="url"
-                    />
-                    {isFetchingLink && <ActivityIndicator size="small" color={Colors.primary} style={{ marginLeft: 8 }} />}
-                  </View>
-                  <TouchableOpacity style={am.clipboardBtn} onPress={handlePaste} activeOpacity={0.75}>
-                    <Ionicons name="clipboard-outline" size={15} color={Colors.textSecondary} />
-                    <Text style={am.clipboardText}>Coller depuis le presse-papier</Text>
+                    <Ionicons name="chevron-forward" size={20} color={Colors.textTertiary} />
                   </TouchableOpacity>
-                  {linkPreview && (
-                    <View style={am.previewCard}>
-                      {linkPreview.thumbnail && <Image source={{ uri: linkPreview.thumbnail }} style={am.previewThumb} resizeMode="cover" />}
-                      <View style={{ flex: 1, gap: 3 }}>
-                        <Text style={am.previewTitle} numberOfLines={2}>{linkPreview.title}</Text>
-                        {linkPreview.author && <Text style={am.previewAuthor}>@{linkPreview.author}</Text>}
-                        <View style={am.previewBadge}><Text style={am.previewBadgeText}>🎵 TikTok</Text></View>
-                      </View>
-                    </View>
-                  )}
-                </View>
+                ))}
+              </ScrollView>
+            </View>
 
-                <View style={am.section}>
-                  <Text style={am.label}>Titre</Text>
-                  <TextInput
-                    style={am.input}
-                    placeholder="Ex: Super restaurant à Rome"
-                    placeholderTextColor={Colors.textTertiary}
-                    value={title}
-                    onChangeText={setTitle}
-                  />
-                </View>
+            {/* ═══ STEP 1 — Premier formulaire ═══ */}
+            <View style={[wf.step, { width }]}>
 
-                <View style={am.section}>
-                  <Text style={am.label}>Catégorie (optionnelle)</Text>
-                  <View style={am.catGrid}>
-                    {ADD_CATEGORIES.map(cat => (
-                      <TouchableOpacity
-                        key={cat.key}
-                        style={[am.catBtn, category === cat.key && am.catBtnActive]}
-                        onPress={() => setCategory(prev => prev === cat.key ? null : cat.key as Category)}
-                        activeOpacity={0.75}
-                      >
-                        <Text style={am.catEmoji}>{cat.emoji}</Text>
-                        <Text style={[am.catLabel, category === cat.key && am.catLabelActive]}>{cat.label}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </View>
-
-                <View style={am.section}>
-                  {!showPlaceSearch ? (
-                    <TouchableOpacity style={am.associateBtn} onPress={() => setShowPlaceSearch(true)} activeOpacity={0.8}>
-                      <Text style={am.associateBtnEmoji}>📍</Text>
-                      <Text style={am.associateBtnText}>Associer un lieu Google (optionnel)</Text>
-                      <Ionicons name="add-circle-outline" size={18} color={Colors.primary} />
-                    </TouchableOpacity>
-                  ) : (
-                    <>
-                      <Text style={am.label}>📍 Lieu associé</Text>
+              {/* ── LIEU étape 1 : Quel lieu ? ── */}
+              {wishType === 'place' && (
+                <View style={{ flex: 1 }}>
+                  <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={wf.stepScroll}>
+                    <Text style={wf.stepTitle}>Quel lieu ?</Text>
+                    <View style={wf.searchBox}>
+                      <Ionicons name="search-outline" size={18} color={Colors.textTertiary} style={{ marginRight: 8 }} />
                       <TextInput
-                        style={am.input}
-                        placeholder="Rechercher un lieu..."
+                        ref={placeSearchRef}
+                        style={wf.searchInput}
+                        placeholder="Restaurant, musée, parc..."
                         placeholderTextColor={Colors.textTertiary}
-                        value={insPlaceQuery}
-                        onChangeText={handleInsPlaceSearch}
+                        value={placeQuery}
+                        onChangeText={handlePlaceSearch}
                         autoCorrect={false}
                       />
-                      {insPlaceSugs.length > 0 && (
-                        <View style={am.suggestBox}>
-                          {insPlaceSugs.slice(0, 4).map((sug, i) => (
-                            <TouchableOpacity
-                              key={sug.place_id}
-                              style={[am.suggestItem, i < insPlaceSugs.length - 1 && am.suggestBorder]}
-                              onPress={() => selectInsPlace(sug)}
-                              activeOpacity={0.7}
-                            >
-                              <Ionicons name="location-outline" size={14} color={Colors.textSecondary} />
-                              <Text style={am.suggestText} numberOfLines={1}>{sug.description}</Text>
-                            </TouchableOpacity>
-                          ))}
-                        </View>
-                      )}
-                      {insSelectedPlace && (
-                        <View style={am.insPlacePreview}>
-                          <Ionicons name="location" size={14} color={Colors.primary} />
-                          <Text style={am.insPlacePreviewText} numberOfLines={1}>{insSelectedPlace.address}</Text>
-                          <TouchableOpacity onPress={() => { setInsSelectedPlace(null); setInsPlaceQuery(''); }}>
-                            <Ionicons name="close-circle" size={16} color={Colors.textTertiary} />
+                    </View>
+                    {placeSuggestions.length > 0 && (
+                      <View style={wf.suggestBox}>
+                        {placeSuggestions.slice(0, 5).map((sug, i) => (
+                          <TouchableOpacity
+                            key={sug.place_id}
+                            style={[wf.suggestItem, i < placeSuggestions.length - 1 && wf.suggestBorder]}
+                            onPress={() => selectPlace(sug)}
+                            activeOpacity={0.7}
+                          >
+                            <Ionicons name="location-outline" size={15} color={Colors.textSecondary} />
+                            <Text style={wf.suggestText} numberOfLines={1}>{sug.description}</Text>
                           </TouchableOpacity>
+                        ))}
+                      </View>
+                    )}
+                    {selectedPlace && (
+                      <View style={wf.placePreview}>
+                        {selectedPlace.photoUrl && (
+                          <Image source={{ uri: selectedPlace.photoUrl }} style={wf.placePreviewImg} resizeMode="cover" />
+                        )}
+                        <View style={wf.placePreviewBody}>
+                          {selectedPlace.name && <Text style={wf.placePreviewName}>{selectedPlace.name}</Text>}
+                          <Text style={wf.placePreviewAddr} numberOfLines={2}>{selectedPlace.address}</Text>
+                          {selectedPlace.rating && (
+                            <Text style={wf.placePreviewRating}>⭐ {selectedPlace.rating.toFixed(1)}</Text>
+                          )}
                         </View>
+                      </View>
+                    )}
+                  </ScrollView>
+                  <BottomBar onSubmit={() => goToStep(2)} submitLabel="Suivant" disabled={!selectedPlace} />
+                </View>
+              )}
+
+              {/* ── INSPIRATION étape 1 : Colle ton lien ── */}
+              {wishType === 'inspiration' && (
+                <View style={{ flex: 1 }}>
+                  <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={wf.stepScroll}>
+                    <Text style={wf.stepTitle}>Partage ta{'\n'}découverte !</Text>
+                    <View style={wf.linkRow}>
+                      <TextInput
+                        style={[wf.input, { flex: 1 }]}
+                        placeholder="https://www.tiktok.com/..."
+                        placeholderTextColor={Colors.textTertiary}
+                        value={insLink}
+                        onChangeText={handleInsLinkChange}
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        keyboardType="url"
+                      />
+                      {isFetchingLink && <ActivityIndicator size="small" color={Colors.primary} style={{ marginLeft: 8 }} />}
+                    </View>
+                    <TouchableOpacity style={wf.pasteBtn} onPress={handlePaste} activeOpacity={0.75}>
+                      <Ionicons name="clipboard-outline" size={16} color={Colors.primary} />
+                      <Text style={wf.pasteBtnText}>📋 Coller depuis le presse-papier</Text>
+                    </TouchableOpacity>
+                    {linkPreview && (
+                      <View style={wf.previewCard}>
+                        {linkPreview.thumbnail && (
+                          <Image source={{ uri: linkPreview.thumbnail }} style={wf.previewThumb} resizeMode="cover" />
+                        )}
+                        <View style={{ flex: 1, gap: 4 }}>
+                          <Text style={wf.previewTitle} numberOfLines={2}>{linkPreview.title}</Text>
+                          {linkPreview.author && <Text style={wf.previewAuthor}>@{linkPreview.author}</Text>}
+                          <View style={wf.previewBadge}><Text style={wf.previewBadgeText}>🎵 TikTok</Text></View>
+                        </View>
+                      </View>
+                    )}
+                    <View style={wf.divider}>
+                      <View style={wf.dividerLine} />
+                      <Text style={wf.dividerText}>ou</Text>
+                      <View style={wf.dividerLine} />
+                    </View>
+                    <Text style={wf.manualLabel}>Pas de lien ? Ajoute manuellement</Text>
+                    <TextInput
+                      style={wf.input}
+                      placeholder="Titre de l'inspiration"
+                      placeholderTextColor={Colors.textTertiary}
+                      value={title}
+                      onChangeText={setTitle}
+                    />
+                  </ScrollView>
+                  <BottomBar onSubmit={() => goToStep(2)} submitLabel="Suivant" disabled={!canNext1Ins} />
+                </View>
+              )}
+
+              {/* ── ORGA étape 1 : C'est quoi la tâche ? ── */}
+              {wishType === 'orga' && (
+                <View style={{ flex: 1 }}>
+                  <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={wf.stepScroll}>
+                    <Text style={wf.stepTitle}>C'est quoi{'\n'}la tâche ?</Text>
+                    <View style={wf.orgaInputWrap}>
+                      {!title && (
+                        <ReAnimated.Text style={[wf.orgaPlaceholder, phAnimStyle]} pointerEvents="none">
+                          {ORGA_PH[phIndex]}
+                        </ReAnimated.Text>
                       )}
-                    </>
-                  )}
+                      <TextInput
+                        style={wf.orgaInput}
+                        value={title}
+                        onChangeText={setTitle}
+                        selectionColor={Colors.primary}
+                        returnKeyType="next"
+                      />
+                    </View>
+                    <TextInput
+                      style={[wf.input, wf.inputMulti]}
+                      placeholder="Description (optionnelle)"
+                      placeholderTextColor={Colors.textTertiary}
+                      value={description}
+                      onChangeText={setDescription}
+                      multiline
+                      numberOfLines={4}
+                      textAlignVertical="top"
+                    />
+                  </ScrollView>
+                  <BottomBar onSubmit={() => goToStep(2)} submitLabel="Suivant" disabled={!canNext1Orga} />
                 </View>
+              )}
+            </View>
 
-                <View style={am.section}>
-                  <Text style={am.label}>Note (optionnelle)</Text>
-                  <TextInput
-                    style={[am.input, am.inputMultiline]}
-                    placeholder="Ajoute une note..."
-                    placeholderTextColor={Colors.textTertiary}
-                    value={description}
-                    onChangeText={setDescription}
-                    multiline
-                    numberOfLines={3}
-                    textAlignVertical="top"
-                  />
+            {/* ═══ STEP 2 — Deuxième formulaire ═══ */}
+            <View style={[wf.step, { width }]}>
+
+              {/* ── LIEU étape 2 : C'est quoi ? ── */}
+              {wishType === 'place' && (
+                <View style={{ flex: 1 }}>
+                  <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={wf.stepScroll}>
+                    <Text style={wf.stepTitle}>C'est quoi ?</Text>
+                    <CatGrid label="Catégorie" />
+                    <Text style={wf.sectionLabel}>Note (optionnelle)</Text>
+                    <TextInput
+                      style={[wf.input, wf.inputMulti]}
+                      placeholder="Ajoute un commentaire..."
+                      placeholderTextColor={Colors.textTertiary}
+                      value={description}
+                      onChangeText={setDescription}
+                      multiline
+                      numberOfLines={3}
+                      textAlignVertical="top"
+                    />
+                    <Text style={wf.sectionLabel}>🎬 Vidéos (optionnel)</Text>
+                    <View style={wf.videoInputRow}>
+                      <TextInput
+                        style={[wf.input, { flex: 1, marginBottom: 0 }]}
+                        placeholder="Lien TikTok ou Reel..."
+                        placeholderTextColor={Colors.textTertiary}
+                        value={videoUrl}
+                        onChangeText={setVideoUrl}
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        keyboardType="url"
+                        onSubmitEditing={handleAddVideo}
+                      />
+                      <TouchableOpacity style={wf.pasteIconBtn} onPress={handlePasteVideo} activeOpacity={0.75}>
+                        <Ionicons name="clipboard-outline" size={18} color={Colors.textSecondary} />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[wf.videoAddBtn, (!videoUrl.trim() || isFetchingVideo) && { opacity: 0.5 }]}
+                        onPress={handleAddVideo}
+                        disabled={!videoUrl.trim() || isFetchingVideo}
+                        activeOpacity={0.85}
+                      >
+                        {isFetchingVideo
+                          ? <ActivityIndicator size="small" color={Colors.white} />
+                          : <Ionicons name="add" size={20} color={Colors.white} />
+                        }
+                      </TouchableOpacity>
+                    </View>
+                    {videoLinks.map((vl, i) => (
+                      <View key={i} style={wf.videoItem}>
+                        {vl.thumbnail
+                          ? <Image source={{ uri: vl.thumbnail }} style={wf.videoThumb} resizeMode="cover" />
+                          : <View style={[wf.videoThumb, { backgroundColor: '#E5E7EB', alignItems: 'center', justifyContent: 'center' }]}>
+                              <Ionicons name="play-circle-outline" size={20} color="#9CA3AF" />
+                            </View>
+                        }
+                        <Text style={wf.videoItemTitle} numberOfLines={2}>{vl.title ?? vl.url}</Text>
+                        <TouchableOpacity onPress={() => setVideoLinks(prev => prev.filter((_, j) => j !== i))} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                          <Ionicons name="close-circle" size={20} color="#9CA3AF" />
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                  </ScrollView>
+                  <BottomBar submitLabel="Ajouter l'envie ✨" />
                 </View>
-              </>
-            )}
+              )}
 
-            {/* ══ ORGA ══ */}
-            {wishType === 'orga' && (
-              <>
-                <View style={am.section}>
-                  <Text style={am.label}>Titre *</Text>
-                  <TextInput
-                    style={am.input}
-                    placeholder="Ex: Prendre adaptateur secteur"
-                    placeholderTextColor={Colors.textTertiary}
-                    value={title}
-                    onChangeText={setTitle}
-                    autoFocus
-                  />
+              {/* ── INSPIRATION étape 2 : Quelques détails ── */}
+              {wishType === 'inspiration' && (
+                <View style={{ flex: 1 }}>
+                  <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={wf.stepScroll}>
+                    <Text style={wf.stepTitle}>Quelques{'\n'}détails</Text>
+                    <CatGrid label="Catégorie (optionnelle)" />
+                    <Text style={wf.sectionLabel}>Note (optionnelle)</Text>
+                    <TextInput
+                      style={[wf.input, wf.inputMulti]}
+                      placeholder="Ajoute un commentaire..."
+                      placeholderTextColor={Colors.textTertiary}
+                      value={description}
+                      onChangeText={setDescription}
+                      multiline
+                      numberOfLines={3}
+                      textAlignVertical="top"
+                    />
+                    {!showPlaceSearch ? (
+                      <TouchableOpacity style={wf.associateBtn} onPress={() => setShowPlaceSearch(true)} activeOpacity={0.8}>
+                        <Text style={{ fontSize: 18 }}>📍</Text>
+                        <Text style={wf.associateBtnText}>Associer un lieu Google (optionnel)</Text>
+                        <Ionicons name="add-circle-outline" size={18} color={Colors.primary} />
+                      </TouchableOpacity>
+                    ) : (
+                      <>
+                        <Text style={wf.sectionLabel}>📍 Lieu associé</Text>
+                        <TextInput
+                          style={wf.input}
+                          placeholder="Rechercher un lieu..."
+                          placeholderTextColor={Colors.textTertiary}
+                          value={insPlaceQuery}
+                          onChangeText={handleInsPlaceSearch}
+                          autoCorrect={false}
+                        />
+                        {insPlaceSugs.length > 0 && (
+                          <View style={wf.suggestBox}>
+                            {insPlaceSugs.slice(0, 4).map((sug, i) => (
+                              <TouchableOpacity
+                                key={sug.place_id}
+                                style={[wf.suggestItem, i < insPlaceSugs.length - 1 && wf.suggestBorder]}
+                                onPress={() => selectInsPlace(sug)}
+                                activeOpacity={0.7}
+                              >
+                                <Ionicons name="location-outline" size={14} color={Colors.textSecondary} />
+                                <Text style={wf.suggestText} numberOfLines={1}>{sug.description}</Text>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
+                        )}
+                        {insSelectedPlace && (
+                          <View style={wf.insPlacePreview}>
+                            <Ionicons name="location" size={14} color={Colors.primary} />
+                            <Text style={wf.insPlacePreviewText} numberOfLines={1}>{insSelectedPlace.address}</Text>
+                            <TouchableOpacity onPress={() => { setInsSelectedPlace(null); setInsPlaceQuery(''); }}>
+                              <Ionicons name="close-circle" size={16} color={Colors.textTertiary} />
+                            </TouchableOpacity>
+                          </View>
+                        )}
+                      </>
+                    )}
+                  </ScrollView>
+                  <BottomBar submitLabel="Ajouter l'envie ✨" />
                 </View>
-                <View style={am.section}>
-                  <Text style={am.label}>Description (optionnelle)</Text>
-                  <TextInput
-                    style={[am.input, am.inputMultiline]}
-                    placeholder="Détails, rappels..."
-                    placeholderTextColor={Colors.textTertiary}
-                    value={description}
-                    onChangeText={setDescription}
-                    multiline
-                    numberOfLines={4}
-                    textAlignVertical="top"
-                  />
+              )}
+
+              {/* ── ORGA étape 2 : Qui s'en occupe ? ── */}
+              {wishType === 'orga' && (
+                <View style={{ flex: 1 }}>
+                  <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={wf.stepScroll}>
+                    <Text style={wf.stepTitle}>Qui s'en{'\n'}occupe ?</Text>
+                    <TouchableOpacity
+                      style={[wf.memberRow, assignees.length === MOCK_AVATARS.length && wf.memberRowActive]}
+                      onPress={() => setAssignees(prev =>
+                        prev.length === MOCK_AVATARS.length ? [] : MOCK_AVATARS.map(a => a.id)
+                      )}
+                      activeOpacity={0.8}
+                    >
+                      <View style={[wf.memberAvatar, { backgroundColor: '#F0F0F0', alignItems: 'center', justifyContent: 'center' }]}>
+                        <Ionicons name="people" size={18} color={Colors.textSecondary} />
+                      </View>
+                      <Text style={wf.memberName}>Tout le monde</Text>
+                      {assignees.length === MOCK_AVATARS.length && (
+                        <Ionicons name="checkmark-circle" size={22} color={Colors.primary} />
+                      )}
+                    </TouchableOpacity>
+                    {MOCK_AVATARS.map(member => (
+                      <TouchableOpacity
+                        key={member.id}
+                        style={[wf.memberRow, assignees.includes(member.id) && wf.memberRowActive]}
+                        onPress={() => setAssignees(prev =>
+                          prev.includes(member.id) ? prev.filter(id => id !== member.id) : [...prev, member.id]
+                        )}
+                        activeOpacity={0.8}
+                      >
+                        <View style={wf.memberAvatar}>
+                          <Image source={{ uri: member.photo }} style={{ width: '100%', height: '100%' }} />
+                        </View>
+                        <Text style={wf.memberName}>{member.name}</Text>
+                        {assignees.includes(member.id) && (
+                          <Ionicons name="checkmark-circle" size={22} color={Colors.primary} />
+                        )}
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                  <BottomBar submitLabel="Ajouter la tâche 📋" />
                 </View>
-              </>
-            )}
+              )}
+            </View>
 
-          </ScrollView>
-
-          <View style={am.footer}>
-            <TouchableOpacity style={[am.submitBtn, isSaving && { opacity: 0.6 }]} onPress={handleSubmit} disabled={isSaving} activeOpacity={0.85}>
-              {isSaving
-                ? <ActivityIndicator size="small" color={Colors.white} />
-                : <Text style={am.submitBtnText}>Ajouter</Text>
-              }
-            </TouchableOpacity>
-          </View>
+          </ReAnimated.View>
         </View>
       </KeyboardAvoidingView>
     </Modal>
@@ -1869,11 +1988,11 @@ export default function EnviesScreen() {
   const [catFilters,     setCatFilters]     = useState<Set<Category>>(new Set());
   const [typeFilters,    setTypeFilters]    = useState<Set<WishType>>(new Set());
   const [sortBy,         setSortBy]         = useState<SortBy>('recent');
-  const [showTypePicker, setShowTypePicker] = useState(false);
-  const [selectedType,   setSelectedType]   = useState<WishType>('inspiration');
-  const [showAddModal,   setShowAddModal]   = useState(false);
+  const [showAddFlow,    setShowAddFlow]    = useState(false);
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [detailId,       setDetailId]       = useState<string | null>(null);
+  const [showPlanSheet,  setShowPlanSheet]  = useState(false);
+  const [planWish,       setPlanWish]       = useState<{ id: string; title: string } | null>(null);
 
   const detailWish = useMemo(
     () => detailId ? (wishes.find(w => w.id === detailId) ?? null) : null,
@@ -2100,15 +2219,17 @@ export default function EnviesScreen() {
         pointerEvents="box-none"
       >
         <NavButton icon="arrow-back-outline" onPress={() => router.back()} />
-        <NavButton icon="add" iconSize={28} onPress={() => setShowTypePicker(true)} />
+        <NavButton icon="add" iconSize={28} onPress={() => setShowAddFlow(true)} />
         <NavButton icon="options-outline" onPress={() => setShowFilterMenu(true)} />
       </View>
 
       {/* ── Modals ── */}
-      <TypePickerModal
-        visible={showTypePicker}
-        onSelect={(type) => { setSelectedType(type); setShowTypePicker(false); setShowAddModal(true); }}
-        onClose={() => setShowTypePicker(false)}
+      <AddWishFlow
+        visible={showAddFlow}
+        tripId={tripId ?? ''}
+        userId={currentUserId}
+        onClose={() => setShowAddFlow(false)}
+        onAdded={() => { setShowAddFlow(false); fetchWishes(); }}
       />
       <FilterMenu
         visible={showFilterMenu}
@@ -2121,20 +2242,30 @@ export default function EnviesScreen() {
         onReset={() => { setCatFilters(new Set()); setTypeFilters(new Set()); setSortBy('recent'); }}
         onClose={() => setShowFilterMenu(false)}
       />
-      <AddWishModal
-        visible={showAddModal}
-        tripId={tripId ?? ''}
-        userId={currentUserId}
-        wishType={selectedType}
-        onClose={() => setShowAddModal(false)}
-        onAdded={() => { setShowAddModal(false); fetchWishes(); }}
-      />
       <DetailSheet
         wish={detailWish} currentUserId={currentUserId}
         isAuthor={detailWish?.added_by === currentUserId}
         onVote={handleVote} onUpdate={handleUpdate}
         onArchive={handleArchive} onDelete={handleDelete}
         onClose={() => setDetailId(null)}
+        onAddToPlanning={(w) => { setPlanWish(w); setShowPlanSheet(true); }}
+      />
+
+      <AddToPlanningSheet
+        visible={showPlanSheet}
+        onClose={() => setShowPlanSheet(false)}
+        onAdded={(day, itemId) => {
+          fetchWishes();
+          if (tripId) {
+            router.push({
+              pathname: '/trip/[id]/planning',
+              params: { id: tripId, highlightDay: day, highlightId: itemId ?? '' },
+            } as any);
+          }
+        }}
+        tripId={tripId ?? ''}
+        userId={currentUserId}
+        defaultWish={planWish}
       />
 
     </View>
@@ -2189,27 +2320,105 @@ const cs = StyleSheet.create({
   swipeBorder:  { borderRadius: 20, borderWidth: 2, borderColor: Colors.primary, opacity: 0.45 },
 });
 
-/* ─── TypePickerModal styles ─────────────────────────────────── */
-const tp = StyleSheet.create({
-  overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)' },
-  sheet: {
-    backgroundColor: Colors.white,
-    borderTopLeftRadius: 28, borderTopRightRadius: 28,
-    paddingHorizontal: 20, paddingTop: 12,
-  },
-  handle:   { width: 40, height: 4, borderRadius: 2, backgroundColor: Colors.border, alignSelf: 'center', marginBottom: 20 },
-  title:    { fontSize: 20, fontWeight: '800', color: Colors.textPrimary, marginBottom: 4, letterSpacing: -0.4 },
-  subtitle: { fontSize: 14, color: Colors.textSecondary, marginBottom: 20 },
-  card: {
-    flexDirection: 'row', alignItems: 'center', gap: 14,
-    paddingVertical: 16, paddingHorizontal: 4,
-    borderBottomWidth: 1, borderBottomColor: Colors.border,
-  },
-  cardIconWrap: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  cardIcon:     { fontSize: 22 },
-  cardText:     { flex: 1 },
-  cardTitle:    { fontSize: 16, fontWeight: '700', color: Colors.textPrimary, marginBottom: 2 },
-  cardSubtitle: { fontSize: 13, color: Colors.textSecondary },
+/* ─── AddWishFlow styles ─────────────────────────────────────── */
+const wf = StyleSheet.create({
+  root:    { flex: 1, backgroundColor: Colors.background, overflow: 'hidden' },
+  header:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.sm, paddingVertical: Spacing.sm },
+  headerBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  dots:    { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  dot:     { width: 6,  height: 6,  borderRadius: 3, backgroundColor: Colors.border },
+  dotActive: { width: 20, height: 8, borderRadius: 4, backgroundColor: Colors.primary },
+  stepsRow:  { flex: 1, flexDirection: 'row' },
+  step:      { flex: 1 },
+  typeScroll:  { padding: Spacing.md, paddingTop: Spacing.lg, paddingBottom: Spacing.xl },
+  stepScroll:  { padding: Spacing.md, paddingBottom: Spacing.xl },
+  stepTitle:   { fontSize: 32, fontWeight: '800', color: Colors.textPrimary, marginBottom: Spacing.lg, letterSpacing: -0.5, lineHeight: 40 },
+
+  /* Type cards */
+  typeCard:        { flexDirection: 'row', alignItems: 'center', gap: 16, paddingVertical: 18, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  typeCardIcon:    { width: 56, height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  typeCardIconText: { fontSize: 26 },
+  typeCardBody:    { flex: 1 },
+  typeCardTitle:   { fontSize: 17, fontWeight: '700', color: Colors.textPrimary, marginBottom: 3 },
+  typeCardSub:     { fontSize: 13, color: Colors.textSecondary },
+
+  /* Search */
+  searchBox:   { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.surface, borderRadius: Radii.lg, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm + 2, marginBottom: Spacing.md },
+  searchInput: { flex: 1, fontSize: 16, color: Colors.textPrimary },
+  input:       { backgroundColor: Colors.surface, borderRadius: Radii.md, paddingHorizontal: Spacing.md, paddingVertical: 12, fontSize: 15, color: Colors.textPrimary, borderWidth: 1, borderColor: Colors.border, marginBottom: Spacing.md },
+  inputMulti:  { height: 90, paddingTop: 12 },
+
+  /* Suggestions */
+  suggestBox:    { marginTop: 4, marginBottom: Spacing.md, backgroundColor: Colors.white, borderRadius: Radii.md, borderWidth: 1, borderColor: Colors.border, overflow: 'hidden', ...Shadows.sm },
+  suggestItem:   { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingHorizontal: 12, paddingVertical: 12 },
+  suggestBorder: { borderBottomWidth: 1, borderBottomColor: Colors.border },
+  suggestText:   { flex: 1, fontSize: 14, color: Colors.textPrimary },
+
+  /* Place preview */
+  placePreview:     { borderRadius: Radii.lg, overflow: 'hidden', borderWidth: 1, borderColor: '#BFDBFE', backgroundColor: '#EFF6FF', marginBottom: Spacing.md },
+  placePreviewImg:  { width: '100%', height: 160 },
+  placePreviewBody: { padding: 12, gap: 3 },
+  placePreviewName: { fontSize: 16, fontWeight: '700', color: Colors.textPrimary },
+  placePreviewAddr: { fontSize: 13, color: Colors.textSecondary, lineHeight: 18 },
+  placePreviewRating: { fontSize: 14, fontWeight: '600', color: '#D97706', marginTop: 4 },
+
+  /* Inspiration link */
+  linkRow:      { flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.sm },
+  pasteBtn:     { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10, marginBottom: Spacing.sm },
+  pasteBtnText: { fontSize: 14, color: Colors.primary, fontWeight: '600' },
+  previewCard:  { flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.sm, marginBottom: Spacing.md, backgroundColor: Colors.surface, borderRadius: Radii.md, padding: Spacing.sm, borderWidth: 1, borderColor: Colors.border },
+  previewThumb: { width: 72, height: 72, borderRadius: Radii.sm },
+  previewTitle: { fontSize: 13, fontWeight: '600', color: Colors.textPrimary, lineHeight: 18 },
+  previewAuthor: { fontSize: 12, color: Colors.textSecondary },
+  previewBadge: { alignSelf: 'flex-start', backgroundColor: '#F0F0F0', borderRadius: Radii.full, paddingHorizontal: 8, paddingVertical: 2, marginTop: 2 },
+  previewBadgeText: { fontSize: 11, fontWeight: '600', color: Colors.textSecondary },
+  divider:     { flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: Spacing.md },
+  dividerLine: { flex: 1, height: 1, backgroundColor: Colors.border },
+  dividerText: { fontSize: 13, color: Colors.textTertiary, fontWeight: '500' },
+  manualLabel: { fontSize: 14, fontWeight: '600', color: Colors.textSecondary, marginBottom: Spacing.sm },
+
+  /* Orga animated input */
+  orgaInputWrap:   { position: 'relative', marginBottom: Spacing.md },
+  orgaPlaceholder: { position: 'absolute', top: 13, left: Spacing.md, fontSize: 15, color: Colors.textTertiary, zIndex: 1 },
+  orgaInput:       { backgroundColor: Colors.surface, borderRadius: Radii.md, paddingHorizontal: Spacing.md, paddingVertical: 12, fontSize: 15, color: Colors.textPrimary, borderWidth: 1, borderColor: Colors.border },
+
+  /* Section label */
+  sectionLabel: { fontSize: 14, fontWeight: '700', color: Colors.textPrimary, marginBottom: Spacing.sm, marginTop: Spacing.md },
+
+  /* Category grid */
+  catGrid:      { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm, marginBottom: Spacing.md },
+  catBtn:       { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12, paddingVertical: 10, borderRadius: Radii.md, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, minWidth: 76, gap: 4 },
+  catBtnActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  catEmoji:     { fontSize: 20 },
+  catLabel:     { fontSize: 11, fontWeight: '600', color: Colors.textSecondary, textAlign: 'center' },
+  catLabelActive: { color: Colors.white },
+
+  /* Videos */
+  videoInputRow:  { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: Spacing.sm },
+  pasteIconBtn:   { width: 44, height: 44, borderRadius: Radii.md, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, alignItems: 'center', justifyContent: 'center' },
+  videoAddBtn:    { width: 44, height: 44, borderRadius: Radii.md, backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center' },
+  videoItem:      { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  videoThumb:     { width: 56, height: 40, borderRadius: 6, overflow: 'hidden' },
+  videoItemTitle: { flex: 1, fontSize: 12, color: Colors.textPrimary, lineHeight: 16 },
+
+  /* Associate place */
+  associateBtn:     { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 14, paddingHorizontal: 14, borderRadius: Radii.md, borderWidth: 1.5, borderStyle: 'dashed', borderColor: '#93C5FD', backgroundColor: '#EFF6FF', marginBottom: Spacing.md },
+  associateBtnText: { flex: 1, fontSize: 14, fontWeight: '600', color: '#1D4ED8' },
+  insPlacePreview:     { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, marginBottom: Spacing.md, padding: 10, backgroundColor: '#EFF6FF', borderRadius: Radii.md },
+  insPlacePreviewText: { flex: 1, fontSize: 13, color: Colors.textPrimary },
+
+  /* Member list (orga step 2) */
+  memberRow:       { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 14, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  memberRowActive: { backgroundColor: Colors.primary + '0A' },
+  memberAvatar:    { width: 44, height: 44, borderRadius: 22, overflow: 'hidden' },
+  memberName:      { flex: 1, fontSize: 16, fontWeight: '600', color: Colors.textPrimary },
+
+  /* Bottom action bar */
+  bottomBar:       { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingHorizontal: Spacing.md, paddingTop: Spacing.sm, borderTopWidth: 1, borderTopColor: Colors.border },
+  nextBtn:         { flex: 1, backgroundColor: Colors.primary, borderRadius: Radii.lg, height: 64, alignItems: 'center', justifyContent: 'center', ...Shadows.md },
+  nextBtnDisabled: { opacity: 0.4 },
+  nextBtnText:     { fontSize: 16, fontWeight: '800', color: Colors.white, letterSpacing: -0.3 },
+
 });
 
 /* ─── Screen styles ──────────────────────────────────────────── */
@@ -2364,67 +2573,3 @@ const ds = StyleSheet.create({
   voteBtnLabel: { fontSize: 13, fontWeight: '700', color: Colors.textPrimary },
 });
 
-/* ─── AddWishModal styles ────────────────────────────────────── */
-const am = StyleSheet.create({
-  container:   { flex: 1, backgroundColor: Colors.background },
-  header:      { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.md, paddingTop: Spacing.lg, paddingBottom: Spacing.md, borderBottomWidth: 1, borderBottomColor: Colors.border },
-  headerTitle: { flex: 1, fontSize: 18, fontWeight: '800', color: Colors.textPrimary, letterSpacing: -0.3 },
-  closeBtn:    { width: 36, height: 36, borderRadius: Radii.full, backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center' },
-  scrollContent: { padding: Spacing.md, paddingBottom: Spacing.xl },
-  section:     { marginBottom: Spacing.lg },
-  label:       { fontSize: 14, fontWeight: '700', color: Colors.textPrimary, marginBottom: Spacing.sm },
-  input:       { backgroundColor: Colors.surface, borderRadius: Radii.md, paddingHorizontal: Spacing.md, paddingVertical: 12, fontSize: 15, color: Colors.textPrimary, borderWidth: 1, borderColor: Colors.border },
-  inputMultiline: { height: 90, paddingTop: 12 },
-  linkRow:     { flexDirection: 'row', alignItems: 'center' },
-  clipboardBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, paddingVertical: 8 },
-  clipboardText: { fontSize: 13, color: Colors.textSecondary, fontWeight: '500' },
-  previewCard:  { flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.sm, backgroundColor: Colors.surface, borderRadius: Radii.md, padding: Spacing.sm, borderWidth: 1, borderColor: Colors.border },
-  previewThumb: { width: 64, height: 64, borderRadius: Radii.sm },
-  previewTitle: { fontSize: 13, fontWeight: '600', color: Colors.textPrimary, lineHeight: 18 },
-  previewAuthor: { fontSize: 12, color: Colors.textSecondary },
-  previewBadge: { alignSelf: 'flex-start', backgroundColor: '#F0F0F0', borderRadius: Radii.full, paddingHorizontal: 8, paddingVertical: 2, marginTop: 2 },
-  previewBadgeText: { fontSize: 11, fontWeight: '600', color: Colors.textSecondary },
-
-  /* Place preview card */
-  placePreviewCard:  { marginBottom: Spacing.md, borderRadius: Radii.lg, overflow: 'hidden', borderWidth: 1, borderColor: '#BFDBFE', backgroundColor: '#EFF6FF' },
-  placePreviewImage: { width: '100%', height: 130 },
-  placePreviewBody:  { padding: 12, gap: 3 },
-  placePreviewName:  { fontSize: 15, fontWeight: '700', color: Colors.textPrimary },
-  placePreviewAddr:  { fontSize: 12, color: Colors.textSecondary, lineHeight: 16 },
-  placePreviewRating: { fontSize: 13, fontWeight: '600', color: '#D97706', marginTop: 4 },
-
-  catGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
-  catBtn:  { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12, paddingVertical: 10, borderRadius: Radii.md, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, minWidth: 76, gap: 4 },
-  catBtnActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  catEmoji:     { fontSize: 20 },
-  catLabel:     { fontSize: 11, fontWeight: '600', color: Colors.textSecondary, textAlign: 'center' },
-  catLabelActive: { color: Colors.white },
-
-  suggestBox:  { marginTop: 4, backgroundColor: Colors.white, borderRadius: Radii.md, borderWidth: 1, borderColor: Colors.border, overflow: 'hidden', ...Shadows.sm },
-  suggestItem: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingHorizontal: Spacing.md, paddingVertical: 12 },
-  suggestBorder: { borderBottomWidth: 1, borderBottomColor: Colors.border },
-  suggestText: { flex: 1, fontSize: 13, color: Colors.textPrimary },
-
-  /* Associate place button */
-  associateBtn:      { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 14, paddingHorizontal: 14, borderRadius: Radii.md, borderWidth: 1.5, borderStyle: 'dashed', borderColor: '#93C5FD', backgroundColor: '#EFF6FF' },
-  associateBtnEmoji: { fontSize: 18 },
-  associateBtnText:  { flex: 1, fontSize: 14, fontWeight: '600', color: '#1D4ED8' },
-
-  /* Inline place preview */
-  insPlacePreview:     { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, padding: 10, backgroundColor: '#EFF6FF', borderRadius: Radii.md },
-  insPlacePreviewText: { flex: 1, fontSize: 13, color: Colors.textPrimary },
-
-  /* Video links (place form) */
-  videoHint:     { fontSize: 12, color: Colors.textSecondary, marginBottom: 8 },
-  videoInputRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 },
-  videoPasteBtn: { width: 44, height: 44, borderRadius: Radii.md, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, alignItems: 'center', justifyContent: 'center' },
-  videoAddBtn:   { height: 44, paddingHorizontal: 14, borderRadius: Radii.md, backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center' },
-  videoAddBtnText: { fontSize: 13, fontWeight: '700', color: Colors.white },
-  videoItem:     { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, paddingHorizontal: 2, borderBottomWidth: 1, borderBottomColor: Colors.border },
-  videoThumb:    { width: 56, height: 40, borderRadius: 6, overflow: 'hidden' },
-  videoItemTitle: { flex: 1, fontSize: 12, color: Colors.textPrimary, lineHeight: 16 },
-
-  footer:        { paddingHorizontal: Spacing.md, paddingTop: Spacing.sm, borderTopWidth: 1, borderTopColor: Colors.border },
-  submitBtn:     { backgroundColor: Colors.primary, borderRadius: Radii.lg, paddingVertical: 16, alignItems: 'center', justifyContent: 'center', ...Shadows.md },
-  submitBtnText: { fontSize: 16, fontWeight: '800', color: Colors.white, letterSpacing: -0.3 },
-});
