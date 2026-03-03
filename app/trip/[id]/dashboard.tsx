@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useRef, useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -18,6 +18,7 @@ import { Colors, Spacing, Radii, Shadows } from '@/constants/theme';
 import { ExpandedMapView, CardLayout } from '@/components/map/ExpandedMapView';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { NavButton } from '@/components/ui/NavButton';
+import { supabase } from '@/services/supabase';
 
 
 /* ─── Mock data ─────────────────────────────────────────────── */
@@ -32,7 +33,10 @@ const AVATARS = [
   { bg: '#A8D5B5', photo: 'https://i.pravatar.cc/64?img=23' },
 ];
 
-const DOC_ITEMS = ["Passeport", "Billets d'avion", "Réservation"];
+const DOC_CAT_EMOJI: Record<string, string> = {
+  vol: '✈️', hotel: '🏨', restaurant: '🍽️', transport: '🚗',
+  passeport: '🛂', assurance: '🛡️', visa: '📋', activite: '🎭', autre: '📄',
+};
 
 /* ─── Main screen ────────────────────────────────────────────── */
 export default function DashboardScreen() {
@@ -42,6 +46,28 @@ export default function DashboardScreen() {
   const mapCardRef = useRef<View>(null);
   const [isMapExpanded, setIsMapExpanded] = useState(false);
   const [mapCardLayout, setMapCardLayout] = useState<CardLayout>({ x: 0, y: 0, width: 0, height: 145 });
+
+  /* Documents */
+  const [recentDocs, setRecentDocs] = useState<{ id: string; title: string; category: string }[]>([]);
+  const [docCount,   setDocCount]   = useState(0);
+
+  useEffect(() => {
+    if (!id) return;
+    supabase
+      .from('documents')
+      .select('id, title, category')
+      .eq('trip_id', id)
+      .order('created_at', { ascending: false })
+      .limit(3)
+      .then(({ data }) => {
+        setRecentDocs(data ?? []);
+      });
+    supabase
+      .from('documents')
+      .select('id', { count: 'exact', head: true })
+      .eq('trip_id', id)
+      .then(({ count }) => setDocCount(count ?? 0));
+  }, [id]);
 
   const handleMapPress = useCallback(() => {
     mapCardRef.current?.measureInWindow((x, y, width, height) => {
@@ -122,15 +148,22 @@ export default function DashboardScreen() {
               minHeight={140}
               onPress={() => router.push(`/trip/${id}/documents`)}
             >
-              <Text style={styles.cardTitle}>DOCUMENT</Text>
-              <View style={styles.docList}>
-                {DOC_ITEMS.map((item, i) => (
-                  <View key={i} style={styles.docRow}>
-                    <View style={styles.bullet} />
-                    <Text style={styles.docText}>{item}</Text>
-                  </View>
-                ))}
+              <View style={styles.cardTitleRow}>
+                <Text style={styles.cardTitle}>DOCUMENTS</Text>
+                <Text style={styles.cardCount}>{docCount}</Text>
               </View>
+              {recentDocs.length === 0 ? (
+                <Text style={styles.docEmpty}>Aucun document</Text>
+              ) : (
+                <View style={styles.docList}>
+                  {recentDocs.map(doc => (
+                    <View key={doc.id} style={styles.docRow}>
+                      <Text style={styles.docEmoji}>{DOC_CAT_EMOJI[doc.category] ?? '📄'}</Text>
+                      <Text style={styles.docText} numberOfLines={1}>{doc.title}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
             </GlassCard>
 
             {/* Planning */}
@@ -342,22 +375,31 @@ const styles = StyleSheet.create({
   },
 
   /* ── Documents ── */
+  cardCount: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.75)',
+  },
   docList: {
-    gap: 7,
+    gap: 6,
     marginTop: Spacing.sm,
   },
   docRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
-  bullet: {
-    width: 5,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: 'rgba(255,255,255,0.65)',
+  docEmoji: {
+    fontSize: 12,
+  },
+  docEmpty: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.55)',
+    fontStyle: 'italic',
+    marginTop: Spacing.sm,
   },
   docText: {
+    flex: 1,
     fontSize: 12,
     color: '#FFFFFF',
     fontWeight: '500',

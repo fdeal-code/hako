@@ -77,6 +77,7 @@ interface PlanningItem {
 }
 type AddMode =
   | null
+  | { type: 'list' }
   | { type: 'wish'; wish: Wish }
   | { type: 'manual' };
 
@@ -563,59 +564,6 @@ export default function PlanningScreen() {
         <NavButton icon="settings-outline" onPress={() => {}} />
       </View>
 
-      {/* ── Réservoir d'envies ── */}
-      {showReservoir && (
-        <View style={s.reservoir}>
-          <View style={s.reservoirHead}>
-            <Text style={s.reservoirLabel}>
-              Envies à placer{wishes.length > 0 ? ` (${wishes.length})` : ''}
-            </Text>
-            <TouchableOpacity
-              onPress={() => setShowReservoir(false)}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <Ionicons name="close" size={20} color={Colors.textSecondary} />
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={s.reservoirScroll}
-          >
-            {wishes.length === 0 && (
-              <View style={s.reservoirEmpty}>
-                <Text style={s.reservoirEmptyTxt}>Toutes les envies sont planifiées 🎉</Text>
-              </View>
-            )}
-            {wishes.map(w => (
-              <ReservoirCard
-                key={w.id}
-                wish={w}
-                isGhost={dragPayload?.type === 'wish' && dragPayload.wish.id === w.id}
-                dragX={dragX}
-                dragY={dragY}
-                isDragging={isDragging}
-                onDragStart={handleWishDragStart}
-                onDragEnd={handleDragEnd}
-                onHover={updateHoveredHour}
-                onTap={(wish) => setAddMode({ type: 'wish', wish })}
-              />
-            ))}
-
-            {/* Bouton ajout manuel */}
-            <TouchableOpacity
-              style={rc.manualBtn}
-              onPress={() => setAddMode({ type: 'manual' })}
-              activeOpacity={0.8}
-            >
-              <Text style={rc.manualEmoji}>✏️</Text>
-              <Text style={rc.manualTxt}>Ajout{'\n'}manuel</Text>
-            </TouchableOpacity>
-          </ScrollView>
-        </View>
-      )}
-
       {/* ── Carrousel de jours ── */}
       <ScrollView
         horizontal
@@ -694,6 +642,40 @@ export default function PlanningScreen() {
         )}
       </ScrollView>
 
+      {/* ── Réservoir d'envies (bas, toggle) ── */}
+      {showReservoir && <View style={[s.reservoir, { paddingBottom: navBottom + navH + 4 }]}>
+        <View style={s.reservoirHead}>
+          <Text style={s.reservoirLabel}>
+            Envies à placer{wishes.length > 0 ? ` (${wishes.length})` : ''}
+          </Text>
+        </View>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={s.reservoirScroll}
+        >
+          {wishes.length === 0 && (
+            <View style={s.reservoirEmpty}>
+              <Text style={s.reservoirEmptyTxt}>Toutes les envies sont planifiées 🎉</Text>
+            </View>
+          )}
+          {wishes.map(w => (
+            <ReservoirCard
+              key={w.id}
+              wish={w}
+              isGhost={dragPayload?.type === 'wish' && dragPayload.wish.id === w.id}
+              dragX={dragX}
+              dragY={dragY}
+              isDragging={isDragging}
+              onDragStart={handleWishDragStart}
+              onDragEnd={handleDragEnd}
+              onHover={updateHoveredHour}
+              onTap={(wish) => setAddMode({ type: 'wish', wish })}
+            />
+          ))}
+        </ScrollView>
+      </View>}
+
       {/* ── Bottom nav ── */}
       <View style={[s.bottomNav, { bottom: navBottom }]} pointerEvents="box-none">
         <NavButton icon="arrow-back-outline" onPress={() => router.back()} />
@@ -702,7 +684,7 @@ export default function PlanningScreen() {
           iconSize={28}
           onPress={() => setShowReservoir(v => !v)}
         />
-        <NavButton icon="list-outline" onPress={() => {}} />
+        <NavButton icon="create-outline" onPress={() => setAddMode({ type: 'manual' })} />
       </View>
 
       {/* ── Drag overlay (flottant au-dessus de tout) ── */}
@@ -744,11 +726,11 @@ export default function PlanningScreen() {
 /* ─── ReservoirCard styles (rc) ─────────────────────────────── */
 const rc = StyleSheet.create({
   card: {
-    width: 90,
-    height: 110,
-    borderRadius: 14,
+    width: 120,
+    height: 150,
+    borderRadius: 16,
     overflow: 'hidden',
-    marginRight: 10,
+    marginRight: 12,
     backgroundColor: Colors.surface,
     position: 'relative',
   },
@@ -757,21 +739,21 @@ const rc = StyleSheet.create({
     justifyContent: 'center',
   },
   fallbackEmoji: {
-    fontSize: 28,
+    fontSize: 36,
   },
   bottom: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    padding: 7,
+    padding: 9,
     backgroundColor: 'rgba(0,0,0,0.42)',
   },
   title: {
     color: '#fff',
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '700',
-    lineHeight: 13,
+    lineHeight: 15,
   },
   manualBtn: {
     width: 80,

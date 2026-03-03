@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx ngrok version)",
+      "Bash(node -e \"require\\(''@expo/ngrok''\\)\")"
+    ]
+  }
+}

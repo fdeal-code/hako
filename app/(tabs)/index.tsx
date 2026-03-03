@@ -77,7 +77,12 @@ export default function HomeScreen() {
   });
 
   /* ── Tri ── */
+  const STATUS_ORDER: Record<string, number> = { active: 0, future: 1, past: 2 };
   const displayedTrips = [...filtered].sort((a, b) => {
+    // Toujours : actif → à venir → terminé
+    const statusDiff = (STATUS_ORDER[a.status] ?? 1) - (STATUS_ORDER[b.status] ?? 1);
+    if (statusDiff !== 0) return statusDiff;
+    // Puis le tri choisi par l'utilisateur
     if (sortBy === 'recent')    return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
     if (sortBy === 'departure') return new Date(a.start_date || '9999-12-31').getTime() - new Date(b.start_date || '9999-12-31').getTime();
     return 0;
