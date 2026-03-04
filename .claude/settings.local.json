@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(npx ngrok version)",
-      "Bash(node -e \"require\\(''@expo/ngrok''\\)\")"
+      "Bash(node -e \"require\\(''@expo/ngrok''\\)\")",
+      "Bash(npx tsc --noEmit)"
     ]
   }
 }

@@ -30,8 +30,12 @@ import * as ImagePicker from 'expo-image-picker';
 import { Colors, Spacing, Radii } from '@/constants/theme';
 import { ExpandedMapView } from '@/components/map/ExpandedMapView';
 import { GlassCard } from '@/components/ui/GlassCard';
+import { NavButton } from '@/components/ui/NavButton';
+import { MemberAvatar } from '@/components/ui/MemberAvatar';
+import { InviteSheet } from '@/components/invitations/InviteSheet';
 import { Trip } from '@/constants/types';
 import { useAuth } from '@/contexts/AuthContext';
+import { useHomeExpand } from '@/contexts/HomeExpandContext';
 import { supabase } from '@/services/supabase';
 import { tripEvents } from '@/utils/events';
 
@@ -40,6 +44,14 @@ const ENVIE_IMG =
   'https://images.unsplash.com/photo-1533104816931-20fa691ff6ca?w=400&q=60';
 const DOC_ITEMS = ["Passeport", "Billets d'avion", "Réservation"];
 const AVATAR_BG = ['#E8C5A5', '#A5B8E0', '#A8D5B5', '#F0B0B0'];
+
+/* ─── Member type for display ────────────────────────────────── */
+interface MemberDisplay {
+  user_id: string;
+  name: string;
+  avatar_url?: string;
+  role: string;
+}
 
 function formatDateLabel(start: string, end: string): string {
   const s = new Date(start);
@@ -92,7 +104,9 @@ export function ExpandedDashboard({ trip, cardLayout, progress }: Props) {
   const mapCardRef = useRef<View>(null);
   const [isMapExpanded, setIsMapExpanded] = useState(false);
   const [mapCardLayout, setMapCardLayout] = useState<CardLayout>({ x: 0, y: 0, width: 0, height: 145 });
-  const [showSettings, setShowSettings] = useState(false);
+  const [showSettings,    setShowSettings]    = useState(false);
+  const [showInviteSheet, setShowInviteSheet] = useState(false);
+  const [members, setMembers] = useState<any[]>([]);
 
   /* ── Géocodage de la destination ── */
   const [region, setRegion] = useState({
@@ -114,7 +128,38 @@ export function ExpandedDashboard({ trip, cardLayout, progress }: Props) {
       .catch(() => {});
   }, [trip.destination]);
 
+  /* ── Fetch real members via profiles table ── */
+  useEffect(() => {
+    if (!trip.id) return;
+    const loadMembers = async () => {
+      const { data: membersList } = await supabase
+        .from('trip_members')
+        .select('user_id')
+        .eq('trip_id', trip.id);
+
+      if (membersList) {
+        const profiles: any[] = [];
+        for (const m of membersList) {
+          const { data } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', m.user_id)
+            .single();
+          console.log('PROFILE LOADED:', JSON.stringify(data));
+          if (data) profiles.push(data);
+        }
+        setMembers(profiles);
+      }
+    };
+    loadMembers();
+  }, [trip.id]);
+
   const isOwner = session?.user?.id === trip.created_by;
+
+  const { triggerCollapse } = useHomeExpand();
+  const handleBack = useCallback(() => {
+    triggerCollapse.current?.();
+  }, [triggerCollapse]);
 
   const handleMapPress = useCallback(() => {
     mapCardRef.current?.measureInWindow((x, y, width, height) => {
@@ -197,40 +242,18 @@ export function ExpandedDashboard({ trip, cardLayout, progress }: Props) {
               <Text style={styles.dateBadgeText}>{dateLabel}</Text>
             </BlurView>
 
-            <View style={styles.headerRight}>
-              {/* Avatars */}
-              <View style={styles.avatarsRow}>
-                {trip.members.slice(0, 3).map((m, i) => (
-                  <View
-                    key={m.user_id}
-                    style={[styles.avatar, {
-                      backgroundColor: AVATAR_BG[i % AVATAR_BG.length],
-                      marginLeft: i > 0 ? -9 : 0,
-                      zIndex: 10 - i,
-                    }]}
-                  >
-                    {m.user.avatar_url && (
-                      <Image source={{ uri: m.user.avatar_url }} style={styles.avatarImg} />
-                    )}
-                  </View>
-                ))}
-                <TouchableOpacity style={styles.addMemberBtn} activeOpacity={0.8}>
-                  <Ionicons name="add" size={13} color="#fff" />
-                </TouchableOpacity>
-              </View>
-
-              {/* Settings gear — owner only */}
-              {isOwner && (
-                <TouchableOpacity
-                  style={styles.settingsGearBtn}
-                  onPress={() => setShowSettings(true)}
-                  activeOpacity={0.75}
-                >
-                  <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
-                  <View style={styles.settingsGearBorder} />
-                  <Ionicons name="settings-outline" size={18} color="#fff" />
-                </TouchableOpacity>
-              )}
+            {/* Avatars réels */}
+            <View style={styles.avatarsRow}>
+              {members.map((m, i) => (
+                <MemberAvatar key={m.id} member={m} size={40} index={i} />
+              ))}
+              <TouchableOpacity
+                style={[styles.avatar, styles.addMemberBtn, { marginLeft: members.length > 0 ? -9 : 0, zIndex: 0 }]}
+                onPress={() => setShowInviteSheet(true)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="add" size={16} color="rgba(255,255,255,0.8)" />
+              </TouchableOpacity>
             </View>
           </View>
         </Animated.View>
@@ -308,6 +331,16 @@ export function ExpandedDashboard({ trip, cardLayout, progress }: Props) {
           </ScrollView>
         </Animated.View>
 
+        {/* ── Bottom nav ── */}
+        <Animated.View
+          style={[styles.bottomNav, { bottom: Math.max(insets.bottom, 10) + 16 }, bentoStyle]}
+          pointerEvents="box-none"
+        >
+          <NavButton icon="arrow-back-outline" onPress={handleBack} />
+          <NavButton icon="add" iconSize={28} onPress={() => setShowInviteSheet(true)} />
+          <NavButton icon="settings-outline" onPress={() => setShowSettings(true)} />
+        </Animated.View>
+
       </View>
 
       {isMapExpanded && (
@@ -325,6 +358,15 @@ export function ExpandedDashboard({ trip, cardLayout, progress }: Props) {
         visible={showSettings}
         onClose={() => setShowSettings(false)}
         trip={trip}
+        members={members.map(m => ({ user_id: m.id, name: m.nickname ?? 'Membre', avatar_url: m.avatar_url, role: 'member' }))}
+        onInvite={() => { setShowSettings(false); setShowInviteSheet(true); }}
+      />
+
+      {/* Invite sheet */}
+      <InviteSheet
+        visible={showInviteSheet}
+        onClose={() => setShowInviteSheet(false)}
+        tripId={trip.id}
       />
 
     </View>
@@ -336,10 +378,14 @@ function TripSettingsSheet({
   visible,
   onClose,
   trip,
+  members,
+  onInvite,
 }: {
   visible: boolean;
   onClose: () => void;
   trip: Trip;
+  members: MemberDisplay[];
+  onInvite: () => void;
 }) {
   const insets = useSafeAreaInsets();
   const { session } = useAuth();
@@ -514,19 +560,13 @@ function TripSettingsSheet({
             {/* ── Section : Membres ── */}
             <Text style={[sheet.sectionLabel, { marginTop: Spacing.lg }]}>Membres</Text>
 
-            {trip.members.length === 0 ? (
+            {members.length === 0 ? (
               <Text style={sheet.emptyMembers}>Aucun membre pour l'instant.</Text>
             ) : (
-              trip.members.map((m) => (
+              members.map((m) => (
                 <View key={m.user_id} style={sheet.memberRow}>
-                  <View style={sheet.memberAvatar}>
-                    {m.user.avatar_url ? (
-                      <Image source={{ uri: m.user.avatar_url }} style={{ width: '100%', height: '100%' }} />
-                    ) : (
-                      <Text style={sheet.memberInitial}>{m.user.name?.[0]?.toUpperCase() ?? '?'}</Text>
-                    )}
-                  </View>
-                  <Text style={sheet.memberName}>{m.user.name}</Text>
+                  <MemberAvatar member={{ avatar_url: m.avatar_url, nickname: m.name }} size={36} index={0} />
+                  <Text style={sheet.memberName}>{m.name}</Text>
                   {m.role === 'owner' && (
                     <Text style={sheet.memberRole}>Organisateur</Text>
                   )}
@@ -534,9 +574,9 @@ function TripSettingsSheet({
               ))
             )}
 
-            <TouchableOpacity style={sheet.inviteBtn} activeOpacity={0.8}>
+            <TouchableOpacity style={sheet.inviteBtn} activeOpacity={0.8} onPress={onInvite}>
               <Ionicons name="person-add-outline" size={18} color={Colors.primary} />
-              <Text style={sheet.inviteBtnText}>Inviter par lien ou email</Text>
+              <Text style={sheet.inviteBtnText}>Inviter par email</Text>
             </TouchableOpacity>
 
             {/* ── Section : Danger ── */}
@@ -839,6 +879,11 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
+  avatarInitial: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+  },
   addMemberBtn: {
     width: 32,
     height: 32,
@@ -905,4 +950,14 @@ const styles = StyleSheet.create({
   /* Budget */
   addCircle: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.22)', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.45)', alignItems: 'center', justifyContent: 'center', alignSelf: 'center', marginVertical: 2 },
   budgetSub: { fontSize: 10, color: '#FFFFFF', textAlign: 'center', fontWeight: '500' },
+
+  /* Bottom nav */
+  bottomNav: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 14,
+  },
 });

@@ -2,6 +2,30 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/services/supabase';
 
+/* ─── Sync profile ───────────────────────────────────────────── */
+async function syncProfile(user: User) {
+  const profileData = {
+    id:         user.id,
+    nickname:   user.user_metadata?.nickname || 'Voyageur',
+    avatar_url: user.user_metadata?.avatar_url || null,
+    email:      user.email,
+  };
+
+  const { data: existing } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('id', user.id)
+    .single();
+
+  if (existing) {
+    await supabase.from('profiles').update(profileData).eq('id', user.id);
+  } else {
+    await supabase.from('profiles').insert(profileData);
+  }
+
+  console.log('PROFILE SYNCED:', JSON.stringify(profileData));
+}
+
 /* ─── Types ──────────────────────────────────────────────────── */
 interface AuthContextType {
   user:     User | null;
@@ -59,6 +83,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       (_event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
+        if (_event === 'SIGNED_IN' && session?.user) {
+          syncProfile(session.user);
+        }
       }
     );
 

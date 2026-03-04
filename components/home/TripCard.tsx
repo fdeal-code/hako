@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import MaskedView from '@react-native-masked-view/masked-view';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -12,7 +12,15 @@ import Animated, {
 
 import { Colors } from '@/constants/theme';
 import { Trip } from '@/constants/types';
+import { supabase } from '@/services/supabase';
 import { CardLayout } from './ExpandedDashboard';
+import { MemberAvatar } from '@/components/ui/MemberAvatar';
+
+interface MemberDisplay {
+  user_id: string;
+  name: string;
+  avatar_url?: string;
+}
 
 /* ─── Tokens ─────────────────────────────────────────────────── */
 const BADGE_COLORS: [string, string] = [
@@ -91,11 +99,38 @@ export function TripCard({
   onExpand: (layout: CardLayout) => void;
   isNextTrip?: boolean;
 }) {
-  const dateLabel       = formatDateLabel(trip.start_date);
-  const isNext          = isNextTrip;
-  const members         = trip.members.slice(0, 3);
+  const dateLabel        = formatDateLabel(trip.start_date);
+  const isNext           = isNextTrip;
   const dateBadgeVariant = getDateBadgeVariant(trip);
-  const isPast          = dateBadgeVariant === 'past';
+  const isPast           = dateBadgeVariant === 'past';
+
+  /* Fetch real members */
+  const [localMembers, setLocalMembers] = useState<MemberDisplay[]>([]);
+  useEffect(() => {
+    const loadMembers = async () => {
+      const { data: membersList } = await supabase
+        .from('trip_members')
+        .select('user_id')
+        .eq('trip_id', trip.id)
+        .limit(4);
+      if (!membersList) return;
+      const display: MemberDisplay[] = [];
+      for (const m of membersList) {
+        const { data } = await supabase
+          .from('profiles')
+          .select('id, nickname, avatar_url')
+          .eq('id', m.user_id)
+          .single();
+        display.push({
+          user_id:    m.user_id,
+          name:       data?.nickname ?? 'Membre',
+          avatar_url: data?.avatar_url ?? undefined,
+        });
+      }
+      setLocalMembers(display);
+    };
+    loadMembers();
+  }, [trip.id]);
 
   /* ref sur la View native pour mesurer la position écran */
   const cardRef = useRef<View>(null);
@@ -172,17 +207,12 @@ export function TripCard({
               </MaskedView>
 
               <View style={styles.avatarsRow}>
-                {members.map((m, i) => (
-                  <View
+                {localMembers.slice(0, 3).map((m, i) => (
+                  <MemberAvatar
                     key={m.user_id}
-                    style={[
-                      styles.avatar,
-                      {
-                        marginLeft: i > 0 ? -10 : 0,
-                        zIndex: members.length - i,
-                        backgroundColor: AVATAR_BG[i % AVATAR_BG.length],
-                      },
-                    ]}
+                    member={{ avatar_url: m.avatar_url, nickname: m.name }}
+                    size={36}
+                    index={i}
                   />
                 ))}
               </View>
@@ -240,5 +270,11 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 2,
     borderColor: Colors.white,
+    overflow: 'hidden',
+  },
+  avatarInitial: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.textPrimary,
   },
 });

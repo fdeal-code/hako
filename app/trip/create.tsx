@@ -26,6 +26,15 @@ import { Colors, Spacing, Radii } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/services/supabase';
 import { tripEvents } from '@/utils/events';
+import { MemberAvatar } from '@/components/ui/MemberAvatar';
+
+/* ─── Types ─────────────────────────────────────────────────── */
+interface Friend {
+  id: string;
+  nickname: string | null;
+  avatar_url: string | null;
+  email: string | null;
+}
 
 /* ─── Config API ─────────────────────────────────────────────── */
 const GOOGLE_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ?? '';
@@ -267,9 +276,46 @@ export default function CreateTripScreen() {
   const [creating,           setCreating]           = useState(false);
 
   /* ── État étape 5 ── */
-  const [travelMode,   setTravelMode]   = useState<'solo' | 'friends'>('solo');
-  const [inviteEmails, setInviteEmails] = useState<string[]>([]);
-  const [emailInput,   setEmailInput]   = useState('');
+  const [travelMode,        setTravelMode]        = useState<'solo' | 'friends'>('solo');
+  const [inviteEmails,      setInviteEmails]      = useState<string[]>([]);
+  const [emailInput,        setEmailInput]        = useState('');
+  const [friends,           setFriends]           = useState<Friend[]>([]);
+  const [loadingFriends,    setLoadingFriends]    = useState(false);
+  const [selectedFriendIds, setSelectedFriendIds] = useState<Set<string>>(new Set());
+
+  /* ── Charge les amis au montage ── */
+  useEffect(() => {
+    const userId = session?.user?.id;
+    if (!userId) return;
+    setLoadingFriends(true);
+    (async () => {
+      const { data: sentData } = await supabase
+        .from('friendships')
+        .select('addressee_id')
+        .eq('requester_id', userId)
+        .eq('status', 'accepted');
+      const { data: receivedData } = await supabase
+        .from('friendships')
+        .select('requester_id')
+        .eq('addressee_id', userId)
+        .eq('status', 'accepted');
+      const ids = [
+        ...(sentData ?? []).map(f => f.addressee_id),
+        ...(receivedData ?? []).map(f => f.requester_id),
+      ];
+      const profiles: Friend[] = [];
+      for (const id of ids) {
+        const { data } = await supabase
+          .from('profiles')
+          .select('id, nickname, avatar_url, email')
+          .eq('id', id)
+          .single();
+        if (data) profiles.push(data);
+      }
+      setFriends(profiles);
+      setLoadingFriends(false);
+    })();
+  }, [session?.user?.id]);
 
   const coverPreviewUrl = coverUri ??
     (selectedSuggestion !== null ? SUGGESTIONS.find(s => s.id === selectedSuggestion)?.uri ?? null : null);
@@ -351,18 +397,20 @@ export default function CreateTripScreen() {
         .from('trip_members')
         .insert({ trip_id: tripData.id, user_id: session?.user?.id ?? null, role: 'owner' });
 
-      /* Invitations — table trip_invites (silent fail si pas encore créée) */
-      if (inviteEmails.length > 0) {
-        try {
-          await supabase.from('trip_invites').insert(
-            inviteEmails.map(email => ({
-              trip_id:    tripData.id,
-              email,
-              invited_by: userId,
-              status:     'pending',
-            }))
-          );
-        } catch { /* table pas encore créée — on ignore */ }
+      /* Invitations — amis sélectionnés + emails manuels */
+      const friendEmails = friends
+        .filter(f => selectedFriendIds.has(f.id) && f.email)
+        .map(f => f.email!.trim().toLowerCase());
+      const allEmails = [...new Set([...friendEmails, ...inviteEmails])];
+      if (allEmails.length > 0) {
+        await supabase.from('invitations').insert(
+          allEmails.map(email => ({
+            trip_id:       tripData.id,
+            invited_email: email,
+            invited_by:    userId,
+            status:        'pending',
+          }))
+        );
       }
 
       tripEvents.emit();
@@ -840,6 +888,70 @@ export default function CreateTripScreen() {
             {/* Section invitation */}
             {travelMode === 'friends' && (
               <View style={styles.inviteSection}>
+
+                {/* ── Mes amis ── */}
+                {loadingFriends ? (
+                  <ActivityIndicator color={Colors.primary} style={{ marginVertical: Spacing.md }} />
+                ) : friends.length === 0 ? (
+                  <View style={styles.noFriendsBox}>
+                    <Ionicons name="people-outline" size={24} color={Colors.textTertiary} />
+                    <Text style={styles.noFriendsText}>
+                      Pas encore d'amis ? Invite-les par email ci-dessous
+                    </Text>
+                  </View>
+                ) : (
+                  <>
+                    <View style={styles.friendsSectionHeader}>
+                      <Text style={styles.friendsSectionLabel}>Mes amis</Text>
+                      {selectedFriendIds.size > 0 && (
+                        <Text style={styles.friendsCounter}>
+                          {selectedFriendIds.size} sélectionné{selectedFriendIds.size > 1 ? 's' : ''}
+                        </Text>
+                      )}
+                    </View>
+                    {friends.map(f => {
+                      const isSelected = selectedFriendIds.has(f.id);
+                      const toggle = () => {
+                        setSelectedFriendIds(prev => {
+                          const next = new Set(prev);
+                          if (next.has(f.id)) next.delete(f.id);
+                          else next.add(f.id);
+                          return next;
+                        });
+                      };
+                      return (
+                        <TouchableOpacity
+                          key={f.id}
+                          style={[styles.friendRow, isSelected && styles.friendRowSelected]}
+                          onPress={toggle}
+                          activeOpacity={0.75}
+                        >
+                          <MemberAvatar member={f} size={40} index={0} />
+                          <View style={styles.friendInfo}>
+                            <Text style={styles.friendName}>{f.nickname ?? 'Ami'}</Text>
+                            {f.email ? (
+                              <Text style={styles.friendEmail} numberOfLines={1}>{f.email}</Text>
+                            ) : null}
+                          </View>
+                          <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
+                            {isSelected && (
+                              <Ionicons name="checkmark" size={14} color="#fff" />
+                            )}
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </>
+                )}
+
+                {/* ── Séparateur ── */}
+                <View style={styles.orDivider}>
+                  <View style={styles.orLine} />
+                  <Text style={styles.orText}>ou invite par email</Text>
+                  <View style={styles.orLine} />
+                </View>
+
+                {/* ── Par email ── */}
                 <View style={styles.emailRow}>
                   <TextInput
                     style={styles.emailInput}
@@ -870,10 +982,12 @@ export default function CreateTripScreen() {
                   </View>
                 ))}
 
-                {inviteEmails.length > 0 && (
+                {(selectedFriendIds.size > 0 || inviteEmails.length > 0) && (
                   <View style={styles.inviteInfo}>
                     <Ionicons name="mail-outline" size={13} color={Colors.textTertiary} />
-                    <Text style={styles.inviteInfoText}>Tes amis recevront une invitation par email</Text>
+                    <Text style={styles.inviteInfoText}>
+                      Tes amis recevront une invitation
+                    </Text>
                   </View>
                 )}
               </View>
@@ -1347,6 +1461,99 @@ const styles = StyleSheet.create({
   /* ── Étape 5 — Invitations ── */
   inviteSection: {
     gap: Spacing.sm,
+  },
+
+  /* Friends list */
+  noFriendsBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    backgroundColor: Colors.surface,
+    borderRadius: Radii.lg,
+    padding: Spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  noFriendsText: {
+    flex: 1,
+    fontSize: 14,
+    color: Colors.textSecondary,
+    lineHeight: 20,
+  },
+  friendsSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: Spacing.xs,
+  },
+  friendsSectionLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  friendsCounter: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.primary,
+  },
+  friendRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    padding: Spacing.sm,
+    borderRadius: Radii.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.background,
+  },
+  friendRowSelected: {
+    backgroundColor: '#EEF2FF',
+    borderColor: Colors.primary,
+  },
+  friendInfo: { flex: 1 },
+  friendName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+  },
+  friendEmail: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    marginTop: 1,
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.background,
+  },
+  checkboxSelected: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+
+  /* Or divider */
+  orDivider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    marginVertical: Spacing.xs,
+  },
+  orLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: Colors.border,
+  },
+  orText: {
+    fontSize: 12,
+    color: Colors.textTertiary,
+    fontWeight: '500',
   },
   emailRow: {
     flexDirection: 'row',

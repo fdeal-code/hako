@@ -20,19 +20,13 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
   const activeRoute = state.routes[state.index].name;
   const isHome      = activeRoute === 'index';
 
-  const { expandProgress, triggerCollapse } = useHomeExpand();
+  const { expandProgress } = useHomeExpand();
 
-  /* ── Opacités croisées — seulement sur l'onglet Home ── */
+  /* ── Home nav se cache quand le Dashboard s'ouvre ── */
   const homeRowStyle = useAnimatedStyle(() => {
     'worklet';
     if (!isHome) return { opacity: 1 };
     return { opacity: interpolate(expandProgress.value, [0, 0.35], [1, 0], 'clamp') };
-  });
-
-  const dashRowStyle = useAnimatedStyle(() => {
-    'worklet';
-    if (!isHome) return { opacity: 0 };
-    return { opacity: interpolate(expandProgress.value, [0.65, 1], [0, 1], 'clamp') };
   });
 
   const navigate = (routeName: string) => {
@@ -78,30 +72,6 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
           />
         </Animated.View>
 
-        {/*
-         * ── Nav Dashboard : [back] [flex spacer] [+] [8px] [filter] ──
-         *
-         * absoluteFill = même largeur/hauteur que navContainer (= largeur home nav).
-         * back   → bord gauche  (aligne avec Home pill)
-         * filter → bord droit   (aligne avec le + de l'accueil)
-         * +      → 8px avant filter
-         */}
-        <Animated.View style={[StyleSheet.absoluteFill, styles.row, dashRowStyle]} pointerEvents="box-none">
-          <NavButton
-            icon="arrow-back-outline"
-            onPress={() => triggerCollapse.current()}
-          />
-          <View style={{ flex: 1 }} />
-          <NavButton
-            icon="add"
-            iconSize={28}
-            onPress={openCreate}
-            style={{ marginRight: 8 }}
-          />
-          <NavButton
-            icon="options-outline"
-          />
-        </Animated.View>
 
       </View>
     </View>

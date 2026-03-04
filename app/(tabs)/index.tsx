@@ -1,9 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Modal, Pressable, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Pressable, ActivityIndicator } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
 import { router } from 'expo-router';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, Easing } from 'react-native-reanimated';
 
@@ -11,10 +10,11 @@ import { TripCard } from '@/components/home/TripCard';
 import { ExpandedDashboard, CardLayout } from '@/components/home/ExpandedDashboard';
 import { FilterTabs, TripFilter, SortBy } from '@/components/home/FilterTabs';
 import { Avatar } from '@/components/ui/Avatar';
+import { PendingInvitationsSheet, PendingInvitation, FriendRequest } from '@/components/invitations/PendingInvitationsSheet';
 import { useHomeExpand } from '@/contexts/HomeExpandContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/services/supabase';
-import { Colors, Spacing, Radii, Shadows } from '@/constants/theme';
+import { Colors, Spacing } from '@/constants/theme';
 import { Trip } from '@/constants/types';
 import { tripEvents } from '@/utils/events';
 
@@ -43,18 +43,20 @@ function dbRowToTrip(row: any): Trip {
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
-  const { session, signOut } = useAuth();
+  const { session } = useAuth();
   const nickname  = session?.user?.user_metadata?.nickname   || 'Voyageur';
   const avatarUrl = session?.user?.user_metadata?.avatar_url as string | undefined;
 
-  const [trips,        setTrips]        = useState<Trip[]>([]);
-  const [loadingTrips, setLoadingTrips] = useState(true);
-  const [filter,       setFilter]       = useState<TripFilter>('all');
-  const [sortBy,       setSortBy]       = useState<SortBy>('recent');
-  const [showSortMenu, setShowSortMenu] = useState(false);
-  const [expandedTrip, setExpandedTrip] = useState<Trip | null>(null);
-  const [cardLayout,   setCardLayout]   = useState<CardLayout>({ x: 0, y: 0, width: 0, height: 0 });
-  const [showSettings, setShowSettings] = useState(false);
+  const [trips,               setTrips]               = useState<Trip[]>([]);
+  const [loadingTrips,        setLoadingTrips]        = useState(true);
+  const [filter,              setFilter]              = useState<TripFilter>('all');
+  const [sortBy,              setSortBy]              = useState<SortBy>('recent');
+  const [showSortMenu,        setShowSortMenu]        = useState(false);
+  const [expandedTrip,        setExpandedTrip]        = useState<Trip | null>(null);
+  const [cardLayout,          setCardLayout]          = useState<CardLayout>({ x: 0, y: 0, width: 0, height: 0 });
+  const [pendingInvitations,  setPendingInvitations]  = useState<PendingInvitation[]>([]);
+  const [friendRequests,      setFriendRequests]      = useState<FriendRequest[]>([]);
+  const [showInvitationsSheet, setShowInvitationsSheet] = useState(false);
 
   /* ── Animation fade liste ── */
   const listOpacity = useSharedValue(1);
@@ -121,6 +123,55 @@ export default function HomeScreen() {
     triggerCollapse.current = handleCollapse;
   }, [handleCollapse, triggerCollapse]);
 
+  /* ── Fetch pending invitations ── */
+  const fetchInvitations = useCallback(() => {
+    const email = session?.user?.email?.toLowerCase();
+    if (!email) return;
+    console.log('CHECKING INVITES FOR:', email);
+    supabase
+      .from('invitations')
+      .select('*, trips(name, destination, cover_image_url, start_date, end_date)')
+      .eq('invited_email', email)
+      .eq('status', 'pending')
+      .then(({ data, error }) => {
+        console.log('INVITATIONS FOUND:', data?.length);
+        console.log('INVITATIONS ERROR:', JSON.stringify(error));
+        console.log('INVITATIONS DATA:', JSON.stringify(data));
+        setPendingInvitations((data ?? []) as PendingInvitation[]);
+      });
+  }, [session?.user?.email]);
+
+  useFocusEffect(fetchInvitations);
+
+  /* ── Fetch friend requests ── */
+  const fetchFriendRequests = useCallback(() => {
+    const userId = session?.user?.id;
+    if (!userId) return;
+
+    (async () => {
+      const { data: requests } = await supabase
+        .from('friendships')
+        .select('id, requester_id')
+        .eq('addressee_id', userId)
+        .eq('status', 'pending');
+
+      if (!requests?.length) { setFriendRequests([]); return; }
+
+      const full: FriendRequest[] = [];
+      for (const req of requests) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('id, nickname, avatar_url, email')
+          .eq('id', req.requester_id)
+          .single();
+        full.push({ id: req.id, requester_id: req.requester_id, requester: profile ?? null });
+      }
+      setFriendRequests(full);
+    })();
+  }, [session?.user?.id]);
+
+  useFocusEffect(fetchFriendRequests);
+
   /* ── Fetch voyages ── */
   const fetchTrips = useCallback(() => {
     const userId = session?.user?.id ?? '00000000-0000-0000-0000-000000000000';
@@ -166,11 +217,14 @@ export default function HomeScreen() {
               <Text style={styles.greeting}>Hello, {nickname} !</Text>
             </View>
             <TouchableOpacity
-              onPress={() => setShowSettings(true)}
-              style={styles.settingsBtn}
+              onPress={() => setShowInvitationsSheet(true)}
+              style={styles.bellBtn}
               activeOpacity={0.7}
             >
-              <Ionicons name="settings-outline" size={22} color={Colors.textSecondary} />
+              <Ionicons name="notifications-outline" size={24} color={Colors.textSecondary} />
+              {(pendingInvitations.length > 0 || friendRequests.length > 0) && (
+                <View style={styles.bellBadge} />
+              )}
             </TouchableOpacity>
           </View>
 
@@ -217,47 +271,18 @@ export default function HomeScreen() {
         />
       )}
 
-      {/* ── Settings modal ── */}
-      <Modal
-        visible={showSettings}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowSettings(false)}
-      >
-        <Pressable style={styles.modalBackdrop} onPress={() => setShowSettings(false)}>
-          <Pressable
-            style={[styles.settingsMenu, { top: insets.top + 52 }]}
-            onPress={() => {}}
-          >
-            <BlurView intensity={60} tint="light" style={StyleSheet.absoluteFill} />
-            <View style={styles.settingsMenuInner}>
-              <View style={styles.menuProfile}>
-                <Avatar name={nickname} uri={avatarUrl} size={36} />
-                <View>
-                  <Text style={styles.menuName}>{nickname}</Text>
-                  <Text style={styles.menuEmail} numberOfLines={1}>
-                    {session?.user?.email}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.menuDivider} />
-
-              <TouchableOpacity
-                style={styles.menuItem}
-                activeOpacity={0.7}
-                onPress={async () => {
-                  setShowSettings(false);
-                  await signOut();
-                }}
-              >
-                <Ionicons name="log-out-outline" size={18} color="#E53935" />
-                <Text style={styles.menuItemTextDanger}>Se déconnecter</Text>
-              </TouchableOpacity>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
+      {/* ── Pending invitations sheet ── */}
+      <PendingInvitationsSheet
+        visible={showInvitationsSheet}
+        onClose={() => setShowInvitationsSheet(false)}
+        invitations={pendingInvitations}
+        onRefresh={() => {
+          fetchInvitations();
+          setShowInvitationsSheet(false);
+        }}
+        friendRequests={friendRequests}
+        onFriendRequestsRefresh={fetchFriendRequests}
+      />
 
     </Pressable>
   );
@@ -291,7 +316,18 @@ const styles = StyleSheet.create({
   },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   greeting:   { fontSize: 16, fontWeight: '600', color: Colors.textPrimary },
-  settingsBtn: { padding: Spacing.xs },
+  bellBtn: { padding: Spacing.xs, position: 'relative' },
+  bellBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    backgroundColor: '#EF4444',
+    borderWidth: 1.5,
+    borderColor: Colors.background,
+  },
   title: { fontSize: 28, fontWeight: '800', color: Colors.textPrimary, lineHeight: 34, marginBottom: Spacing.lg },
   filters: { marginBottom: Spacing.lg },
   tripList: { gap: Spacing.md },
@@ -302,39 +338,4 @@ const styles = StyleSheet.create({
   emptyButton:     { marginTop: Spacing.md, backgroundColor: Colors.primary, paddingHorizontal: Spacing.xl, paddingVertical: Spacing.md, borderRadius: 999 },
   emptyButtonText: { color: Colors.white, fontWeight: '700', fontSize: 15 },
 
-  modalBackdrop: { flex: 1 },
-  settingsMenu: {
-    position: 'absolute',
-    right: 16,
-    width: 240,
-    borderRadius: Radii.lg,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: Colors.border,
-    ...Shadows.lg,
-  },
-  settingsMenuInner: { paddingVertical: Spacing.sm },
-  menuProfile: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-  },
-  menuName:  { fontSize: 14, fontWeight: '700', color: Colors.textPrimary },
-  menuEmail: { fontSize: 12, color: Colors.textTertiary, maxWidth: 150 },
-  menuDivider: {
-    height: 1,
-    backgroundColor: Colors.border,
-    marginVertical: Spacing.xs,
-    marginHorizontal: Spacing.md,
-  },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 12,
-  },
-  menuItemTextDanger: { fontSize: 14, fontWeight: '600', color: '#E53935' },
 });
