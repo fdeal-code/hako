@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { ScrollView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useLocalSearchParams, router } from 'expo-router';
+import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import Animated, {
@@ -39,7 +39,7 @@ const START_HOUR  = 8;
 const END_HOUR    = 23;
 const TOTAL_HOURS = END_HOUR - START_HOUR;  // 15
 const TIMELINE_H  = TOTAL_HOURS * HOUR_H;   // 960
-const MIN_CARD_H  = 52;
+const MIN_CARD_H  = 60;
 const TIME_COL_W  = 52;   // left time label column
 const OVERLAY_W   = 210;
 const OVERLAY_H   = 56;
@@ -197,9 +197,10 @@ interface TimelineItemCardProps {
   onDragEnd:   (x: number, y: number) => void;
   onHover:     (y: number) => void;
   onDelete:    (item: PlanningItem) => void;
+  onPress:     (item: PlanningItem) => void;
 }
 function TimelineItemCard({
-  item, isNew, dragX, dragY, isDragging, onDragStart, onDragEnd, onHover, onDelete,
+  item, isNew, dragX, dragY, isDragging, onDragStart, onDragEnd, onHover, onDelete, onPress,
 }: TimelineItemCardProps) {
   const c = cat(item.wish?.category ?? item.category);
   const img = item.wish?.image_url;
@@ -211,7 +212,7 @@ function TimelineItemCard({
 
   const topOffset  = (sh - START_HOUR + sm / 60) * HOUR_H + 2;
   const durMins    = (eh * 60 + em) - (sh * 60 + sm);
-  const cardH      = Math.max((durMins / 60) * HOUR_H - 6, MIN_CARD_H);
+  const cardH      = Math.max(MIN_CARD_H, (durMins / 60) * HOUR_H);
   const timeStr    = `${fmtTime(sh, sm)} - ${fmtTime(eh, em)}`;
 
   /* Flash for new item */
@@ -230,6 +231,13 @@ function TimelineItemCard({
     });
   }, [isNew]);
 
+  /* Tap → ouvre la fiche détail */
+  const tapGesture = Gesture.Tap()
+    .maxDuration(200)
+    .onEnd((_e, success) => {
+      if (success) runOnJS(onPress)(item);
+    });
+
   /* Swipe-to-delete */
   const swipeX = useSharedValue(0);
   const swipeGesture = Gesture.Pan()
@@ -242,9 +250,9 @@ function TimelineItemCard({
       swipeX.value = swipeX.value < -42 ? withSpring(-84) : withSpring(0);
     });
 
-  /* Drag (disabled if locked) */
+  /* Drag long-press (désactivé si locked) */
   const dragGesture = Gesture.Pan()
-    .activateAfterLongPress(500)
+    .activateAfterLongPress(350)
     .onStart((e) => {
       isDragging.value = withTiming(1, { duration: 120 });
       dragX.value = e.absoluteX;
@@ -266,9 +274,10 @@ function TimelineItemCard({
       }
     });
 
+  /* Race : le premier geste qui s'active gagne */
   const composed = item.is_locked
-    ? swipeGesture
-    : Gesture.Exclusive(dragGesture, swipeGesture);
+    ? Gesture.Race(tapGesture, swipeGesture)
+    : Gesture.Race(tapGesture, swipeGesture, dragGesture);
 
   const cardStyle = useAnimatedStyle(() => ({
     opacity: flashAnim.value,
@@ -277,39 +286,42 @@ function TimelineItemCard({
 
   return (
     <View style={[tic.container, { top: topOffset }]}>
-      {/* Delete zone (revealed by swipe) */}
+      {/* Icône ✕ révélée au swipe gauche */}
       <TouchableOpacity
         style={tic.deleteZone}
         onPress={() => onDelete(item)}
         activeOpacity={0.85}
       >
-        <Ionicons name="trash-outline" size={16} color="#fff" />
-        <Text style={tic.deleteTxt}>Retirer</Text>
+        <Ionicons name="close-circle" size={28} color="#EF4444" />
       </TouchableOpacity>
 
       <GestureDetector gesture={composed}>
         <Animated.View style={[tic.card, { height: cardH }, cardStyle]}>
-          {/* Left color border */}
-          <View style={[tic.border, { backgroundColor: c.color }]} />
 
-          {/* Thumbnail */}
+          {/* Image de fond (ou couleur catégorie) */}
           {img ? (
-            <Image source={{ uri: img }} style={tic.thumb} resizeMode="cover" />
+            <Image source={{ uri: img }} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
           ) : (
-            <View style={[tic.thumb, tic.thumbFallback, { backgroundColor: c.color + '22' }]}>
-              <Text style={tic.thumbEmoji}>{c.emoji}</Text>
+            <View style={[StyleSheet.absoluteFillObject, tic.fallbackBg, { backgroundColor: c.color + '30' }]}>
+              <Text style={tic.fallbackEmoji}>{c.emoji}</Text>
             </View>
           )}
 
-          {/* Text */}
+          {/* Overlay sombre pour lisibilité */}
+          <View style={tic.overlay} />
+
+          {/* Barre couleur gauche */}
+          <View style={[tic.border, { backgroundColor: c.color }]} />
+
+          {/* Texte */}
           <View style={tic.textWrap}>
             <Text style={tic.itemTitle} numberOfLines={2}>{item.title}</Text>
             <Text style={tic.itemTime}>{timeStr}</Text>
           </View>
 
-          {/* Lock */}
+          {/* Cadenas */}
           {item.is_locked && (
-            <Ionicons name="lock-closed" size={13} color={Colors.textTertiary} style={tic.lock} />
+            <Ionicons name="lock-closed" size={13} color="rgba(255,255,255,0.8)" style={tic.lock} />
           )}
         </Animated.View>
       </GestureDetector>
@@ -429,6 +441,16 @@ export default function PlanningScreen() {
       loadWishes();
     }
   }, [days, selDayIdx, loadItems, loadWishes]);
+
+  /* ── Refresh au retour (ex: depuis la fiche détail) ── */
+  useFocusEffect(
+    useCallback(() => {
+      if (days.length > 0 && days[selDayIdx]) {
+        loadItems(days[selDayIdx]);
+        loadWishes();
+      }
+    }, [days, selDayIdx, loadItems, loadWishes]),
+  );
 
   /* ── Measure timeline absolute Y ── */
   const measureTimeline = useCallback(() => {
@@ -561,7 +583,6 @@ export default function PlanningScreen() {
       {/* ── Header ── */}
       <View style={s.header}>
         <Text style={s.title}>Planning</Text>
-        <NavButton icon="settings-outline" onPress={() => {}} />
       </View>
 
       {/* ── Carrousel de jours ── */}
@@ -625,6 +646,7 @@ export default function PlanningScreen() {
             onDragEnd={handleDragEnd}
             onHover={updateHoveredHour}
             onDelete={handleDelete}
+            onPress={(it) => router.push(`/trip/${tripId}/planning-detail?itemId=${it.id}`)}
           />
         ))}
 
@@ -793,45 +815,34 @@ const tic = StyleSheet.create({
     top: 0,
     bottom: 0,
     width: 84,
-    backgroundColor: '#EF4444',
-    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
-  },
-  deleteTxt: {
-    color: '#fff',
-    fontSize: 11,
-    fontWeight: '700',
   },
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.background,
     borderRadius: 14,
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: Colors.border,
     paddingRight: 10,
     gap: 10,
     ...Shadows.sm,
   },
-  border: {
-    width: 4,
-    alignSelf: 'stretch',
-  },
-  thumb: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    flexShrink: 0,
-  },
-  thumbFallback: {
+  fallbackBg: {
     alignItems: 'center',
     justifyContent: 'center',
   },
-  thumbEmoji: {
-    fontSize: 18,
+  fallbackEmoji: {
+    fontSize: 28,
+    opacity: 0.45,
+  },
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.42)',
+  },
+  border: {
+    width: 4,
+    alignSelf: 'stretch',
+    flexShrink: 0,
   },
   textWrap: {
     flex: 1,
@@ -841,13 +852,13 @@ const tic = StyleSheet.create({
   itemTitle: {
     fontSize: 13,
     fontWeight: '700',
-    color: Colors.textPrimary,
+    color: '#fff',
     letterSpacing: -0.2,
   },
   itemTime: {
     fontSize: 11,
     fontWeight: '500',
-    color: Colors.textSecondary,
+    color: 'rgba(255,255,255,0.72)',
   },
   lock: {
     flexShrink: 0,

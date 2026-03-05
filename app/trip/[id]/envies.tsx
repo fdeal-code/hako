@@ -336,7 +336,7 @@ function WishCard({
         style={[
           cs.card,
           { height: cardH },
-          isPlace && { borderWidth: 2.5, borderColor: statusColor },
+          isPlace && { borderWidth: 2, borderColor: statusColor },
         ]}
         activeOpacity={0.92}
         onPress={() => { if (!swipeRef.current) onPress(); }}
@@ -492,6 +492,9 @@ function DetailSheet({
   const [commentText,   setCommentText]   = useState('');
   const [isSending,     setIsSending]     = useState(false);
 
+  /* Real trip members for votes */
+  const [tripMembers, setTripMembers] = useState<{ user_id: string; nickname: string | null; avatar_url: string | null }[]>([]);
+
   /* ── Associate a place (for inspirations) ── */
   const [showAssociate,  setShowAssociate]  = useState(false);
   const [associateQuery, setAssociateQuery] = useState('');
@@ -517,6 +520,28 @@ function DetailSheet({
       setAddingVideo(false); setVideoInput('');
     }
   }, [wish?.id]);
+
+  /* Load real trip members for vote display */
+  useEffect(() => {
+    if (!wish?.trip_id) return;
+    (async () => {
+      const { data: membersData } = await supabase
+        .from('trip_members')
+        .select('user_id')
+        .eq('trip_id', wish.trip_id);
+      if (!membersData) return;
+      const profiles: { user_id: string; nickname: string | null; avatar_url: string | null }[] = [];
+      for (const m of membersData) {
+        const { data } = await supabase
+          .from('profiles')
+          .select('id, nickname, avatar_url')
+          .eq('id', m.user_id)
+          .single();
+        if (data) profiles.push({ user_id: m.user_id, nickname: data.nickname, avatar_url: data.avatar_url });
+      }
+      setTripMembers(profiles);
+    })();
+  }, [wish?.trip_id]);
 
   if (!wish) return null;
 
@@ -649,6 +674,10 @@ function DetailSheet({
         <View style={[ds.container, { paddingBottom: Math.max(insets.bottom, 20) }]}>
 
           <View style={ds.handle} />
+
+          <TouchableOpacity style={ds.closeFab} onPress={onClose} activeOpacity={0.8}>
+            <Ionicons name="close" size={18} color="#fff" />
+          </TouchableOpacity>
 
           <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 
@@ -1035,14 +1064,18 @@ function DetailSheet({
                 <View style={ds.section}>
                   <Text style={ds.sectionLabel}>🗳️ Votes des membres</Text>
                   <View style={ds.memberVoteList}>
-                    {MOCK_AVATARS.map(member => {
-                      const mv = wish.wish_votes.find(v => v.user_id === member.id);
+                    {tripMembers.map(member => {
+                      const mv = wish.wish_votes.find(v => v.user_id === member.user_id);
+                      const initials = (member.nickname ?? 'M')[0].toUpperCase();
                       return (
-                        <View key={member.id} style={ds.memberVoteRow}>
-                          <View style={[ds.memberAvatar, { backgroundColor: member.color }]}>
-                            <Image source={{ uri: member.photo }} style={ds.memberAvatarImg} />
+                        <View key={member.user_id} style={ds.memberVoteRow}>
+                          <View style={[ds.memberAvatar, { backgroundColor: '#E8E8E8' }]}>
+                            {member.avatar_url
+                              ? <Image source={{ uri: member.avatar_url }} style={ds.memberAvatarImg} />
+                              : <Text style={ds.memberAvatarTxt}>{initials}</Text>
+                            }
                           </View>
-                          <Text style={ds.memberName}>{member.name}</Text>
+                          <Text style={ds.memberName}>{member.nickname ?? 'Membre'}</Text>
                           <View style={ds.memberVoteBadge}>
                             <Text style={ds.memberVoteEmoji}>
                               {mv?.vote === 'up' ? '❤️' : mv?.vote === 'down' ? '👎' : '⏳'}
@@ -1065,14 +1098,15 @@ function DetailSheet({
                   <Text style={ds.infoEmpty}>Aucun commentaire. Soyez le premier !</Text>
                 )}
                 {comments.map(c => {
-                  const av = MOCK_AVATARS.find(a => a.id === c.user_id);
+                  const member = tripMembers.find(m => m.user_id === c.user_id);
+                  const initials = (c.user_name ?? 'M')[0].toUpperCase();
                   return (
                     <View key={c.id} style={ds.commentRow}>
-                      <View style={[ds.commentAvatar, { backgroundColor: av?.color ?? '#ccc' }]}>
-                        {av ? (
-                          <Image source={{ uri: av.photo }} style={ds.commentAvatarImg} />
+                      <View style={[ds.commentAvatar, { backgroundColor: '#E8E8E8' }]}>
+                        {member?.avatar_url ? (
+                          <Image source={{ uri: member.avatar_url }} style={ds.commentAvatarImg} />
                         ) : (
-                          <Text style={{ fontSize: 12, color: '#fff' }}>{c.user_name[0]}</Text>
+                          <Text style={{ fontSize: 12, color: '#555', fontWeight: '700' }}>{initials}</Text>
                         )}
                       </View>
                       <View style={ds.commentBody}>
@@ -1109,12 +1143,12 @@ function DetailSheet({
               <View style={ds.actionsSection}>
                 {wish.status === 'validated' && !isOrga && (
                   <TouchableOpacity
-                    style={[ds.actionBtn, { backgroundColor: Colors.primary }]}
+                    style={[ds.actionBtn, { backgroundColor: '#1A1A1A' }]}
                     onPress={() => onAddToPlanning({ id: wish.id, title: wish.title })}
                     activeOpacity={0.85}
                   >
-                    <Ionicons name="calendar-outline" size={17} color={Colors.white} />
-                    <Text style={[ds.actionBtnText, { color: Colors.white }]}>Ajouter au planning</Text>
+                    <Ionicons name="calendar-outline" size={17} color="#fff" />
+                    <Text style={[ds.actionBtnText, { color: '#fff' }]}>Ajouter au planning</Text>
                   </TouchableOpacity>
                 )}
                 {wish.status !== 'archived' && (
@@ -2458,24 +2492,27 @@ const sc = StyleSheet.create({
 
 /* ─── Detail sheet styles ────────────────────────────────────── */
 const ds = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-  handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: Colors.border, alignSelf: 'center', marginTop: 12, marginBottom: 8 },
+  container: { flex: 1, backgroundColor: '#fff' },
+  handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#E5E7EB', alignSelf: 'center', marginTop: 12, marginBottom: 8 },
 
-  imgWrap:       { width: '100%', height: 240 },
-  img:           { width: '100%', height: '100%' },
+  /* Close button */
+  closeFab: { position: 'absolute', top: 12, right: 16, zIndex: 20, width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(0,0,0,0.35)', alignItems: 'center', justifyContent: 'center' },
+
+  imgWrap: { marginHorizontal: 16, marginTop: 4, marginBottom: 4, height: 240, borderRadius: 20, overflow: 'hidden' },
+  img:     { width: '100%', height: '100%' },
 
   /* Video section */
   videoSection:        { paddingTop: 14, paddingBottom: 6 },
   videoSectionHeader:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, marginBottom: 10 },
-  videoSectionTitle:   { fontSize: 13, fontWeight: '700', color: Colors.textSecondary },
-  videoAddPill:        { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: Colors.primary + '14', borderRadius: Radii.full, paddingHorizontal: 10, paddingVertical: 5 },
-  videoAddPillText:    { fontSize: 12, fontWeight: '700', color: Colors.primary },
+  videoSectionTitle:   { fontSize: 13, fontWeight: '700', color: '#555' },
+  videoAddPill:        { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#F5F5F5', borderRadius: Radii.full, paddingHorizontal: 10, paddingVertical: 5 },
+  videoAddPillText:    { fontSize: 12, fontWeight: '700', color: '#1A1A1A' },
   videoInputWrap:      { marginHorizontal: 16, marginBottom: 12, gap: 8 },
-  videoInput:          { backgroundColor: Colors.surface, borderRadius: Radii.md, paddingHorizontal: 12, paddingVertical: 10, fontSize: 13, color: Colors.textPrimary, borderWidth: 1, borderColor: Colors.border },
+  videoInput:          { backgroundColor: '#F5F5F5', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, fontSize: 13, color: '#1A1A1A' },
   videoInputActions:   { flexDirection: 'row', gap: 8, justifyContent: 'flex-end' },
-  videoCancelBtn:      { paddingHorizontal: 14, paddingVertical: 8, borderRadius: Radii.full, backgroundColor: Colors.surface },
-  videoCancelText:     { fontSize: 13, color: Colors.textSecondary, fontWeight: '600' },
-  videoConfirmBtn:     { paddingHorizontal: 16, paddingVertical: 8, borderRadius: Radii.full, backgroundColor: Colors.primary },
+  videoCancelBtn:      { paddingHorizontal: 14, paddingVertical: 8, borderRadius: Radii.full, backgroundColor: '#F5F5F5' },
+  videoCancelText:     { fontSize: 13, color: '#888', fontWeight: '600' },
+  videoConfirmBtn:     { paddingHorizontal: 16, paddingVertical: 8, borderRadius: Radii.full, backgroundColor: '#1A1A1A' },
   videoConfirmText:    { fontSize: 13, color: 'white', fontWeight: '700' },
   videoScroll:         { paddingHorizontal: 16, gap: 10, paddingBottom: 4 },
   videoCard:           { width: 130, gap: 6 },
@@ -2483,93 +2520,93 @@ const ds = StyleSheet.create({
   videoPlayOverlay:    { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.25)', alignItems: 'center', justifyContent: 'center' },
   videoPlayBtn:        { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.28)', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.6)', alignItems: 'center', justifyContent: 'center' },
   videoDeleteBtn:      { position: 'absolute', top: 5, right: 5 },
-  videoCardTitle:      { fontSize: 11, color: Colors.textSecondary, lineHeight: 14 },
-  videoEmpty:          { paddingHorizontal: 16, fontSize: 12, color: Colors.textTertiary, fontStyle: 'italic', marginBottom: 4 },
+  videoCardTitle:      { fontSize: 11, color: '#888', lineHeight: 14 },
+  videoEmpty:          { paddingHorizontal: 16, fontSize: 12, color: '#aaa', fontStyle: 'italic', marginBottom: 4 },
   openTikTok:    { position: 'absolute', bottom: 14, right: 14, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(0,0,0,0.65)', borderRadius: Radii.full, paddingHorizontal: 14, paddingVertical: 8 },
   openTikTokText: { color: '#fff', fontSize: 13, fontWeight: '700' },
 
-  body:      { padding: Spacing.md, gap: 6 },
+  body:      { paddingHorizontal: 20, paddingTop: 8, paddingBottom: Spacing.md, gap: 6 },
   titleRow:  { flexDirection: 'row', alignItems: 'flex-start' },
-  title:     { fontSize: 22, fontWeight: '800', color: Colors.textPrimary, letterSpacing: -0.3, lineHeight: 28 },
-  badgeRow:  { flexDirection: 'row', gap: Spacing.sm, alignItems: 'center', marginTop: 6, marginBottom: 4, flexWrap: 'wrap' },
+  title:     { fontSize: 28, fontWeight: '800', color: '#1A1A1A', letterSpacing: -0.5, lineHeight: 34 },
+  badgeRow:  { flexDirection: 'row', gap: 8, alignItems: 'center', marginTop: 10, marginBottom: 6, flexWrap: 'wrap' },
   statusBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: Radii.full, paddingHorizontal: 10, paddingVertical: 4 },
   statusDot:   { width: 7, height: 7, borderRadius: 4 },
   statusText:  { fontSize: 12, fontWeight: '700' },
-  catBadge:    { backgroundColor: Colors.surface, borderRadius: Radii.full, paddingHorizontal: 10, paddingVertical: 4 },
-  catBadgeText: { fontSize: 12, fontWeight: '600', color: Colors.textSecondary },
+  catBadge:    { backgroundColor: '#F5F5F5', borderRadius: Radii.full, paddingHorizontal: 10, paddingVertical: 4 },
+  catBadgeText: { fontSize: 12, fontWeight: '600', color: '#555' },
 
   /* Orga done button */
   doneBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     marginTop: 8, paddingVertical: 12, paddingHorizontal: 14,
-    borderRadius: Radii.md, borderWidth: 1, borderColor: Colors.border,
-    backgroundColor: Colors.surface,
+    borderRadius: 12, backgroundColor: '#F5F5F5',
   },
-  doneBtnActive: { borderColor: '#86EFAC', backgroundColor: '#F0FDF4' },
-  doneBtnText: { fontSize: 14, fontWeight: '600', color: Colors.textSecondary },
+  doneBtnActive: { backgroundColor: '#F0FDF4' },
+  doneBtnText: { fontSize: 14, fontWeight: '600', color: '#888' },
 
   /* Associate place button */
   associateBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     paddingVertical: 14, paddingHorizontal: 14,
-    borderRadius: Radii.md, borderWidth: 1.5, borderStyle: 'dashed',
+    borderRadius: 14, borderWidth: 1.5, borderStyle: 'dashed',
     borderColor: '#93C5FD', backgroundColor: '#EFF6FF',
   },
   associateBtnIcon:  { fontSize: 20 },
   associateBtnTitle: { fontSize: 14, fontWeight: '700', color: '#1D4ED8' },
   associateBtnSub:   { fontSize: 12, color: '#60A5FA', marginTop: 1 },
 
-  section:      { marginTop: Spacing.md, gap: 8 },
-  sectionLabel: { fontSize: 13, fontWeight: '700', color: Colors.textSecondary, letterSpacing: 0.1 },
-  infoValue:    { fontSize: 14, color: Colors.textPrimary, lineHeight: 20 },
-  infoEmpty:    { fontSize: 13, color: Colors.textTertiary, fontStyle: 'italic' },
+  section:      { marginTop: 20, gap: 10 },
+  sectionLabel: { fontSize: 11, fontWeight: '600', color: '#999', textTransform: 'uppercase', letterSpacing: 1 },
+  infoValue:    { fontSize: 14, color: '#1A1A1A', lineHeight: 20 },
+  infoEmpty:    { fontSize: 13, color: '#aaa', fontStyle: 'italic' },
   addBtn:       { flexDirection: 'row', alignItems: 'center', gap: 6 },
   addBtnText:   { fontSize: 13, color: Colors.primary, fontWeight: '600' },
   inputRow:     { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  input: { backgroundColor: Colors.surface, borderRadius: Radii.md, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: Colors.textPrimary, borderWidth: 1, borderColor: Colors.border },
-  miniBtn: { paddingVertical: 10, borderRadius: Radii.md, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, alignItems: 'center' },
-  miniBtnPrimary: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  miniBtnText: { fontSize: 13, fontWeight: '700', color: Colors.textPrimary },
-  suggestBox:  { marginTop: 4, backgroundColor: Colors.white, borderRadius: Radii.md, borderWidth: 1, borderColor: Colors.border, overflow: 'hidden', ...Shadows.sm },
+  input: { backgroundColor: '#F5F5F5', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 12, fontSize: 14, color: '#1A1A1A' },
+  miniBtn: { paddingVertical: 10, borderRadius: 12, backgroundColor: '#F5F5F5', alignItems: 'center' },
+  miniBtnPrimary: { backgroundColor: '#1A1A1A' },
+  miniBtnText: { fontSize: 13, fontWeight: '700', color: '#1A1A1A' },
+  suggestBox:  { marginTop: 4, backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: '#F0F0F0', overflow: 'hidden', ...Shadows.sm },
   suggestItem: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingHorizontal: 12, paddingVertical: 10 },
-  suggestBorder: { borderBottomWidth: 1, borderBottomColor: Colors.border },
-  suggestText: { flex: 1, fontSize: 13, color: Colors.textPrimary },
+  suggestBorder: { borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
+  suggestText: { flex: 1, fontSize: 13, color: '#1A1A1A' },
   pillRow:    { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  pill:       { paddingHorizontal: 14, paddingVertical: 8, borderRadius: Radii.full, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border },
-  pillActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  pillText:   { fontSize: 13, fontWeight: '600', color: Colors.textSecondary },
-  pillTextActive: { color: Colors.white },
+  pill:       { paddingHorizontal: 14, paddingVertical: 8, borderRadius: Radii.full, backgroundColor: '#F5F5F5' },
+  pillActive: { backgroundColor: '#1A1A1A' },
+  pillText:   { fontSize: 13, fontWeight: '600', color: '#555' },
+  pillTextActive: { color: '#fff' },
 
-  memberVoteList:  { gap: 12 },
-  memberVoteRow:   { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  memberAvatar:    { width: 34, height: 34, borderRadius: 17, overflow: 'hidden' },
+  memberVoteList:  { gap: 14 },
+  memberVoteRow:   { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  memberAvatar:    { width: 38, height: 38, borderRadius: 19, overflow: 'hidden', backgroundColor: '#F0F0F0', alignItems: 'center', justifyContent: 'center' },
   memberAvatarImg: { width: '100%', height: '100%' },
-  memberName:      { flex: 1, fontSize: 14, fontWeight: '600', color: Colors.textPrimary },
+  memberAvatarTxt: { fontSize: 15, fontWeight: '700', color: '#555' },
+  memberName:      { flex: 1, fontSize: 14, fontWeight: '600', color: '#1A1A1A' },
   memberVoteBadge: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   memberVoteEmoji: { fontSize: 16 },
-  memberVoteLabel: { fontSize: 12, color: Colors.textSecondary, fontWeight: '500' },
+  memberVoteLabel: { fontSize: 12, color: '#888', fontWeight: '500' },
 
   commentRow:      { flexDirection: 'row', gap: 10, alignItems: 'flex-start', marginBottom: 12 },
-  commentAvatar:   { width: 32, height: 32, borderRadius: 16, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
+  commentAvatar:   { width: 32, height: 32, borderRadius: 16, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', backgroundColor: '#F0F0F0' },
   commentAvatarImg: { width: '100%', height: '100%' },
-  commentBody:     { flex: 1, backgroundColor: Colors.surface, borderRadius: Radii.md, padding: 10 },
+  commentBody:     { flex: 1, backgroundColor: '#F9F9F9', borderRadius: 12, padding: 10 },
   commentMeta:     { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
-  commentName:     { fontSize: 13, fontWeight: '700', color: Colors.textPrimary },
-  commentDate:     { fontSize: 11, color: Colors.textTertiary },
-  commentText:     { fontSize: 13, color: Colors.textPrimary, lineHeight: 18 },
+  commentName:     { fontSize: 13, fontWeight: '700', color: '#1A1A1A' },
+  commentDate:     { fontSize: 11, color: '#aaa' },
+  commentText:     { fontSize: 13, color: '#1A1A1A', lineHeight: 18 },
   commentInputRow: { flexDirection: 'row', gap: 8, alignItems: 'center', marginTop: 8 },
-  sendBtn:         { width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center' },
+  sendBtn:         { width: 40, height: 40, borderRadius: 20, backgroundColor: '#1A1A1A', alignItems: 'center', justifyContent: 'center' },
 
-  actionsSection: { marginTop: Spacing.lg, gap: Spacing.sm, marginBottom: Spacing.md },
-  actionBtn:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, borderRadius: Radii.lg, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border },
-  actionBtnDanger: { borderColor: '#FCA5A5', backgroundColor: '#FEF2F2' },
-  actionBtnText:  { fontSize: 14, fontWeight: '700', color: Colors.textPrimary },
+  actionsSection: { marginTop: 24, gap: 10, marginBottom: Spacing.md },
+  actionBtn:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 15, borderRadius: 14, backgroundColor: '#F5F5F5' },
+  actionBtnDanger: { backgroundColor: 'rgba(220,38,38,0.08)', borderWidth: 1, borderColor: 'rgba(220,38,38,0.25)' },
+  actionBtnText:  { fontSize: 14, fontWeight: '700', color: '#1A1A1A' },
 
-  footer:       { flexDirection: 'row', gap: Spacing.sm, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderTopWidth: 1, borderTopColor: Colors.border },
-  voteBtn:      { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 13, borderRadius: Radii.lg, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border },
-  voteBtnLove:  { backgroundColor: '#FFF0F3', borderColor: '#FF4B6E' },
-  voteBtnPass:  { backgroundColor: '#FFF7ED', borderColor: '#F97316' },
+  footer:       { flexDirection: 'row', gap: Spacing.sm, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderTopWidth: 1, borderTopColor: '#F0F0F0' },
+  voteBtn:      { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 14, borderRadius: 14, backgroundColor: '#F5F5F5' },
+  voteBtnLove:  { backgroundColor: '#FFF0F3', borderWidth: 1.5, borderColor: '#FF4B6E' },
+  voteBtnPass:  { backgroundColor: '#FFF7ED', borderWidth: 1.5, borderColor: '#F97316' },
   voteBtnEmoji: { fontSize: 18 },
-  voteBtnLabel: { fontSize: 13, fontWeight: '700', color: Colors.textPrimary },
+  voteBtnLabel: { fontSize: 13, fontWeight: '700', color: '#1A1A1A' },
 });
 

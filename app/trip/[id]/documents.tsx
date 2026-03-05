@@ -322,14 +322,11 @@ export default function DocumentsScreen() {
 
       {/* Header */}
       <View style={s.header}>
-        <View>
-          <Text style={s.title}>Documents</Text>
-          <Text style={s.subtitle}>
-            {totalCount} document{totalCount !== 1 ? 's' : ''}
-            {trip ? ` · ${trip.name}` : ''}
-          </Text>
-        </View>
-        <NavButton icon="settings-outline" onPress={() => {}} />
+        <Text style={s.title}>Documents</Text>
+        <Text style={s.subtitle}>
+          {totalCount} document{totalCount !== 1 ? 's' : ''}
+          {trip ? ` · ${trip.name}` : ''}
+        </Text>
       </View>
 
       {/* Filters */}

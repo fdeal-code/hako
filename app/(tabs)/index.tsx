@@ -44,8 +44,16 @@ function dbRowToTrip(row: any): Trip {
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { session } = useAuth();
-  const nickname  = session?.user?.user_metadata?.nickname   || 'Voyageur';
+  const [profileNick, setProfileNick] = useState<string | null>(null);
   const avatarUrl = session?.user?.user_metadata?.avatar_url as string | undefined;
+  const nickname = profileNick ?? session?.user?.user_metadata?.nickname ?? session?.user?.email?.split('@')[0] ?? '';
+
+  useEffect(() => {
+    const uid = session?.user?.id;
+    if (!uid) return;
+    supabase.from('profiles').select('nickname').eq('id', uid).single()
+      .then(({ data }) => { if (data?.nickname) setProfileNick(data.nickname); });
+  }, [session?.user?.id]);
 
   const [trips,               setTrips]               = useState<Trip[]>([]);
   const [loadingTrips,        setLoadingTrips]        = useState(true);

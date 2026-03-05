@@ -18,6 +18,7 @@ import { Colors, Spacing, Radii, Shadows } from '@/constants/theme';
 import { supabase } from '@/services/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { MemberAvatar } from '@/components/ui/MemberAvatar';
+import { NavButton } from '@/components/ui/NavButton';
 
 /* ─── Types ──────────────────────────────────────────────────── */
 interface DbSplit {
@@ -174,20 +175,12 @@ export default function BudgetScreen() {
 
       {/* ── Header ── */}
       <View style={s.header}>
-        <TouchableOpacity onPress={() => router.back()} style={s.backBtn} activeOpacity={0.7}>
-          <Ionicons name="chevron-back" size={22} color={Colors.textPrimary} />
-        </TouchableOpacity>
-        <View style={{ flex: 1 }}>
-          <Text style={s.headerTitle}>Budget</Text>
-          {!loading && (
-            <Text style={s.headerSub}>
-              {expenses.length} dépense{expenses.length !== 1 ? 's' : ''} · {members.length} participant{members.length !== 1 ? 's' : ''}
-            </Text>
-          )}
-        </View>
-        <TouchableOpacity style={s.addBtn} onPress={() => setShowAdd(true)} activeOpacity={0.8}>
-          <Ionicons name="add" size={22} color={Colors.white} />
-        </TouchableOpacity>
+        <Text style={s.headerTitle}>Budget</Text>
+        {!loading && (
+          <Text style={s.headerSub}>
+            {expenses.length} dépense{expenses.length !== 1 ? 's' : ''} · {members.length} participant{members.length !== 1 ? 's' : ''}
+          </Text>
+        )}
       </View>
 
       {loading ? (
@@ -303,6 +296,13 @@ export default function BudgetScreen() {
 
         </ScrollView>
       )}
+
+      {/* ── Bottom nav ── */}
+      <View style={[s.bottomNav, { bottom: Math.max(insets.bottom, 10) + 16 }]} pointerEvents="box-none">
+        <NavButton icon="arrow-back-outline" onPress={() => router.back()} />
+        <NavButton icon="add" iconSize={28} onPress={() => setShowAdd(true)} />
+        <NavButton icon="options-outline" onPress={() => {}} />
+      </View>
 
       {/* ── Add expense modal ── */}
       <AddExpenseModal
@@ -607,11 +607,10 @@ function AddExpenseModal({
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.background },
 
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.md, paddingVertical: Spacing.md, gap: Spacing.sm },
-  backBtn: { padding: 4 },
-  headerTitle: { fontSize: 22, fontWeight: '800', color: Colors.textPrimary },
-  headerSub:   { fontSize: 13, color: Colors.textSecondary, fontWeight: '500', marginTop: 1 },
-  addBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center' },
+  header: { paddingHorizontal: Spacing.md, paddingTop: Spacing.sm, paddingBottom: Spacing.xs },
+  headerTitle: { fontSize: 32, fontWeight: '800', color: Colors.textPrimary, letterSpacing: -1 },
+  headerSub:   { fontSize: 13, color: Colors.textSecondary, fontWeight: '500', marginTop: 2 },
+  bottomNav: { position: 'absolute', left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', gap: 14, zIndex: 10 },
 
   scroll: { paddingHorizontal: Spacing.md, paddingTop: Spacing.sm, gap: Spacing.md },
 

@@ -317,10 +317,10 @@ const s = StyleSheet.create({
 
   sectionLabel: {
     fontSize: 11,
-    fontWeight: '700',
-    color: Colors.textSecondary,
+    fontWeight: '600',
+    color: '#999',
     textTransform: 'uppercase',
-    letterSpacing: 0.8,
+    letterSpacing: 1,
     marginBottom: Spacing.sm,
   },
 

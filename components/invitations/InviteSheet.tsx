@@ -20,7 +20,6 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -202,7 +201,6 @@ export function InviteSheet({ visible, onClose, tripId }: Props) {
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
 
         <View style={[s.container, { paddingBottom: insets.bottom + Spacing.md }]}>
-          <BlurView intensity={80} tint="light" style={StyleSheet.absoluteFill} />
 
           <View style={s.handleBar} />
 
@@ -215,7 +213,7 @@ export function InviteSheet({ visible, onClose, tripId }: Props) {
             <View style={s.header}>
               <Text style={s.title}>Inviter des amis</Text>
               <TouchableOpacity onPress={onClose} style={s.closeBtn} activeOpacity={0.7}>
-                <Ionicons name="close" size={22} color={Colors.textSecondary} />
+                <Ionicons name="close" size={22} color="#888" />
               </TouchableOpacity>
             </View>
 
@@ -230,14 +228,19 @@ export function InviteSheet({ visible, onClose, tripId }: Props) {
 
                   return (
                     <View key={friend.id} style={s.friendRow}>
-                      <MemberAvatar member={friend} size={36} index={0} />
-                      <Text style={s.friendName} numberOfLines={1}>
-                        {friend.nickname ?? 'Ami'}
-                      </Text>
+                      <MemberAvatar member={friend} size={40} index={0} />
+                      <View style={s.friendInfo}>
+                        <Text style={s.friendName} numberOfLines={1}>
+                          {friend.nickname ?? 'Ami'}
+                        </Text>
+                        {friend.email ? (
+                          <Text style={s.friendEmail} numberOfLines={1}>{friend.email}</Text>
+                        ) : null}
+                      </View>
                       {isMember ? (
                         <Text style={s.tagText}>Déjà membre</Text>
                       ) : isInvited ? (
-                        <Text style={s.tagText}>Invitation envoyée</Text>
+                        <Text style={s.tagText}>Invité</Text>
                       ) : (
                         <TouchableOpacity
                           style={[s.inviteBtn, isSending && { opacity: 0.6 }]}
@@ -254,12 +257,20 @@ export function InviteSheet({ visible, onClose, tripId }: Props) {
                     </View>
                   );
                 })}
-                <View style={s.divider} />
+
+                {/* Or separator */}
+                <View style={s.orSeparator}>
+                  <View style={s.orLine} />
+                  <Text style={s.orText}>ou invite par email</Text>
+                  <View style={s.orLine} />
+                </View>
               </>
             )}
 
             {/* ── Par email ── */}
-            <Text style={s.sectionLabel}>Par email</Text>
+            {friends.length === 0 && (
+              <Text style={s.sectionLabel}>Par email</Text>
+            )}
             <View style={s.inputRow}>
               <TextInput
                 ref={emailInputRef}
@@ -292,7 +303,7 @@ export function InviteSheet({ visible, onClose, tripId }: Props) {
               <ActivityIndicator color={Colors.primary} style={{ marginTop: Spacing.md }} />
             ) : invitations.length > 0 ? (
               <>
-                <Text style={[s.sectionLabel, { marginTop: Spacing.md }]}>Invitations envoyées</Text>
+                <Text style={[s.sectionLabel, { marginTop: Spacing.lg }]}>Invitations envoyées</Text>
                 {invitations.map(inv => {
                   const cfg = STATUS[inv.status] ?? STATUS.pending;
                   return (
@@ -323,43 +334,53 @@ const s = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.45)',
   },
   container: {
-    borderTopLeftRadius: Radii.xl,
-    borderTopRightRadius: Radii.xl,
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     overflow: 'hidden',
-    maxHeight: '80%',
+    maxHeight: '85%',
   },
   handleBar: {
     width: 36,
     height: 4,
-    backgroundColor: Colors.border,
+    backgroundColor: '#E5E7EB',
     borderRadius: 2,
     alignSelf: 'center',
-    marginTop: Spacing.sm,
+    marginTop: 12,
     marginBottom: Spacing.sm,
   },
   scroll: {
-    paddingHorizontal: Spacing.md,
+    paddingHorizontal: 20,
     paddingBottom: Spacing.md,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: Spacing.lg,
+    marginBottom: 28,
+    marginTop: Spacing.sm,
   },
   title: {
-    fontSize: 18,
+    fontSize: 28,
     fontWeight: '800',
-    color: Colors.textPrimary,
+    color: '#1A1A1A',
+    letterSpacing: -0.5,
   },
-  closeBtn: { padding: Spacing.xs },
+  closeBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F5F5F5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 
   sectionLabel: {
     fontSize: 11,
-    fontWeight: '700',
-    color: Colors.textSecondary,
+    fontWeight: '600',
+    color: '#999',
     textTransform: 'uppercase',
-    letterSpacing: 0.8,
+    letterSpacing: 1,
     marginBottom: Spacing.sm,
   },
 
@@ -367,38 +388,57 @@ const s = StyleSheet.create({
   friendRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.sm,
-    paddingVertical: 6,
+    gap: 12,
+    paddingVertical: 8,
+  },
+  friendInfo: {
+    flex: 1,
   },
   friendName: {
-    flex: 1,
     fontSize: 15,
     fontWeight: '600',
-    color: Colors.textPrimary,
+    color: '#1A1A1A',
+  },
+  friendEmail: {
+    fontSize: 12,
+    color: '#888',
+    marginTop: 2,
   },
   tagText: {
     fontSize: 12,
-    color: Colors.textTertiary,
+    color: '#999',
     fontWeight: '500',
   },
   inviteBtn: {
-    backgroundColor: Colors.primary,
-    borderRadius: Radii.full,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 6,
+    backgroundColor: '#1A1A1A',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: 70,
   },
   inviteBtnText: {
     color: '#fff',
     fontWeight: '700',
     fontSize: 13,
   },
-  divider: {
+
+  /* Or separator */
+  orSeparator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    marginVertical: 20,
+  },
+  orLine: {
+    flex: 1,
     height: 1,
-    backgroundColor: Colors.border,
-    marginVertical: Spacing.md,
+    backgroundColor: '#F0F0F0',
+  },
+  orText: {
+    fontSize: 12,
+    color: '#999',
+    fontWeight: '500',
   },
 
   /* Email input */
@@ -409,19 +449,17 @@ const s = StyleSheet.create({
   },
   input: {
     flex: 1,
-    backgroundColor: Colors.surface,
-    borderRadius: Radii.md,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 10,
+    backgroundColor: '#F5F5F5',
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
     fontSize: 15,
-    color: Colors.textPrimary,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    color: '#1A1A1A',
   },
   sendBtn: {
-    backgroundColor: Colors.primary,
-    borderRadius: Radii.md,
-    paddingHorizontal: Spacing.md,
+    backgroundColor: '#1A1A1A',
+    borderRadius: 14,
+    paddingHorizontal: 16,
     alignItems: 'center',
     justifyContent: 'center',
     minWidth: 90,
@@ -437,18 +475,16 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: Colors.surface,
-    borderRadius: Radii.md,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    backgroundColor: '#F9F9F9',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     marginBottom: Spacing.xs,
   },
   invEmail: {
     flex: 1,
     fontSize: 14,
-    color: Colors.textPrimary,
+    color: '#1A1A1A',
     fontWeight: '500',
     marginRight: Spacing.sm,
   },

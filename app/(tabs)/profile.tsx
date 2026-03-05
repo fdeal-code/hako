@@ -242,7 +242,7 @@ function StatCard({
 }) {
   return (
     <View style={s.statCard}>
-      <Ionicons name={icon} size={22} color={Colors.accent} />
+      <Ionicons name={icon} size={22} color="#888" />
       <Text style={s.statValue}>{value}</Text>
       <Text style={s.statLabel}>{label}</Text>
     </View>

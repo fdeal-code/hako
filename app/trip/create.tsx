@@ -97,7 +97,7 @@ async function fetchPlacesSuggestions(query: string): Promise<PlacesSuggestion[]
 /* ─── Calendrier — constantes et helpers ─────────────────────── */
 const MONTHS_FR = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
 const DAYS_FR   = ['L','M','M','J','V','S','D'];
-const RANGE_BG  = '#E8E8F0';
+const RANGE_BG  = '#E3EAFF';
 
 function getDaysInMonth(y: number, m: number) { return new Date(y, m + 1, 0).getDate(); }
 function getFirstOffset(y: number, m: number) { const d = new Date(y, m, 1).getDay(); return d === 0 ? 6 : d - 1; }
@@ -654,6 +654,7 @@ export default function CreateTripScreen() {
                     const isRange  = !!startDate && !!endDate &&
                                      cellDate > startDate && cellDate < endDate;
                     const showBar  = isRange || (isStart && !!endDate) || (isEnd && !!startDate);
+                    const isToday  = sameDay(cellDate, today);
 
                     return (
                       <TouchableOpacity
@@ -682,6 +683,7 @@ export default function CreateTripScreen() {
                             styles.calCircle,
                             { width: circleSize, height: circleSize, borderRadius: circleSize / 2 },
                             (isStart || isEnd) && styles.calCircleSelected,
+                            isToday && !isStart && !isEnd && styles.calCircleToday,
                           ]}
                         >
                           <Text
@@ -690,6 +692,7 @@ export default function CreateTripScreen() {
                               isPast  && styles.calDayTextPast,
                               isRange && styles.calDayTextRange,
                               (isStart || isEnd) && styles.calDayTextSelected,
+                              isToday && !isStart && !isEnd && styles.calDayTextToday,
                             ]}
                           >
                             {dayNum}
@@ -1152,17 +1155,18 @@ const styles = StyleSheet.create({
   /* ── Étape 2 ── */
   nameInputWrap: {
     position: 'relative',
-    borderBottomWidth: 2,
-    borderBottomColor: Colors.primary,
-    paddingBottom: Spacing.sm,
+    backgroundColor: '#F5F5F5',
+    borderRadius: 14,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 14,
     marginBottom: Spacing.xs,
-    minHeight: 40,
+    minHeight: 52,
     justifyContent: 'center',
   },
   namePlaceholder: {
     position: 'absolute',
-    left: 0,
-    right: 0,
+    left: Spacing.md,
+    right: Spacing.md,
     fontSize: 20,
     fontWeight: '500',
     color: Colors.textTertiary,
@@ -1248,8 +1252,8 @@ const styles = StyleSheet.create({
   },
   calRangeBar: {
     position: 'absolute',
-    top: '18%',
-    bottom: '18%',
+    top: '12%',
+    bottom: '12%',
     backgroundColor: RANGE_BG,
   },
   calCircle: {
@@ -1258,6 +1262,10 @@ const styles = StyleSheet.create({
   },
   calCircleSelected: {
     backgroundColor: Colors.primary,
+  },
+  calCircleToday: {
+    borderWidth: 1.5,
+    borderColor: Colors.primary,
   },
   calDayText: {
     fontSize: 14,
@@ -1273,6 +1281,10 @@ const styles = StyleSheet.create({
   },
   calDayTextSelected: {
     color: Colors.white,
+    fontWeight: '700',
+  },
+  calDayTextToday: {
+    color: Colors.primary,
     fontWeight: '700',
   },
 

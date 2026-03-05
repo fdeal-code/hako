@@ -106,7 +106,10 @@ export function ExpandedDashboard({ trip, cardLayout, progress }: Props) {
   const [mapCardLayout, setMapCardLayout] = useState<CardLayout>({ x: 0, y: 0, width: 0, height: 145 });
   const [showSettings,    setShowSettings]    = useState(false);
   const [showInviteSheet, setShowInviteSheet] = useState(false);
-  const [members, setMembers] = useState<any[]>([]);
+  const [members,      setMembers]      = useState<any[]>([]);
+  const [budgetTotal,   setBudgetTotal]   = useState<number | null>(null);
+  const [enviesCount,   setEnviesCount]   = useState<number | null>(null);
+  const [validatedCount, setValidatedCount] = useState<number | null>(null);
 
   /* ── Géocodage de la destination ── */
   const [region, setRegion] = useState({
@@ -152,6 +155,28 @@ export function ExpandedDashboard({ trip, cardLayout, progress }: Props) {
       }
     };
     loadMembers();
+  }, [trip.id]);
+
+  /* ── Fetch budget total ── */
+  useEffect(() => {
+    if (!trip.id) return;
+    supabase.from('expenses').select('amount').eq('trip_id', trip.id)
+      .then(({ data }) => {
+        if (data) setBudgetTotal(data.reduce((sum, e) => sum + (e.amount ?? 0), 0));
+      });
+  }, [trip.id]);
+
+  /* ── Fetch envies count ── */
+  useEffect(() => {
+    if (!trip.id) return;
+    supabase.from('wishes').select('status').eq('trip_id', trip.id)
+      .then(({ data }) => {
+        if (data) {
+          const active = data.filter(w => w.status !== 'archived');
+          setEnviesCount(active.length);
+          setValidatedCount(active.filter(w => w.status === 'validated').length);
+        }
+      });
   }, [trip.id]);
 
   const isOwner = session?.user?.id === trip.created_by;
@@ -317,15 +342,35 @@ export function ExpandedDashboard({ trip, cardLayout, progress }: Props) {
                 onPress={() => router.push(`/trip/${trip.id}/envies`)}
               >
                 <Text style={styles.cardTitle}>VOS ENVIES</Text>
-                <Text style={styles.enviesEmpty}>Espace vide</Text>
+                {enviesCount !== null && enviesCount > 0 ? (
+                  <Text style={styles.enviesCount}>
+                    {enviesCount} envie{enviesCount > 1 ? 's' : ''}
+                    {validatedCount !== null && validatedCount > 0
+                      ? ` · ${validatedCount} validée${validatedCount > 1 ? 's' : ''}`
+                      : ''}
+                  </Text>
+                ) : (
+                  <Text style={styles.enviesEmpty}>Ajoute ta première envie !</Text>
+                )}
               </GlassCard>
 
               <GlassCard flex={1} minHeight={115} onPress={() => router.push(`/trip/${trip.id}/budget`)}>
                 <Text style={styles.cardTitle}>BUDGET</Text>
-                <View style={styles.addCircle}>
-                  <Ionicons name="add" size={20} color="#fff" />
-                </View>
-                <Text style={styles.budgetSub}>Créer un tricount</Text>
+                {budgetTotal !== null && budgetTotal > 0 ? (
+                  <>
+                    <Text style={styles.budgetAmount}>
+                      {budgetTotal.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} €
+                    </Text>
+                    <Text style={styles.budgetSub}>dépensés</Text>
+                  </>
+                ) : (
+                  <>
+                    <View style={styles.addCircle}>
+                      <Ionicons name="add" size={20} color="#fff" />
+                    </View>
+                    <Text style={styles.budgetSub}>Ajouter une dépense</Text>
+                  </>
+                )}
               </GlassCard>
             </View>
           </ScrollView>
@@ -513,7 +558,6 @@ function TripSettingsSheet({
       <View style={sheet.backdrop}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
         <View style={[sheet.container, { paddingBottom: insets.bottom + Spacing.md }]}>
-          <BlurView intensity={80} tint="light" style={StyleSheet.absoluteFill} />
 
           {/* Handle bar */}
           <View style={sheet.handleBar} />
@@ -522,9 +566,9 @@ function TripSettingsSheet({
 
             {/* Header */}
             <View style={sheet.header}>
-              <Text style={sheet.title}>Paramètres du voyage</Text>
+              <Text style={sheet.title}>Paramètres</Text>
               <TouchableOpacity onPress={onClose} style={sheet.closeBtn} activeOpacity={0.7}>
-                <Ionicons name="close" size={22} color={Colors.textSecondary} />
+                <Ionicons name="close" size={20} color="#888" />
               </TouchableOpacity>
             </View>
 
@@ -553,7 +597,7 @@ function TripSettingsSheet({
             >
               {saving
                 ? <ActivityIndicator color="#fff" />
-                : <Text style={sheet.saveBtnText}>Sauvegarder</Text>
+                : <Text style={sheet.saveBtnText}>Sauvegarder les modifications</Text>
               }
             </TouchableOpacity>
 
@@ -565,11 +609,13 @@ function TripSettingsSheet({
             ) : (
               members.map((m) => (
                 <View key={m.user_id} style={sheet.memberRow}>
-                  <MemberAvatar member={{ avatar_url: m.avatar_url, nickname: m.name }} size={36} index={0} />
-                  <Text style={sheet.memberName}>{m.name}</Text>
-                  {m.role === 'owner' && (
-                    <Text style={sheet.memberRole}>Organisateur</Text>
-                  )}
+                  <MemberAvatar member={{ avatar_url: m.avatar_url, nickname: m.name }} size={50} index={0} />
+                  <View style={sheet.memberInfo}>
+                    <Text style={sheet.memberName}>{m.name}</Text>
+                    {m.role === 'owner' && (
+                      <Text style={sheet.memberRole}>Organisateur</Text>
+                    )}
+                  </View>
                 </View>
               ))
             )}
@@ -642,91 +688,95 @@ const sheet = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.45)',
   },
   container: {
-    borderTopLeftRadius: Radii.xl,
-    borderTopRightRadius: Radii.xl,
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     overflow: 'hidden',
-    maxHeight: '90%',
+    maxHeight: '92%',
   },
   handleBar: {
     width: 36,
     height: 4,
-    backgroundColor: Colors.border,
+    backgroundColor: '#E5E7EB',
     borderRadius: 2,
     alignSelf: 'center',
-    marginTop: Spacing.sm,
+    marginTop: 12,
     marginBottom: Spacing.sm,
   },
   scroll: {
-    paddingHorizontal: Spacing.md,
-    paddingBottom: Spacing.md,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: Spacing.lg,
+    marginBottom: 28,
+    marginTop: Spacing.sm,
   },
   title: {
-    fontSize: 18,
+    fontSize: 28,
     fontWeight: '800',
-    color: Colors.textPrimary,
+    color: '#1A1A1A',
+    letterSpacing: -0.5,
   },
   closeBtn: {
-    padding: Spacing.xs,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F5F5F5',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   sectionLabel: {
     fontSize: 11,
-    fontWeight: '700',
-    color: Colors.textSecondary,
+    fontWeight: '600',
+    color: '#999',
     textTransform: 'uppercase',
-    letterSpacing: 0.8,
+    letterSpacing: 1,
     marginBottom: Spacing.sm,
   },
   field: {
-    marginBottom: Spacing.sm,
+    marginBottom: 12,
   },
   fieldLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.textSecondary,
-    marginBottom: 4,
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#888',
+    marginBottom: 6,
   },
   fieldInput: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radii.md,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 10,
+    backgroundColor: '#F5F5F5',
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
     fontSize: 15,
-    color: Colors.textPrimary,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    color: '#1A1A1A',
   },
   dateRow: {
     flexDirection: 'row',
     gap: Spacing.sm,
-    marginBottom: Spacing.sm,
+    marginBottom: 12,
   },
   coverBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm,
-    backgroundColor: Colors.surface,
-    borderRadius: Radii.md,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm + 2,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    backgroundColor: '#F5F5F5',
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     marginBottom: Spacing.md,
   },
   coverBtnText: {
     fontSize: 14,
-    color: Colors.primary,
+    color: '#1A1A1A',
     fontWeight: '500',
   },
   saveBtn: {
-    backgroundColor: Colors.primary,
-    borderRadius: Radii.full,
-    paddingVertical: Spacing.md,
+    backgroundColor: '#1A1A1A',
+    borderRadius: 14,
+    paddingVertical: 17,
     alignItems: 'center',
     marginBottom: Spacing.md,
   },
@@ -744,72 +794,71 @@ const sheet = StyleSheet.create({
   memberRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.sm,
-    marginBottom: Spacing.sm,
+    gap: 14,
+    marginBottom: 14,
+  },
+  memberInfo: {
+    flex: 1,
   },
   memberAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     backgroundColor: Colors.border,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
   },
   memberInitial: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '700',
     color: Colors.textSecondary,
   },
   memberName: {
-    flex: 1,
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '600',
-    color: Colors.textPrimary,
+    color: '#1A1A1A',
   },
   memberRole: {
-    fontSize: 11,
-    color: Colors.textTertiary,
+    fontSize: 12,
+    color: '#999',
     fontWeight: '500',
+    marginTop: 2,
   },
   inviteBtn: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: Spacing.sm,
-    backgroundColor: Colors.surface,
-    borderRadius: Radii.md,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm + 2,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    backgroundColor: '#F5F5F5',
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     marginBottom: Spacing.sm,
   },
   inviteBtnText: {
     fontSize: 14,
-    color: Colors.primary,
-    fontWeight: '500',
+    color: '#1A1A1A',
+    fontWeight: '600',
   },
   dangerSection: {
-    marginTop: Spacing.lg,
-    paddingTop: Spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
+    marginTop: 32,
   },
   deleteBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: Spacing.sm,
-    backgroundColor: '#FFF0F0',
-    borderRadius: Radii.md,
-    paddingVertical: Spacing.md,
+    backgroundColor: 'rgba(220,38,38,0.08)',
+    borderRadius: 14,
+    paddingVertical: 17,
     borderWidth: 1,
-    borderColor: '#FFD0D0',
+    borderColor: 'rgba(220,38,38,0.3)',
   },
   deleteBtnText: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#E53935',
+    color: '#DC2626',
   },
 });
 
@@ -945,11 +994,13 @@ const styles = StyleSheet.create({
   mapLabel: { color: '#FFFFFF', fontSize: 11, fontWeight: '600' },
 
   /* Envies */
-  enviesEmpty: { fontSize: 12, color: '#FFFFFF', fontStyle: 'italic', marginTop: Spacing.xs },
+  enviesEmpty: { fontSize: 11, color: 'rgba(255,255,255,0.75)', fontStyle: 'italic', marginTop: Spacing.xs },
+  enviesCount: { fontSize: 13, color: '#FFFFFF', fontWeight: '600', marginTop: Spacing.xs, lineHeight: 18 },
 
   /* Budget */
   addCircle: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.22)', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.45)', alignItems: 'center', justifyContent: 'center', alignSelf: 'center', marginVertical: 2 },
-  budgetSub: { fontSize: 10, color: '#FFFFFF', textAlign: 'center', fontWeight: '500' },
+  budgetAmount: { fontSize: 22, fontWeight: '900', color: '#fff', marginTop: 6, letterSpacing: -0.5 },
+  budgetSub: { fontSize: 10, color: 'rgba(255,255,255,0.7)', fontWeight: '500', marginTop: 2 },
 
   /* Bottom nav */
   bottomNav: {

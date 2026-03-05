@@ -75,10 +75,10 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 16,
     justifyContent: 'space-between',
-    backgroundColor: 'rgba(255,255,255,0.35)',
+    backgroundColor: 'rgba(255,255,255,0.50)',
   },
   fillNoPadding: {
     flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.35)',
+    backgroundColor: 'rgba(255,255,255,0.50)',
   },
 });

@@ -3,7 +3,9 @@
     "allow": [
       "Bash(npx ngrok version)",
       "Bash(node -e \"require\\(''@expo/ngrok''\\)\")",
-      "Bash(npx tsc --noEmit)"
+      "Bash(npx tsc --noEmit)",
+      "Bash(grep -n \"function WishDetail\\\\|WishDetailModal\\\\|WishSheet\\\\|detail.*wish\\\\|wish.*detail\\\\|Modal.*wish\" /Users/pierre/Desktop/Félix/hako/app/trip/[id]/envies.tsx)",
+      "Bash(wc -l /Users/pierre/Desktop/Félix/hako/app/trip/[id]/envies.tsx)"
     ]
   }
 }

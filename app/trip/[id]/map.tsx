@@ -15,6 +15,7 @@ import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { Colors, Spacing } from '@/constants/theme';
+import { BlurView } from 'expo-blur';
 import { supabase } from '@/services/supabase';
 
 /* ─── Types ──────────────────────────────────────────────────── */
@@ -149,18 +150,18 @@ const ms = StyleSheet.create({
 /* ─── WishSheet ──────────────────────────────────────────────── */
 function WishSheet({ wish, onClose }: { wish: Wish | null; onClose: () => void }) {
   const insets   = useSafeAreaInsets();
-  const slideY   = useRef(new Animated.Value(300)).current;
+  const slideY   = useRef(new Animated.Value(600)).current;
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
     if (wish) {
       setVisible(true);
       Animated.spring(slideY, {
-        toValue: 0, useNativeDriver: true, tension: 80, friction: 12,
+        toValue: 0, useNativeDriver: true, tension: 70, friction: 12,
       }).start();
     } else {
       Animated.timing(slideY, {
-        toValue: 300, duration: 220, useNativeDriver: true,
+        toValue: 600, duration: 260, useNativeDriver: true,
       }).start(() => setVisible(false));
     }
   }, [wish]);
@@ -169,7 +170,7 @@ function WishSheet({ wish, onClose }: { wish: Wish | null; onClose: () => void }
 
   const color       = statusColor(wish!.status);
   const statusLabel =
-    wish!.status === 'validated' ? 'Validée' :
+    wish!.status === 'validated' ? 'Validée ✓' :
     wish!.status === 'debate'    ? 'En débat' : 'En attente';
   const catMeta  = wish!.category ? CATEGORY_META[wish!.category] : null;
   const imageUri = wish!.image_url ?? wish!.cover_url;
@@ -186,46 +187,62 @@ function WishSheet({ wish, onClose }: { wish: Wish | null; onClose: () => void }
       {/* Handle */}
       <View style={ss.handle} />
 
-      <View style={ss.row}>
-        {/* Thumbnail */}
-        {imageUri ? (
-          <Image source={{ uri: imageUri }} style={ss.thumb} />
-        ) : (
-          <View style={[ss.thumbFallback, { backgroundColor: color + '22' }]}>
-            <Text style={{ fontSize: 30 }}>{catMeta?.emoji ?? '📍'}</Text>
-          </View>
-        )}
+      {/* Image */}
+      {imageUri ? (
+        <Image source={{ uri: imageUri }} style={ss.heroImage} resizeMode="cover" />
+      ) : (
+        <View style={[ss.heroFallback, { backgroundColor: color + '18' }]}>
+          <Text style={{ fontSize: 52 }}>{catMeta?.emoji ?? '📍'}</Text>
+        </View>
+      )}
 
-        {/* Info */}
-        <View style={ss.info}>
-          <Text style={ss.title} numberOfLines={2}>{wish!.title}</Text>
+      {/* Content */}
+      <View style={ss.content}>
+        <Text style={ss.title} numberOfLines={2}>{wish!.title}</Text>
 
-          <View style={ss.metaRow}>
+        {/* Badges */}
+        <View style={ss.badges}>
+          <View style={[ss.badge, { backgroundColor: color + '18' }]}>
             <View style={[ss.dot, { backgroundColor: color }]} />
-            <Text style={ss.metaText}>{statusLabel}</Text>
-            {catMeta && (
-              <Text style={ss.metaText}> · {catMeta.label}</Text>
-            )}
+            <Text style={[ss.badgeText, { color }]}>{statusLabel}</Text>
           </View>
-
-          {wish!.address ? (
-            <Text style={ss.address} numberOfLines={1}>
-              <Ionicons name="location-outline" size={11} color={Colors.textTertiary} />
-              {' '}{wish!.address}
-            </Text>
-          ) : null}
-
-          <View style={ss.votesRow}>
-            <Ionicons name="heart" size={13} color="#22C55E" />
-            <Text style={ss.voteNum}>{ups}</Text>
-            <Ionicons name="thumbs-down" size={13} color="#EF4444" style={{ marginLeft: 10 }} />
-            <Text style={ss.voteNum}>{downs}</Text>
+          {catMeta && (
+            <View style={ss.badge}>
+              <Text style={ss.badgeText}>{catMeta.emoji} {catMeta.label}</Text>
+            </View>
+          )}
+          <View style={ss.badge}>
+            <Text style={ss.badgeText}>❤️ {ups}  👎 {downs}</Text>
           </View>
         </View>
 
-        {/* Close */}
-        <TouchableOpacity onPress={onClose} style={ss.closeBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-          <Ionicons name="close" size={20} color={Colors.textTertiary} />
+        {wish!.address ? (
+          <View style={ss.addressRow}>
+            <Ionicons name="location-outline" size={13} color="#999" />
+            <Text style={ss.address} numberOfLines={2}>{wish!.address}</Text>
+          </View>
+        ) : null}
+      </View>
+
+      {/* Actions */}
+      <View style={ss.actions}>
+        <TouchableOpacity
+          style={ss.planBtn}
+          onPress={() => router.push(`/trip/${wish!.trip_id}/planning`)}
+          activeOpacity={0.85}
+        >
+          <Ionicons name="calendar-outline" size={16} color="#fff" />
+          <Text style={ss.planBtnText}>Ajouter au planning</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={ss.detailBtn}
+          onPress={() => { onClose(); router.push(`/trip/${wish!.trip_id}/envies`); }}
+          activeOpacity={0.8}
+        >
+          <Text style={ss.detailBtnText}>Voir les détails</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={onClose} activeOpacity={0.7}>
+          <Text style={ss.closeTxt}>Fermer</Text>
         </TouchableOpacity>
       </View>
     </Animated.View>
@@ -235,35 +252,70 @@ function WishSheet({ wish, onClose }: { wish: Wish | null; onClose: () => void }
 const ss = StyleSheet.create({
   container: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
-    backgroundColor: 'white',
-    borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    paddingHorizontal: 20, paddingTop: 12,
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 28, borderTopRightRadius: 28,
+    paddingTop: 12,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-    elevation: 16,
+    shadowOffset: { width: 0, height: -6 },
+    shadowOpacity: 0.14,
+    shadowRadius: 20,
+    elevation: 20,
+    minHeight: '55%',
   },
   handle: {
     width: 36, height: 4, borderRadius: 2,
-    backgroundColor: '#D1D5DB',
+    backgroundColor: '#E5E7EB',
     alignSelf: 'center', marginBottom: 16,
   },
-  row:          { flexDirection: 'row', gap: 14, alignItems: 'flex-start' },
-  thumb:        { width: 72, height: 72, borderRadius: 14 },
-  thumbFallback:{
-    width: 72, height: 72, borderRadius: 14,
-    alignItems: 'center', justifyContent: 'center',
+  heroImage: {
+    width: '100%',
+    height: 200,
+    marginHorizontal: 0,
   },
-  info:         { flex: 1 },
-  title:        { fontSize: 16, fontWeight: '700', color: Colors.textPrimary, marginBottom: 6, lineHeight: 22 },
-  metaRow:      { flexDirection: 'row', alignItems: 'center', marginBottom: 4, flexWrap: 'wrap' },
-  dot:          { width: 8, height: 8, borderRadius: 4, marginRight: 6 },
-  metaText:     { fontSize: 13, color: Colors.textSecondary },
-  address:      { fontSize: 12, color: Colors.textTertiary, marginBottom: 4 },
-  votesRow:     { flexDirection: 'row', alignItems: 'center', marginTop: 6 },
-  voteNum:      { fontSize: 13, fontWeight: '600', color: Colors.textSecondary, marginLeft: 4 },
-  closeBtn:     { paddingTop: 2 },
+  heroFallback: {
+    width: '100%',
+    height: 160,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  content: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 4,
+  },
+  title: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#1A1A1A',
+    letterSpacing: -0.4,
+    marginBottom: 12,
+    lineHeight: 28,
+  },
+  badges: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 12,
+  },
+  badge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#F5F5F5',
+    borderRadius: 99,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  dot:          { width: 7, height: 7, borderRadius: 4 },
+  badgeText:    { fontSize: 12, fontWeight: '600', color: '#555' },
+  addressRow:   { flexDirection: 'row', alignItems: 'flex-start', gap: 5, marginBottom: 4 },
+  address:      { flex: 1, fontSize: 13, color: '#888', lineHeight: 18 },
+  actions:      { paddingHorizontal: 20, marginTop: 12, gap: 10 },
+  planBtn:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#1A1A1A', borderRadius: 14, paddingVertical: 15 },
+  planBtnText:  { fontSize: 15, fontWeight: '700', color: '#fff' },
+  detailBtn:    { backgroundColor: '#F5F5F5', borderRadius: 14, paddingVertical: 15, alignItems: 'center' },
+  detailBtnText: { fontSize: 15, fontWeight: '600', color: '#1A1A1A' },
+  closeTxt:     { textAlign: 'center', fontSize: 14, color: '#999', paddingVertical: 6, fontWeight: '500' },
 });
 
 /* ─── MapScreen ──────────────────────────────────────────────── */
@@ -415,9 +467,12 @@ export default function MapScreen() {
       {/* ── Count badge ── */}
       {!loading && filtered.length > 0 && (
         <View style={[styles.countBadge, { top: CHIP_TOP + 48 }]}>
-          <Text style={styles.countText}>
-            {filtered.length} envie{filtered.length > 1 ? 's' : ''}
-          </Text>
+          <BlurView intensity={40} tint="light" style={StyleSheet.absoluteFill} />
+          <View style={styles.countBadgeContent}>
+            <Text style={styles.countText}>
+              {filtered.length} envie{filtered.length > 1 ? 's' : ''}
+            </Text>
+          </View>
         </View>
       )}
 
@@ -457,14 +512,17 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   headerBtn: {
-    width: 40, height: 40, borderRadius: 20,
-    backgroundColor: 'white',
+    width: 56, height: 56, borderRadius: 99,
+    backgroundColor: 'rgba(255,255,255,0.85)',
     alignItems: 'center', justifyContent: 'center',
+    overflow: 'hidden',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.9)',
   },
   title: {
     fontSize: 20,
@@ -499,16 +557,21 @@ const styles = StyleSheet.create({
   /* Count badge */
   countBadge: {
     position: 'absolute', right: Spacing.md,
-    backgroundColor: 'white',
-    borderRadius: 12,
-    paddingHorizontal: 12, paddingVertical: 5,
+    borderRadius: 14,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.5)',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
+    shadowRadius: 6,
+    elevation: 4,
   },
-  countText: { fontSize: 12, fontWeight: '700', color: Colors.textSecondary },
+  countBadgeContent: {
+    paddingHorizontal: 12, paddingVertical: 6,
+    backgroundColor: 'rgba(255,255,255,0.35)',
+  },
+  countText: { fontSize: 12, fontWeight: '700', color: Colors.textPrimary },
 
   /* Loading */
   loadingWrap: {
