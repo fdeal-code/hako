@@ -286,13 +286,13 @@ function TimelineItemCard({
 
   return (
     <View style={[tic.container, { top: topOffset }]}>
-      {/* Icône ✕ révélée au swipe gauche */}
+      {/* Bouton suppression révélé au swipe gauche */}
       <TouchableOpacity
         style={tic.deleteZone}
         onPress={() => onDelete(item)}
-        activeOpacity={0.85}
+        activeOpacity={0.75}
       >
-        <Ionicons name="close-circle" size={28} color="#EF4444" />
+        <Ionicons name="close-circle" size={28} color="#ffffff" />
       </TouchableOpacity>
 
       <GestureDetector gesture={composed}>
@@ -607,62 +607,69 @@ export default function PlanningScreen() {
         ))}
       </ScrollView>
 
-      {/* ── Timeline ── */}
-      <ScrollView
-        ref={timelineRef}
-        style={s.timelineScroll}
-        contentContainerStyle={{ height: TIMELINE_H + bottomPad }}
-        showsVerticalScrollIndicator={false}
-        scrollEnabled={!dragPayload}
-        onScroll={(e) => { timelineScrollRef.current = e.nativeEvent.contentOffset.y; }}
-        scrollEventThrottle={16}
-        onLayout={measureTimeline}
-      >
-        {/* Hour lines */}
-        {Array.from({ length: TOTAL_HOURS }, (_, i) => {
-          const hour    = START_HOUR + i;
-          const isHover = hoveredHour === hour;
-          return (
-            <View
-              key={hour}
-              style={[s.hourSlot, { top: i * HOUR_H }, isHover && s.hourSlotHover]}
-            >
-              <Text style={s.hourLabel}>{String(hour).padStart(2, '0')}:00</Text>
-              <View style={[s.hourLine, isHover && s.hourLineHover]} />
-            </View>
-          );
-        })}
+      {/* ── Timeline ou état vide ── */}
+      {items.length === 0 ? (
+        <View style={s.emptyState}>
+          <Text style={s.emptyEmoji}>📅</Text>
+          <Text style={s.emptyTitle}>Aucune activité pour le moment</Text>
+          <Text style={s.emptySub}>
+            {wishes.length > 0
+              ? 'Glisse une envie depuis le réservoir, ou ajoute manuellement'
+              : 'Commence à construire ton programme pour cette journée'}
+          </Text>
+          <TouchableOpacity
+            style={s.emptyBtn}
+            onPress={() => setAddMode({ type: 'manual' })}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="add" size={18} color={Colors.white} />
+            <Text style={s.emptyBtnText}>Ajouter une activité</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <ScrollView
+          ref={timelineRef}
+          style={s.timelineScroll}
+          contentContainerStyle={{ height: TIMELINE_H + bottomPad }}
+          showsVerticalScrollIndicator={false}
+          scrollEnabled={!dragPayload}
+          onScroll={(e) => { timelineScrollRef.current = e.nativeEvent.contentOffset.y; }}
+          scrollEventThrottle={16}
+          onLayout={measureTimeline}
+        >
+          {/* Hour lines */}
+          {Array.from({ length: TOTAL_HOURS }, (_, i) => {
+            const hour    = START_HOUR + i;
+            const isHover = hoveredHour === hour;
+            return (
+              <View
+                key={hour}
+                style={[s.hourSlot, { top: i * HOUR_H }, isHover && s.hourSlotHover]}
+              >
+                <Text style={s.hourLabel}>{String(hour).padStart(2, '0')}:00</Text>
+                <View style={[s.hourLine, isHover && s.hourLineHover]} />
+              </View>
+            );
+          })}
 
-        {/* Items */}
-        {items.map(item => (
-          <TimelineItemCard
-            key={item.id}
-            item={item}
-            isNew={item.id === newItemId}
-            dragX={dragX}
-            dragY={dragY}
-            isDragging={isDragging}
-            onDragStart={handleItemDragStart}
-            onDragEnd={handleDragEnd}
-            onHover={updateHoveredHour}
-            onDelete={handleDelete}
-            onPress={(it) => router.push(`/trip/${tripId}/planning-detail?itemId=${it.id}`)}
-          />
-        ))}
-
-        {/* Empty state */}
-        {items.length === 0 && (
-          <View style={s.emptyState}>
-            <Text style={s.emptyEmoji}>📅</Text>
-            <Text style={s.emptyTitle}>Rien de planifié</Text>
-            <Text style={s.emptySub}>
-              {wishes.length > 0
-                ? 'Appuie sur "+" pour ouvrir le réservoir et glisser une envie'
-                : 'Ajoute des envies validées pour les planifier ici'}
-            </Text>
-          </View>
-        )}
-      </ScrollView>
+          {/* Items */}
+          {items.map(item => (
+            <TimelineItemCard
+              key={item.id}
+              item={item}
+              isNew={item.id === newItemId}
+              dragX={dragX}
+              dragY={dragY}
+              isDragging={isDragging}
+              onDragStart={handleItemDragStart}
+              onDragEnd={handleDragEnd}
+              onHover={updateHoveredHour}
+              onDelete={handleDelete}
+              onPress={(it) => router.push(`/trip/${tripId}/planning-detail?itemId=${it.id}`)}
+            />
+          ))}
+        </ScrollView>
+      )}
 
       {/* ── Réservoir d'envies (bas, toggle) ── */}
       {showReservoir && <View style={[s.reservoir, { paddingBottom: navBottom + navH + 4 }]}>
@@ -807,22 +814,26 @@ const tic = StyleSheet.create({
   container: {
     position: 'absolute',
     left: TIME_COL_W + 8,
-    right: 12,
+    right: 0,
   },
   deleteZone: {
     position: 'absolute',
-    right: -84,
+    right: 0,
     top: 0,
     bottom: 0,
     width: 84,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: '#ff3b30',
+    borderTopRightRadius: 14,
+    borderBottomRightRadius: 14,
   },
   card: {
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: 14,
     overflow: 'hidden',
+    marginRight: 12,
     paddingRight: 10,
     gap: 10,
     ...Shadows.sm,
@@ -935,7 +946,7 @@ const s = StyleSheet.create({
     paddingHorizontal: Spacing.md,
     gap: Spacing.xs,
     alignItems: 'center',
-    paddingVertical: 8,
+    paddingVertical: 6,
   },
   dayChip: {
     paddingHorizontal: 14,
@@ -1007,25 +1018,41 @@ const s = StyleSheet.create({
 
   /* Empty state */
   emptyState: {
-    position: 'absolute',
-    top: 80,
-    left: 0,
-    right: 0,
+    flex: 1,
     alignItems: 'center',
-    paddingHorizontal: 40,
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.xxl,
+    backgroundColor: Colors.background,
+    gap: Spacing.sm,
   },
-  emptyEmoji: { fontSize: 40, marginBottom: 10 },
+  emptyEmoji: { fontSize: 48, marginBottom: Spacing.xs },
   emptyTitle: {
     fontSize: 17,
     fontWeight: '700',
     color: Colors.textPrimary,
-    marginBottom: 6,
+    textAlign: 'center',
   },
   emptySub: {
     fontSize: 13,
     color: Colors.textSecondary,
     textAlign: 'center',
-    lineHeight: 19,
+    lineHeight: 20,
+    marginBottom: Spacing.md,
+  },
+  emptyBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    backgroundColor: Colors.primary,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: 14,
+    borderRadius: Radii.pill,
+    ...Shadows.md,
+  },
+  emptyBtnText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.white,
   },
 
   /* Bottom nav */

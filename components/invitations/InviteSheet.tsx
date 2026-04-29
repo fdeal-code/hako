@@ -23,7 +23,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Colors, Spacing, Radii } from '@/constants/theme';
+import { Colors, Spacing } from '@/constants/theme';
 import { supabase } from '@/services/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { MemberAvatar } from '@/components/ui/MemberAvatar';
@@ -198,7 +198,7 @@ export function InviteSheet({ visible, onClose, tripId }: Props) {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={10}
       >
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <Pressable style={[StyleSheet.absoluteFill, s.overlay]} onPress={onClose} />
 
         <View style={[s.container, { paddingBottom: insets.bottom + Spacing.md }]}>
 
@@ -321,6 +321,8 @@ export function InviteSheet({ visible, onClose, tripId }: Props) {
 
           </ScrollView>
         </View>
+        {/* Plancher blanc — comble le gap entre le formulaire et le clavier */}
+        <View style={s.keyboardFloor} />
       </KeyboardAvoidingView>
     </Modal>
   );
@@ -331,7 +333,13 @@ const s = StyleSheet.create({
   kav: {
     flex: 1,
     justifyContent: 'flex-end',
+  },
+  overlay: {
     backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  keyboardFloor: {
+    backgroundColor: '#fff',
+    height: 300,
   },
   container: {
     backgroundColor: '#fff',

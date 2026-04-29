@@ -26,6 +26,7 @@ import * as DocumentPicker from 'expo-document-picker';
 
 import { Colors, Spacing, Radii, Shadows } from '@/constants/theme';
 import { NavButton } from '@/components/ui/NavButton';
+import { FilterButton } from '@/components/ui/FilterButton';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/services/supabase';
 
@@ -324,8 +325,7 @@ export default function DocumentsScreen() {
       <View style={s.header}>
         <Text style={s.title}>Documents</Text>
         <Text style={s.subtitle}>
-          {totalCount} document{totalCount !== 1 ? 's' : ''}
-          {trip ? ` · ${trip.name}` : ''}
+          {totalCount} document{totalCount !== 1 ? 's' : ''}{trip ? ` · ${trip.name}` : ''}
         </Text>
       </View>
 
@@ -338,18 +338,14 @@ export default function DocumentsScreen() {
       >
         {FILTERS.map(f => {
           const count = f.key === 'all' ? totalCount : filterDocs(docs, f.key).length;
-          const active = filter === f.key;
           return (
-            <TouchableOpacity
+            <FilterButton
               key={f.key}
-              style={[s.filterChip, active && s.filterChipOn]}
+              label={f.label}
+              active={filter === f.key}
               onPress={() => setFilter(f.key)}
-              activeOpacity={0.75}
-            >
-              <Text style={[s.filterTxt, active && s.filterTxtOn]}>
-                {f.label}{count > 0 ? ` (${count})` : ''}
-              </Text>
-            </TouchableOpacity>
+              count={count > 0 ? count : undefined}
+            />
           );
         })}
       </ScrollView>
@@ -367,6 +363,7 @@ export default function DocumentsScreen() {
         </View>
       ) : (
         <FlatList
+          style={{ flex: 1 }}
           data={filtered}
           keyExtractor={d => d.id}
           contentContainerStyle={[s.list, { paddingBottom: navH + navBottom + 20 }]}
@@ -618,12 +615,9 @@ const s = StyleSheet.create({
 
   /* Header */
   header: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    paddingHorizontal: Spacing.md,
-    paddingTop: Spacing.sm,
-    paddingBottom: Spacing.xs,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 8,
   },
   title: {
     fontSize: 32,
@@ -640,15 +634,15 @@ const s = StyleSheet.create({
 
   /* Filters */
   filterStrip: {
-    maxHeight: 48,
+    maxHeight: 52,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
   filterRow: {
-    paddingHorizontal: Spacing.md,
-    gap: Spacing.xs,
+    paddingHorizontal: 20,
+    gap: 8,
     alignItems: 'center',
-    paddingVertical: 8,
+    paddingVertical: 4,
   },
   filterChip: {
     paddingHorizontal: 14,
@@ -675,7 +669,7 @@ const s = StyleSheet.create({
   /* List */
   list: {
     paddingHorizontal: Spacing.md,
-    paddingTop: Spacing.md,
+    paddingTop: 8,
     gap: Spacing.sm,
   },
 

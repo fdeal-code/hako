@@ -12,6 +12,7 @@ import {
   TextInput,
   ActivityIndicator,
   Pressable,
+  Share,
 } from 'react-native';
 import Animated, {
   SharedValue,
@@ -24,10 +25,10 @@ import MaskedView from '@react-native-masked-view/masked-view';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import MapView, { Marker } from "react-native-maps";
+import MapView, { Marker, Polyline } from "react-native-maps";
 import * as ImagePicker from 'expo-image-picker';
 
-import { Colors, Spacing, Radii } from '@/constants/theme';
+import { Colors, Spacing, Radii, Shadows } from '@/constants/theme';
 import { ExpandedMapView } from '@/components/map/ExpandedMapView';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { NavButton } from '@/components/ui/NavButton';
@@ -45,12 +46,89 @@ const ENVIE_IMG =
 const DOC_ITEMS = ["Passeport", "Billets d'avion", "Réservation"];
 const AVATAR_BG = ['#E8C5A5', '#A5B8E0', '#A8D5B5', '#F0B0B0'];
 
+/* ─── Types ──────────────────────────────────────────────────── */
+interface PlanActivity {
+  id:         string;
+  title:      string;
+  start_time: string | null;
+  end_time:   string | null;
+  wish_id:    string | null;
+  wish?: { id: string; title: string; image_url?: string | null; category?: string | null } | null;
+}
+type TripStatus = 'future' | 'ongoing' | 'past';
+
+/* ─── Catégories ─────────────────────────────────────────────── */
+const CAT_CFG: Record<string, { emoji: string; color: string }> = {
+  restaurant: { emoji: '🍽️', color: '#F97316' },
+  monument:   { emoji: '🏛️', color: '#8B5CF6' },
+  cafe:       { emoji: '☕',  color: '#A16207' },
+  hotel:      { emoji: '🏨', color: '#0EA5E9' },
+  activity:   { emoji: '🎭', color: '#22C55E' },
+  photo_spot: { emoji: '📸', color: '#EC4899' },
+  bar:        { emoji: '🍺', color: '#EAB308' },
+  transport:  { emoji: '🚗', color: '#3B82F6' },
+  autre:      { emoji: '✨', color: '#6B7280' },
+};
+function catCfg(k?: string | null) { return CAT_CFG[k ?? ''] ?? CAT_CFG.autre; }
+
+/* ─── Helpers ongoing ─────────────────────────────────────────── */
+const MONTHS_OG = ['Jan','Fév','Mar','Avr','Mai','Juin','Juil','Août','Sep','Oct','Nov','Déc'];
+const DAYS_OG   = ['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
+
+function getDayBadge(start: string, end: string): string {
+  const s   = new Date(start + 'T00:00:00');
+  const e   = new Date(end   + 'T00:00:00');
+  const now = new Date();
+  const cur   = Math.floor((now.getTime() - s.getTime()) / 86_400_000) + 1;
+  const total = Math.floor((e.getTime() - s.getTime()) / 86_400_000) + 1;
+  return `Jour ${cur}/${total}`;
+}
+function fmtDayHeader(dateStr: string): string {
+  const d = new Date(dateStr + 'T00:00:00');
+  return `${DAYS_OG[d.getDay()]} ${d.getDate()} ${MONTHS_OG[d.getMonth()]}`;
+}
+function fmtT(t: string | null): string {
+  if (!t) return '--';
+  const [h, m] = t.split(':');
+  return `${h}h${m !== '00' ? m : ''}`;
+}
+function actStatus(s: string | null, e: string | null): 'past' | 'current' | 'upcoming' {
+  if (!s || !e) return 'upcoming';
+  const now = new Date();
+  const nm  = now.getHours() * 60 + now.getMinutes();
+  const [sh, sm] = s.split(':').map(Number);
+  const [eh, em] = e.split(':').map(Number);
+  const start = sh * 60 + (sm ?? 0), end = eh * 60 + (em ?? 0);
+  if (nm >= start && nm < end) return 'current';
+  if (nm >= end) return 'past';
+  return 'upcoming';
+}
+function timeUntilStr(startTime: string): string {
+  const [h, m] = startTime.split(':').map(Number);
+  const now  = new Date();
+  const diff = (h * 60 + (m ?? 0)) - (now.getHours() * 60 + now.getMinutes());
+  if (diff <= 0) return 'maintenant';
+  if (diff < 60) return `dans ${diff} min`;
+  const hrs = Math.floor(diff / 60), mins = diff % 60;
+  return mins ? `dans ${hrs}h${String(mins).padStart(2, '0')}` : `dans ${hrs}h`;
+}
+
 /* ─── Member type for display ────────────────────────────────── */
 interface MemberDisplay {
   user_id: string;
   name: string;
   avatar_url?: string;
   role: string;
+}
+
+function formatPastDates(start: string, end: string): string {
+  const s = new Date(start + 'T00:00:00');
+  const e = new Date(end   + 'T00:00:00');
+  const year = e.getFullYear();
+  if (s.getMonth() === e.getMonth()) {
+    return `${s.getDate()} → ${e.getDate()} ${MONTHS_OG[e.getMonth()]} ${year}`;
+  }
+  return `${s.getDate()} ${MONTHS_OG[s.getMonth()]} → ${e.getDate()} ${MONTHS_OG[e.getMonth()]} ${year}`;
 }
 
 function formatDateLabel(start: string, end: string): string {
@@ -97,6 +175,21 @@ interface Props {
 }
 
 export function ExpandedDashboard({ trip, cardLayout, progress }: Props) {
+  /* ── Statut du voyage ── */
+  const tripStatus: TripStatus = (() => {
+    const n     = new Date();
+    const start = new Date(trip.start_date + 'T00:00:00');
+    const end   = new Date(trip.end_date   + 'T23:59:59');
+    if (n >= start && n <= end) return 'ongoing';
+    if (n > end)                return 'past';
+    return 'future';
+  })();
+
+  /* ── État ongoing ── */
+  const [todayActivities,    setTodayActivities]    = useState<PlanActivity[]>([]);
+  const [tomorrowActivities, setTomorrowActivities] = useState<PlanActivity[]>([]);
+  const [unplannedCount,     setUnplannedCount]     = useState(0);
+
   const insets = useSafeAreaInsets();
   const { width: SCREEN_W, height: SCREEN_H } = useWindowDimensions();
   const { session } = useAuth();
@@ -110,6 +203,12 @@ export function ExpandedDashboard({ trip, cardLayout, progress }: Props) {
   const [budgetTotal,   setBudgetTotal]   = useState<number | null>(null);
   const [enviesCount,   setEnviesCount]   = useState<number | null>(null);
   const [validatedCount, setValidatedCount] = useState<number | null>(null);
+
+  /* Past dashboard — counts for bento cards */
+  const [pastPhotosCount, setPastPhotosCount] = useState(0);
+  const [pastPlacesCount, setPastPlacesCount] = useState(0);
+  const [pastTotalSpent,  setPastTotalSpent]  = useState(0);
+  const [pastPolyline,    setPastPolyline]    = useState<{ latitude: number; longitude: number }[]>([]);
 
   /* ── Géocodage de la destination ── */
   const [region, setRegion] = useState({
@@ -179,6 +278,71 @@ export function ExpandedDashboard({ trip, cardLayout, progress }: Props) {
       });
   }, [trip.id]);
 
+  /* ── Charger les données "en cours" ── */
+  useEffect(() => {
+    if (tripStatus !== 'ongoing' || !trip.id) return;
+    const today    = new Date().toISOString().split('T')[0];
+    const tomorrow = new Date(Date.now() + 86_400_000).toISOString().split('T')[0];
+
+    supabase.from('planning_items')
+      .select('id, title, start_time, end_time, wish_id, wish:wish_id(id, title, image_url, category)')
+      .eq('trip_id', trip.id).eq('day_date', today)
+      .order('start_time', { ascending: true })
+      .then(({ data }) => setTodayActivities((data ?? []) as unknown as PlanActivity[]));
+
+    supabase.from('planning_items')
+      .select('id, title, start_time, end_time, wish_id')
+      .eq('trip_id', trip.id).eq('day_date', tomorrow)
+      .order('start_time', { ascending: true })
+      .then(({ data }) => setTomorrowActivities((data ?? []) as unknown as PlanActivity[]));
+
+    supabase.from('planning_items').select('wish_id').eq('trip_id', trip.id)
+      .then(({ data: planned }) => {
+        const ids = (planned ?? []).map((p: any) => p.wish_id).filter(Boolean);
+        supabase.from('wishes').select('id').eq('trip_id', trip.id).eq('status', 'validated')
+          .then(({ data: v }) =>
+            setUnplannedCount((v ?? []).filter((w: any) => !ids.includes(w.id)).length),
+          );
+      });
+  }, [tripStatus, trip.id]);
+
+  /* ── Fetch past counts (bento cards) ── */
+  useEffect(() => {
+    if (tripStatus !== 'past' || !trip.id) return;
+
+    supabase.from('trip_photos').select('id', { count: 'exact', head: true })
+      .eq('trip_id', trip.id)
+      .then(({ count }) => setPastPhotosCount(count ?? 0));
+
+    supabase.from('wishes').select('id', { count: 'exact', head: true })
+      .eq('trip_id', trip.id).eq('type', 'place').eq('status', 'validated')
+      .then(({ count }) => setPastPlacesCount(count ?? 0));
+
+    supabase.from('expenses').select('amount').eq('trip_id', trip.id)
+      .then(({ data }) => {
+        const total = (data ?? []).reduce((s, e) => s + parseFloat(String(e.amount)), 0);
+        setPastTotalSpent(total);
+      });
+
+    supabase.from('planning_items')
+      .select('id, wish:wish_id(latitude, longitude)')
+      .eq('trip_id', trip.id)
+      .order('day_date', { ascending: true })
+      .order('start_time', { ascending: true })
+      .then(({ data }) => {
+        const coords = (data ?? [])
+          .filter((p: any) => p.wish?.latitude && p.wish?.longitude)
+          .map((p: any) => ({ latitude: p.wish.latitude, longitude: p.wish.longitude }));
+        setPastPolyline(coords);
+      });
+  }, [tripStatus, trip.id]);
+
+  const sharePastTrip = useCallback(async () => {
+    await Share.share({
+      message: `🌍 ${trip.name} — ${trip.destination}\n📅 ${formatPastDates(trip.start_date, trip.end_date)}\n\n${pastPhotosCount > 0 ? `📸 ${pastPhotosCount} photos\n` : ''}${pastPlacesCount > 0 ? `📍 ${pastPlacesCount} lieux visités\n` : ''}\nOrganisé avec HAKO ✈️`,
+    });
+  }, [trip, pastPhotosCount, pastPlacesCount]);
+
   const isOwner = session?.user?.id === trip.created_by;
 
   const { triggerCollapse } = useHomeExpand();
@@ -227,6 +391,7 @@ export function ExpandedDashboard({ trip, cardLayout, progress }: Props) {
   });
 
   const dateLabel = formatDateLabel(trip.start_date, trip.end_date);
+  const pastDateRange = tripStatus === 'past' ? formatPastDates(trip.start_date, trip.end_date) : '';
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
@@ -246,6 +411,40 @@ export function ExpandedDashboard({ trip, cardLayout, progress }: Props) {
 
         {/* Header */}
         <Animated.View style={[styles.header, headerStyle]}>
+          {/* Top badges row */}
+          <View style={styles.topBadgesRow}>
+            {tripStatus === 'ongoing' ? (
+              <View style={[styles.heroBadge, styles.heroBadgeOngoing]}>
+                <View style={styles.liveDot} />
+                <Text style={styles.heroBadgeText}>En cours</Text>
+              </View>
+            ) : tripStatus === 'past' ? (
+              <View style={[styles.heroBadge, styles.heroBadgePast]}>
+                <Text style={[styles.heroBadgeText, { opacity: 0.85 }]}>Terminé ✈️</Text>
+              </View>
+            ) : (
+              <View style={styles.heroBadge}>
+                <BlurView intensity={20} tint="light" style={StyleSheet.absoluteFill} />
+                <LinearGradient
+                  colors={['rgba(255,255,255,0.50)', 'rgba(255,255,255,0.15)']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={StyleSheet.absoluteFill}
+                />
+                <Text style={styles.heroBadgeText}>À venir</Text>
+              </View>
+            )}
+            <View style={{ flex: 1 }} />
+            <BlurView intensity={50} tint="dark" style={styles.dateBadge}>
+              {tripStatus === 'ongoing' && <View style={styles.liveDot} />}
+              <Text style={styles.dateBadgeText}>
+                {tripStatus === 'ongoing'
+                  ? getDayBadge(trip.start_date, trip.end_date)
+                  : dateLabel}
+              </Text>
+            </BlurView>
+          </View>
+
           <MaskedView
             style={styles.destinationMask}
             maskElement={
@@ -257,123 +456,311 @@ export function ExpandedDashboard({ trip, cardLayout, progress }: Props) {
               />
             }
           >
-            <Text style={styles.destText} adjustsFontSizeToFit numberOfLines={1}>
+            <Text style={[styles.destText, tripStatus === 'past' && styles.destTextPast]} adjustsFontSizeToFit numberOfLines={2}>
               {trip.name.toUpperCase()}
             </Text>
           </MaskedView>
+          {tripStatus === 'past' && (
+            <Text style={styles.pastDateLine}>{pastDateRange}</Text>
+          )}
 
-          <View style={styles.headerMeta}>
-            <BlurView intensity={50} tint="dark" style={styles.dateBadge}>
-              <Text style={styles.dateBadgeText}>{dateLabel}</Text>
-            </BlurView>
-
-            {/* Avatars réels */}
-            <View style={styles.avatarsRow}>
-              {members.map((m, i) => (
-                <MemberAvatar key={m.id} member={m} size={40} index={i} />
-              ))}
-              <TouchableOpacity
-                style={[styles.avatar, styles.addMemberBtn, { marginLeft: members.length > 0 ? -9 : 0, zIndex: 0 }]}
-                onPress={() => setShowInviteSheet(true)}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="add" size={16} color="rgba(255,255,255,0.8)" />
-              </TouchableOpacity>
-            </View>
+          <View style={styles.avatarsRow}>
+            {members.map((m, i) => (
+              <MemberAvatar key={m.id} member={m} size={40} index={i} />
+            ))}
           </View>
         </Animated.View>
 
-        {/* Bento grid */}
+        {/* Bento / Ongoing dashboard */}
         <Animated.View style={[{ flex: 1 }, bentoStyle]}>
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 110 }]}
-          >
-            {/* Row 1 : Documents + Planning */}
-            <View style={styles.row}>
-              <GlassCard flex={1} minHeight={140} onPress={() => router.push(`/trip/${trip.id}/documents`)}>
-                <Text style={styles.cardTitle}>DOCUMENT</Text>
-                <View style={styles.docList}>
-                  {DOC_ITEMS.map((item, i) => (
-                    <View key={i} style={styles.docRow}>
-                      <View style={styles.bullet} />
-                      <Text style={styles.docText}>{item}</Text>
-                    </View>
-                  ))}
-                </View>
-              </GlassCard>
+          {tripStatus === 'ongoing' ? (
+            /* ── Dashboard EN COURS ── */
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={[og.scroll, { paddingBottom: insets.bottom + 110 }]}
+            >
 
-              <GlassCard flex={1} minHeight={140} onPress={() => router.push(`/trip/${trip.id}/planning`)}>
-                <View style={styles.cardTitleRow}>
-                  <Text style={styles.cardTitle}>PLANNING</Text>
-                  <Ionicons name="calendar-outline" size={15} color="rgba(255,255,255,0.7)" />
-                </View>
-                <Text style={styles.planningInfo}>{'02/06\nDépart de Lyon'}</Text>
-              </GlassCard>
-            </View>
+              {/* Section 1 : Aujourd'hui */}
+              <View style={og.section}>
+                <Text style={og.sectionTitle}>AUJOURD'HUI · {fmtDayHeader(new Date().toISOString().split('T')[0])}</Text>
+                {todayActivities.length === 0 ? (
+                  <View style={og.emptyCard}>
+                    <Text style={og.emptyText}>Aucune activité planifiée aujourd'hui</Text>
+                  </View>
+                ) : (
+                  todayActivities.map((act) => {
+                    const status = actStatus(act.start_time, act.end_time);
+                    const cfg = catCfg(act.wish?.category);
+                    return (
+                      <TouchableOpacity
+                        key={act.id}
+                        style={[og.actCard, status === 'current' && og.actCardCurrent]}
+                        onPress={() => router.push(`/trip/${trip.id}/planning`)}
+                        activeOpacity={0.8}
+                      >
+                        <View style={[og.actBorder, { backgroundColor: cfg.color }]} />
+                        <View style={og.actThumb}>
+                          <Text style={og.actEmoji}>{cfg.emoji}</Text>
+                        </View>
+                        <View style={og.actInfo}>
+                          <Text style={og.actTitle} numberOfLines={1}>{act.title}</Text>
+                          <Text style={og.actTime}>
+                            {fmtT(act.start_time)}{act.end_time ? ` – ${fmtT(act.end_time)}` : ''}
+                          </Text>
+                        </View>
+                        {status === 'current' && (
+                          <View style={og.badge}>
+                            <View style={og.badgeDot} />
+                            <Text style={og.badgeText}>EN COURS</Text>
+                          </View>
+                        )}
+                        {status === 'upcoming' && act.start_time && (
+                          <Text style={og.actUntil}>{timeUntilStr(act.start_time)}</Text>
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })
+                )}
+              </View>
 
-            {/* Row 2 : Map */}
-            <View ref={mapCardRef} collapsable={false}>
-              <GlassCard height={145} noPadding onPress={handleMapPress}>
-                <MapView
-                  style={StyleSheet.absoluteFill}
-                  initialRegion={region}
-                  region={region}
-                  scrollEnabled={false}
-                  zoomEnabled={false}
-                  rotateEnabled={false}
-                  pitchEnabled={false}
+              {/* Section 2 : Accès rapide */}
+              <View style={og.section}>
+                <Text style={og.sectionTitle}>ACCÈS RAPIDE</Text>
+                <View style={og.quickGrid}>
+                  <TouchableOpacity style={og.quickBtn} onPress={() => router.push(`/trip/${trip.id}/planning`)} activeOpacity={0.8}>
+                    <Ionicons name="calendar-outline" size={22} color="#1A1A1A" />
+                    <Text style={og.quickLabel}>Planning</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={og.quickBtn} onPress={() => router.push(`/trip/${trip.id}/documents`)} activeOpacity={0.8}>
+                    <Ionicons name="document-outline" size={22} color="#1A1A1A" />
+                    <Text style={og.quickLabel}>Documents</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={og.quickBtn} onPress={() => router.push(`/trip/${trip.id}/budget`)} activeOpacity={0.8}>
+                    <Ionicons name="wallet-outline" size={22} color="#1A1A1A" />
+                    <Text style={og.quickLabel}>Budget</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={og.quickBtn} onPress={() => router.push(`/trip/${trip.id}/envies`)} activeOpacity={0.8}>
+                    <Ionicons name="heart-outline" size={22} color="#1A1A1A" />
+                    <Text style={og.quickLabel}>Envies</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Section 3 : Demain */}
+              {tomorrowActivities.length > 0 && (
+                <View style={og.section}>
+                  <Text style={og.sectionTitle}>DEMAIN</Text>
+                  {tomorrowActivities.slice(0, 3).map((act) => {
+                    const cfg = catCfg(act.wish?.category);
+                    return (
+                      <View key={act.id} style={og.tomorrowRow}>
+                        <Text style={og.tomorrowEmoji}>{cfg.emoji}</Text>
+                        <Text style={og.tomorrowTitle} numberOfLines={1}>{act.title}</Text>
+                        <Text style={og.tomorrowTime}>{fmtT(act.start_time)}</Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+
+              {/* Section 4 : Envies non planifiées */}
+              {unplannedCount > 0 && (
+                <TouchableOpacity
+                  style={og.unplannedBanner}
+                  onPress={() => router.push(`/trip/${trip.id}/envies`)}
+                  activeOpacity={0.8}
                 >
-                  <Marker coordinate={{ latitude: region.latitude, longitude: region.longitude }} />
-                </MapView>
-                <View style={styles.mapLabelWrap}>
-                  <Ionicons name="map-outline" size={12} color="rgba(255,255,255,0.7)" />
-                  <Text style={styles.mapLabel}>{trip.destination}</Text>
-                </View>
-              </GlassCard>
-            </View>
-
-            {/* Row 3 : Envies + Budget */}
-            <View style={styles.row}>
-              <GlassCard
-                flex={1}
-                minHeight={115}
-                backgroundImageUri={ENVIE_IMG}
-                onPress={() => router.push(`/trip/${trip.id}/envies`)}
-              >
-                <Text style={styles.cardTitle}>VOS ENVIES</Text>
-                {enviesCount !== null && enviesCount > 0 ? (
-                  <Text style={styles.enviesCount}>
-                    {enviesCount} envie{enviesCount > 1 ? 's' : ''}
-                    {validatedCount !== null && validatedCount > 0
-                      ? ` · ${validatedCount} validée${validatedCount > 1 ? 's' : ''}`
-                      : ''}
+                  <Text style={og.unplannedEmoji}>✨</Text>
+                  <Text style={og.unplannedText}>
+                    {unplannedCount} envie{unplannedCount > 1 ? 's' : ''} en attente de planification
                   </Text>
-                ) : (
-                  <Text style={styles.enviesEmpty}>Ajoute ta première envie !</Text>
-                )}
-              </GlassCard>
-
-              <GlassCard flex={1} minHeight={115} onPress={() => router.push(`/trip/${trip.id}/budget`)}>
-                <Text style={styles.cardTitle}>BUDGET</Text>
-                {budgetTotal !== null && budgetTotal > 0 ? (
-                  <>
-                    <Text style={styles.budgetAmount}>
-                      {budgetTotal.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} €
+                  <Ionicons name="chevron-forward" size={16} color="#6B7280" />
+                </TouchableOpacity>
+              )}
+            </ScrollView>
+          ) : tripStatus === 'past' ? (
+            /* ── Dashboard PASSÉ — bento grid ── */
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 110 }]}
+            >
+              {/* Row 1 : Photos + Avis */}
+              <View style={styles.row}>
+                <GlassCard flex={1} minHeight={140} onPress={() => router.push(`/trip/${trip.id}/past-photos`)}>
+                  <Text style={styles.cardTitle}>📸 PHOTOS</Text>
+                  {pastPhotosCount > 0 ? (
+                    <Text style={styles.enviesCount}>
+                      {pastPhotosCount} photo{pastPhotosCount > 1 ? 's' : ''}
                     </Text>
-                    <Text style={styles.budgetSub}>dépensés</Text>
-                  </>
-                ) : (
-                  <>
-                    <View style={styles.addCircle}>
-                      <Ionicons name="add" size={20} color="#fff" />
-                    </View>
-                    <Text style={styles.budgetSub}>Ajouter une dépense</Text>
-                  </>
-                )}
-              </GlassCard>
-            </View>
-          </ScrollView>
+                  ) : (
+                    <Text style={styles.enviesEmpty}>Ajoute tes souvenirs</Text>
+                  )}
+                </GlassCard>
+
+                <GlassCard flex={1} minHeight={140} onPress={() => router.push(`/trip/${trip.id}/past-avis`)}>
+                  <View style={styles.cardTitleRow}>
+                    <Text style={styles.cardTitle}>⭐ AVIS</Text>
+                    <Ionicons name="star-outline" size={15} color="rgba(255,255,255,0.7)" />
+                  </View>
+                  <Text style={styles.planningInfo}>
+                    {pastPlacesCount > 0
+                      ? `${pastPlacesCount} lieu${pastPlacesCount > 1 ? 'x' : ''} à noter`
+                      : 'Aucun lieu validé'}
+                  </Text>
+                </GlassCard>
+              </View>
+
+              {/* Row 2 : Parcours */}
+              <View ref={mapCardRef} collapsable={false}>
+                <GlassCard height={145} noPadding onPress={handleMapPress}>
+                  <MapView
+                    style={StyleSheet.absoluteFill}
+                    initialRegion={region}
+                    region={region}
+                    scrollEnabled={false}
+                    zoomEnabled={false}
+                    rotateEnabled={false}
+                    pitchEnabled={false}
+                  >
+                    {pastPolyline.length > 0
+                      ? pastPolyline.map((c, i) => <Marker key={i} coordinate={c} />)
+                      : <Marker coordinate={{ latitude: region.latitude, longitude: region.longitude }} />
+                    }
+                    {pastPolyline.length > 1 && (
+                      <Polyline coordinates={pastPolyline} strokeColor="rgba(255,255,255,0.9)" strokeWidth={2.5} />
+                    )}
+                  </MapView>
+                  <View style={styles.mapLabelWrap}>
+                    <Ionicons name="map-outline" size={12} color="rgba(255,255,255,0.7)" />
+                    <Text style={styles.mapLabel}>
+                      {pastPolyline.length > 1 ? 'Notre parcours' : trip.destination}
+                    </Text>
+                  </View>
+                </GlassCard>
+              </View>
+
+              {/* Row 3 : Partager + Bilan */}
+              <View style={styles.row}>
+                <GlassCard flex={1} minHeight={115} onPress={sharePastTrip}>
+                  <Text style={styles.cardTitle}>🔗 PARTAGER</Text>
+                  <View style={styles.addCircle}>
+                    <Ionicons name="share-social-outline" size={20} color="#fff" />
+                  </View>
+                  <Text style={styles.budgetSub}>Partage ton voyage</Text>
+                </GlassCard>
+
+                <GlassCard flex={1} minHeight={115} onPress={() => router.push(`/trip/${trip.id}/budget`)}>
+                  <Text style={styles.cardTitle}>💰 BILAN</Text>
+                  {pastTotalSpent > 0 ? (
+                    <>
+                      <Text style={styles.budgetAmount}>
+                        {Math.round(pastTotalSpent).toLocaleString('fr-FR')} €
+                      </Text>
+                      <Text style={styles.budgetSub}>dépensés</Text>
+                    </>
+                  ) : (
+                    <>
+                      <View style={styles.addCircle}>
+                        <Ionicons name="wallet-outline" size={20} color="#fff" />
+                      </View>
+                      <Text style={styles.budgetSub}>Voir le budget</Text>
+                    </>
+                  )}
+                </GlassCard>
+              </View>
+            </ScrollView>
+          ) : (
+            /* ── Dashboard FUTUR ── */
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 110 }]}
+            >
+              {/* Row 1 : Documents + Planning */}
+              <View style={styles.row}>
+                <GlassCard flex={1} minHeight={140} onPress={() => router.push(`/trip/${trip.id}/documents`)}>
+                  <Text style={styles.cardTitle}>DOCUMENT</Text>
+                  <View style={styles.docList}>
+                    {DOC_ITEMS.map((item, i) => (
+                      <View key={i} style={styles.docRow}>
+                        <View style={styles.bullet} />
+                        <Text style={styles.docText}>{item}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </GlassCard>
+
+                <GlassCard flex={1} minHeight={140} onPress={() => router.push(`/trip/${trip.id}/planning`)}>
+                  <View style={styles.cardTitleRow}>
+                    <Text style={styles.cardTitle}>PLANNING</Text>
+                    <Ionicons name="calendar-outline" size={15} color="rgba(255,255,255,0.7)" />
+                  </View>
+                  <Text style={styles.planningInfo}>{'02/06\nDépart de Lyon'}</Text>
+                </GlassCard>
+              </View>
+
+              {/* Row 2 : Map */}
+              <View ref={mapCardRef} collapsable={false}>
+                <GlassCard height={145} noPadding onPress={handleMapPress}>
+                  <MapView
+                    style={StyleSheet.absoluteFill}
+                    initialRegion={region}
+                    region={region}
+                    scrollEnabled={false}
+                    zoomEnabled={false}
+                    rotateEnabled={false}
+                    pitchEnabled={false}
+                  >
+                    <Marker coordinate={{ latitude: region.latitude, longitude: region.longitude }} />
+                  </MapView>
+                  <View style={styles.mapLabelWrap}>
+                    <Ionicons name="map-outline" size={12} color="rgba(255,255,255,0.7)" />
+                    <Text style={styles.mapLabel}>{trip.destination}</Text>
+                  </View>
+                </GlassCard>
+              </View>
+
+              {/* Row 3 : Envies + Budget */}
+              <View style={styles.row}>
+                <GlassCard
+                  flex={1}
+                  minHeight={115}
+                  backgroundImageUri={ENVIE_IMG}
+                  onPress={() => router.push(`/trip/${trip.id}/envies`)}
+                >
+                  <Text style={styles.cardTitle}>VOS ENVIES</Text>
+                  {enviesCount !== null && enviesCount > 0 ? (
+                    <Text style={styles.enviesCount}>
+                      {enviesCount} envie{enviesCount > 1 ? 's' : ''}
+                      {validatedCount !== null && validatedCount > 0
+                        ? ` · ${validatedCount} validée${validatedCount > 1 ? 's' : ''}`
+                        : ''}
+                    </Text>
+                  ) : (
+                    <Text style={styles.enviesEmpty}>Ajoute ta première envie !</Text>
+                  )}
+                </GlassCard>
+
+                <GlassCard flex={1} minHeight={115} onPress={() => router.push(`/trip/${trip.id}/budget`)}>
+                  <Text style={styles.cardTitle}>BUDGET</Text>
+                  {budgetTotal !== null && budgetTotal > 0 ? (
+                    <>
+                      <Text style={styles.budgetAmount}>
+                        {budgetTotal.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} €
+                      </Text>
+                      <Text style={styles.budgetSub}>dépensés</Text>
+                    </>
+                  ) : (
+                    <>
+                      <View style={styles.addCircle}>
+                        <Ionicons name="add" size={20} color="#fff" />
+                      </View>
+                      <Text style={styles.budgetSub}>Ajouter une dépense</Text>
+                    </>
+                  )}
+                </GlassCard>
+              </View>
+            </ScrollView>
+          )}
         </Animated.View>
 
         {/* ── Bottom nav ── */}
@@ -382,8 +769,14 @@ export function ExpandedDashboard({ trip, cardLayout, progress }: Props) {
           pointerEvents="box-none"
         >
           <NavButton icon="arrow-back-outline" onPress={handleBack} />
-          <NavButton icon="add" iconSize={28} onPress={() => setShowInviteSheet(true)} />
-          <NavButton icon="settings-outline" onPress={() => setShowSettings(true)} />
+          {tripStatus === 'past'
+            ? <NavButton icon="camera-outline" iconSize={24} onPress={() => router.push(`/trip/${trip.id}/past-photos`)} />
+            : <NavButton icon="add" iconSize={28} onPress={() => setShowInviteSheet(true)} />
+          }
+          {tripStatus === 'past'
+            ? <NavButton icon="share-social-outline" iconSize={22} onPress={sharePastTrip} />
+            : <NavButton icon="settings-outline" onPress={() => setShowSettings(true)} />
+          }
         </Animated.View>
 
       </View>
@@ -862,6 +1255,131 @@ const sheet = StyleSheet.create({
   },
 });
 
+/* ─── Ongoing dashboard styles ───────────────────────────────── */
+const og = StyleSheet.create({
+  scroll: {
+    paddingTop: 16,
+    paddingHorizontal: 16,
+    gap: 20,
+  },
+  section: {
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    borderRadius: 20,
+    padding: 16,
+    gap: 10,
+    ...Shadows.sm,
+  },
+  sectionTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#9CA3AF',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    marginBottom: 4,
+  },
+
+  /* Activity card */
+  actCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+    borderRadius: 14,
+    padding: 10,
+    gap: 10,
+    overflow: 'hidden',
+  },
+  actCardCurrent: {
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#86EFAC',
+  },
+  actBorder: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 4,
+    borderRadius: 2,
+  },
+  actThumb: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 4,
+  },
+  actEmoji: { fontSize: 20 },
+  actInfo: { flex: 1 },
+  actTitle: { fontSize: 14, fontWeight: '600', color: '#1A1A1A' },
+  actTime: { fontSize: 12, color: '#6B7280', marginTop: 2 },
+  actUntil: { fontSize: 12, fontWeight: '600', color: '#6B7280' },
+
+  /* EN COURS badge */
+  badge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 9999,
+  },
+  badgeDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#16A34A' },
+  badgeText: { fontSize: 10, fontWeight: '700', color: '#16A34A', letterSpacing: 0.5 },
+
+  /* Empty state */
+  emptyCard: {
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+  emptyText: { fontSize: 13, color: '#9CA3AF', fontStyle: 'italic' },
+
+  /* Quick access grid */
+  quickGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  quickBtn: {
+    flex: 1,
+    minWidth: '45%',
+    backgroundColor: '#F9FAFB',
+    borderRadius: 14,
+    paddingVertical: 16,
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  quickLabel: { fontSize: 12, fontWeight: '600', color: '#374151' },
+
+  /* Tomorrow */
+  tomorrowRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 4,
+  },
+  tomorrowEmoji: { fontSize: 16, width: 24, textAlign: 'center' },
+  tomorrowTitle: { flex: 1, fontSize: 13, color: '#374151', fontWeight: '500' },
+  tomorrowTime: { fontSize: 12, color: '#9CA3AF', fontWeight: '500' },
+
+  /* Unplanned banner */
+  unplannedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    borderRadius: 16,
+    padding: 14,
+    ...Shadows.sm,
+  },
+  unplannedEmoji: { fontSize: 18 },
+  unplannedText: { flex: 1, fontSize: 13, fontWeight: '500', color: '#374151' },
+});
+
 /* ─── Main styles ────────────────────────────────────────────── */
 const styles = StyleSheet.create({
   /* Hero */
@@ -884,11 +1402,40 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   destText: {
-    fontSize: 100,
+    fontSize: 64,
     fontWeight: '900',
     color: '#FFFFFF',
     textAlign: 'center',
-    letterSpacing: 3,
+    letterSpacing: 2,
+  },
+  topBadgesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  heroBadge: {
+    overflow: 'hidden',
+    borderRadius: 99,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,1)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  heroBadgeText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  heroBadgeOngoing: {
+    backgroundColor: 'rgba(34,197,94,0.35)',
+    borderColor: 'rgba(34,197,94,0.25)',
+  },
+  heroBadgePast: {
+    backgroundColor: 'rgba(110,110,110,0.65)',
+    borderColor: 'rgba(110,110,110,0.4)',
   },
   headerMeta: {
     flexDirection: 'row',
@@ -908,12 +1455,21 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.18)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   dateBadgeText: {
     color: '#fff',
     fontSize: 13,
     fontWeight: '600',
     letterSpacing: 0.3,
+  },
+  liveDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: '#22C55E',
   },
   avatarsRow: { flexDirection: 'row', alignItems: 'center' },
   avatar: {
@@ -1010,5 +1566,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     gap: 14,
+  },
+
+  /* Past trip header overrides */
+  destTextPast: {
+    fontSize: 38,
+    letterSpacing: 0.5,
+    lineHeight: 44,
+  },
+  pastDateLine: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.75)',
+    marginTop: 4,
+    marginBottom: 4,
   },
 });

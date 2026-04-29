@@ -29,6 +29,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
 import { Colors, Spacing, Radii, Shadows } from '@/constants/theme';
+import { ActionButton } from '@/components/ui/ActionButton';
 import { supabase } from '@/services/supabase';
 
 /* ─── Constants ──────────────────────────────────────────────── */
@@ -405,22 +406,13 @@ export function AddToPlanningSheet({
 
   /* ── Confirm button ── */
   const ConfirmBtn = ({ isManual }: { isManual: boolean }) => (
-    <TouchableOpacity
-      style={[a.confirmBtn, saving && { opacity: 0.55 }]}
+    <ActionButton
+      label="Ajouter au planning"
+      icon="calendar-outline"
+      variant="primary"
+      loading={saving}
       onPress={() => handleSave(isManual)}
-      disabled={saving}
-      activeOpacity={0.85}
-    >
-      {saving
-        ? <ActivityIndicator size="small" color="#fff" />
-        : (
-          <>
-            <Ionicons name="calendar-outline" size={17} color="#fff" />
-            <Text style={a.confirmTxt}>Ajouter au planning</Text>
-          </>
-        )
-      }
-    </TouchableOpacity>
+    />
   );
 
   /* ── Render ── */

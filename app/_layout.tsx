@@ -62,7 +62,8 @@ function AuthGate() {
       <Stack.Screen name="trip/[id]/planning"  options={{ headerShown: false }} />
       <Stack.Screen name="trip/[id]/map"       options={{ headerShown: false }} />
       <Stack.Screen name="trip/[id]/documents" options={{ headerShown: false }} />
-      <Stack.Screen name="trip/[id]/budget"    options={{ headerShown: false }} />
+      <Stack.Screen name="trip/[id]/budget"          options={{ headerShown: false }} />
+      <Stack.Screen name="trip/[id]/planning-detail" options={{ headerShown: false }} />
     </Stack>
   );
 }

@@ -37,6 +37,10 @@ import { Colors, Spacing, Radii, Shadows } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/services/supabase';
 import { NavButton } from '@/components/ui/NavButton';
+import { FilterButton } from '@/components/ui/FilterButton';
+import { Tag } from '@/components/ui/Tag';
+import { CategoryButton } from '@/components/ui/CategoryButton';
+import { ActionButton } from '@/components/ui/ActionButton';
 import { AddToPlanningSheet } from '@/components/planning/AddToPlanningSheet';
 
 const { width: SW } = Dimensions.get('window');
@@ -363,8 +367,8 @@ function WishCard({
                 </Text>
               </View>
             )}
-            <View style={[cs.badge, cs.badgePlace]}>
-              <Text style={cs.badgeText}>📍 Lieu</Text>
+            <View style={cs.badge}>
+              <Tag label="Lieu" emoji="📍" color="blue" solid />
             </View>
             <View style={cs.cardBottomPlace}>
               <Text style={hasImage ? cs.titleVideo : cs.titlePlaceNoImg} numberOfLines={2}>{wish.title}</Text>
@@ -391,11 +395,16 @@ function WishCard({
                 end={{ x: 1, y: 1 }}
               />
             )}
-            <View style={[cs.badge, cs.badgeTikTok]}>
-              <Text style={cs.badgeText}>
-                {wish.link_url?.includes('tiktok.com') ? 'TikTok' :
-                 wish.link_url?.includes('instagram.com') ? 'Reel' : '✨ Inspiration'}
-              </Text>
+            <View style={cs.badge}>
+              <Tag
+                label={
+                  wish.link_url?.includes('tiktok.com') ? 'TikTok' :
+                  wish.link_url?.includes('instagram.com') ? 'Reel' : 'Inspiration'
+                }
+                emoji={wish.link_url?.includes('tiktok.com') || wish.link_url?.includes('instagram.com') ? undefined : '✨'}
+                color="red"
+                solid
+              />
             </View>
             {hasImage && (
               <View style={cs.playWrap}>
@@ -420,8 +429,8 @@ function WishCard({
         {/* ── Orga ── */}
         {isOrga && (
           <>
-            <View style={[cs.badge, cs.badgeOrg]}>
-              <Text style={cs.badgeText}>📋 Orga</Text>
+            <View style={cs.badge}>
+              <Tag label="Orga" emoji="📋" color="olive" solid />
             </View>
             <TouchableOpacity
               style={cs.checkboxWrap}
@@ -829,21 +838,23 @@ function DetailSheet({
                 </View>
               </View>
               <View style={ds.badgeRow}>
-                <View style={[ds.statusBadge, { backgroundColor: statusColor + '22' }]}>
-                  <View style={[ds.statusDot, { backgroundColor: statusColor }]} />
-                  <Text style={[ds.statusText, { color: statusColor }]}>{statusLabel}</Text>
-                </View>
+                <Tag
+                  label={statusLabel}
+                  color={
+                    wish.status === 'validated' ? 'green' :
+                    wish.status === 'debate'    ? 'orange' :
+                    wish.status === 'archived'  ? 'gray' : 'gray'
+                  }
+                />
                 {catMeta && (
-                  <View style={ds.catBadge}>
-                    <Text style={ds.catBadgeText}>{catMeta.emoji} {catMeta.label}</Text>
-                  </View>
+                  <Tag label={catMeta.label} emoji={catMeta.emoji} color="gray" />
                 )}
                 {wish.type && (
-                  <View style={[ds.catBadge, { backgroundColor: wish.type === 'place' ? '#EFF6FF' : wish.type === 'orga' ? '#F0FDF4' : '#FFF7ED' }]}>
-                    <Text style={ds.catBadgeText}>
-                      {wish.type === 'place' ? '📍 Lieu' : wish.type === 'orga' ? '📋 Orga' : '✨ Inspiration'}
-                    </Text>
-                  </View>
+                  <Tag
+                    label={wish.type === 'place' ? 'Lieu' : wish.type === 'orga' ? 'Orga' : 'Inspiration'}
+                    emoji={wish.type === 'place' ? '📍' : wish.type === 'orga' ? '📋' : '✨'}
+                    color={wish.type === 'place' ? 'blue' : wish.type === 'orga' ? 'olive' : 'red'}
+                  />
                 )}
               </View>
 
@@ -1142,26 +1153,28 @@ function DetailSheet({
               {/* ── Actions ── */}
               <View style={ds.actionsSection}>
                 {wish.status === 'validated' && !isOrga && (
-                  <TouchableOpacity
-                    style={[ds.actionBtn, { backgroundColor: '#1A1A1A' }]}
+                  <ActionButton
+                    label="Ajouter au planning"
+                    icon="calendar-outline"
+                    variant="primary"
                     onPress={() => onAddToPlanning({ id: wish.id, title: wish.title })}
-                    activeOpacity={0.85}
-                  >
-                    <Ionicons name="calendar-outline" size={17} color="#fff" />
-                    <Text style={[ds.actionBtnText, { color: '#fff' }]}>Ajouter au planning</Text>
-                  </TouchableOpacity>
+                  />
                 )}
                 {wish.status !== 'archived' && (
-                  <TouchableOpacity style={ds.actionBtn} onPress={confirmArchive} activeOpacity={0.85}>
-                    <Ionicons name="archive-outline" size={17} color={Colors.textPrimary} />
-                    <Text style={ds.actionBtnText}>Archiver</Text>
-                  </TouchableOpacity>
+                  <ActionButton
+                    label="Archiver"
+                    icon="archive-outline"
+                    variant="secondary"
+                    onPress={confirmArchive}
+                  />
                 )}
                 {isAuthor && (
-                  <TouchableOpacity style={[ds.actionBtn, ds.actionBtnDanger]} onPress={confirmDelete} activeOpacity={0.85}>
-                    <Ionicons name="trash-outline" size={17} color="#EF4444" />
-                    <Text style={[ds.actionBtnText, { color: '#EF4444' }]}>Supprimer</Text>
-                  </TouchableOpacity>
+                  <ActionButton
+                    label="Supprimer"
+                    icon="trash-outline"
+                    variant="danger"
+                    onPress={confirmDelete}
+                  />
                 )}
               </View>
             </View>
@@ -1446,23 +1459,29 @@ function AddWishFlow({
   const canNext1Ins  = !!insLink.trim() || !!title.trim();
   const canNext1Orga = !!title.trim();
 
-  /* ── Shared category grid ── */
+  /* ── Shared category scroll (horizontal pills) ── */
   const CatGrid = ({ label }: { label: string }) => (
     <>
       <Text style={wf.sectionLabel}>{label}</Text>
-      <View style={wf.catGrid}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={wf.catScroll}
+      >
         {ADD_CATEGORIES.map(cat => (
           <TouchableOpacity
             key={cat.key}
-            style={[wf.catBtn, category === cat.key && wf.catBtnActive]}
+            style={[wf.catPill, category === cat.key && wf.catPillActive]}
             onPress={() => setCategory(prev => prev === cat.key ? null : cat.key as Category)}
             activeOpacity={0.75}
           >
-            <Text style={wf.catEmoji}>{cat.emoji}</Text>
-            <Text style={[wf.catLabel, category === cat.key && wf.catLabelActive]}>{cat.label}</Text>
+            <Text style={wf.catPillEmoji}>{cat.emoji}</Text>
+            <Text style={[wf.catPillLabel, category === cat.key && wf.catPillLabelActive]}>
+              {cat.label}
+            </Text>
           </TouchableOpacity>
         ))}
-      </View>
+      </ScrollView>
     </>
   );
 
@@ -1472,17 +1491,14 @@ function AddWishFlow({
   }: { onSubmit?: () => void; submitLabel?: string; disabled?: boolean }) => (
     <View style={[wf.bottomBar, { paddingBottom: Math.max(insets.bottom, Spacing.lg) }]}>
       <NavButton icon="arrow-back" onPress={handleBack} />
-      <TouchableOpacity
-        style={[wf.nextBtn, (isSaving || disabled) && wf.nextBtnDisabled]}
-        onPress={onSubmit ?? handleSubmit}
-        disabled={isSaving || disabled}
-        activeOpacity={0.85}
-      >
-        {isSaving
-          ? <ActivityIndicator size="small" color={Colors.white} />
-          : <Text style={wf.nextBtnText}>{submitLabel ?? 'Suivant'}</Text>
-        }
-      </TouchableOpacity>
+      <View style={{ flex: 1 }}>
+        <ActionButton
+          label={submitLabel ?? 'Suivant'}
+          onPress={onSubmit ?? handleSubmit}
+          loading={isSaving}
+          disabled={disabled}
+        />
+      </View>
     </View>
   );
 
@@ -2195,7 +2211,12 @@ export default function EnviesScreen() {
 
       {/* ── Header ── */}
       <View style={sc.header}>
-        <Text style={sc.title}>Vos envies</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={sc.title}>Vos envies</Text>
+          <Text style={sc.subtitle}>
+            {wishes.length} envie{wishes.length !== 1 ? 's' : ''} · {wishes.filter(w => w.status === 'validated').length} validée{wishes.filter(w => w.status === 'validated').length !== 1 ? 's' : ''}
+          </Text>
+        </View>
         <TouchableOpacity style={sc.gearBtn} activeOpacity={0.7}>
           <Ionicons name="settings-outline" size={22} color={Colors.textPrimary} />
         </TouchableOpacity>
@@ -2207,14 +2228,12 @@ export default function EnviesScreen() {
         style={sc.filterRow} contentContainerStyle={sc.filterContent}
       >
         {statusChips.map(c => (
-          <TouchableOpacity
+          <FilterButton
             key={c.key}
-            style={[sc.chip, statusFilter === c.key && sc.chipActive]}
+            label={c.label}
+            active={statusFilter === c.key}
             onPress={() => { userChangedFilter.current = true; setStatusFilter(c.key); }}
-            activeOpacity={0.8}
-          >
-            <Text style={[sc.chipText, statusFilter === c.key && sc.chipTextActive]}>{c.label}</Text>
-          </TouchableOpacity>
+          />
         ))}
       </ScrollView>
 
@@ -2229,7 +2248,9 @@ export default function EnviesScreen() {
 
       {/* ── Masonry grid ── */}
       {loading ? (
-        <ActivityIndicator size="large" color={Colors.primary} style={{ marginTop: Spacing.xxl }} />
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+        </View>
       ) : filtered.length === 0 ? (
         <View style={sc.empty}>
           <Text style={sc.emptyIcon}>✨</Text>
@@ -2237,6 +2258,7 @@ export default function EnviesScreen() {
         </View>
       ) : (
         <ScrollView
+          style={{ flex: 1 }}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={[sc.masonryContent, { paddingBottom: Math.max(insets.bottom, 16) + 110 }]}
         >
@@ -2419,13 +2441,13 @@ const wf = StyleSheet.create({
   /* Section label */
   sectionLabel: { fontSize: 14, fontWeight: '700', color: Colors.textPrimary, marginBottom: Spacing.sm, marginTop: Spacing.md },
 
-  /* Category grid */
-  catGrid:      { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm, marginBottom: Spacing.md },
-  catBtn:       { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12, paddingVertical: 10, borderRadius: Radii.md, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, minWidth: 76, gap: 4 },
-  catBtnActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  catEmoji:     { fontSize: 20 },
-  catLabel:     { fontSize: 11, fontWeight: '600', color: Colors.textSecondary, textAlign: 'center' },
-  catLabelActive: { color: Colors.white },
+  /* Category scroll */
+  catScroll:         { gap: Spacing.sm, paddingVertical: 4, marginBottom: Spacing.md },
+  catPill:           { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 10, borderRadius: Radii.pill, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border },
+  catPillActive:     { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  catPillEmoji:      { fontSize: 16 },
+  catPillLabel:      { fontSize: 13, fontWeight: '600', color: Colors.textPrimary },
+  catPillLabelActive: { color: Colors.white },
 
   /* Videos */
   videoInputRow:  { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: Spacing.sm },
@@ -2460,13 +2482,14 @@ const sc = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: H_PAD, paddingTop: Spacing.sm, paddingBottom: Spacing.sm,
+    paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8,
   },
   title:   { fontSize: 28, fontWeight: '800', color: Colors.textPrimary, letterSpacing: -0.5 },
+  subtitle: { fontSize: 13, color: Colors.textSecondary, fontWeight: '500', marginTop: 2 },
   gearBtn: { width: 40, height: 40, borderRadius: Radii.full, backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center' },
 
-  filterRow:     { maxHeight: 48, marginBottom: 4 },
-  filterContent: { paddingHorizontal: H_PAD, gap: Spacing.sm, alignItems: 'center' },
+  filterRow:     { maxHeight: 52, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  filterContent: { paddingHorizontal: 20, paddingVertical: 4, gap: 8, alignItems: 'center' },
   chip:          { paddingHorizontal: 14, paddingVertical: 9, borderRadius: Radii.full, backgroundColor: '#F0F0F0' },
   chipActive:    { backgroundColor: Colors.primary },
   chipText:      { fontSize: 13, fontWeight: '600', color: Colors.textPrimary },
@@ -2483,7 +2506,7 @@ const sc = StyleSheet.create({
   masonryContent: { paddingHorizontal: H_PAD, paddingTop: Spacing.sm },
   masonryRow:     { flexDirection: 'row', gap: COL_GAP },
 
-  empty:     { alignItems: 'center', paddingTop: 80, gap: Spacing.sm },
+  empty:     { flex: 1, alignItems: 'center', paddingTop: 80, gap: Spacing.sm },
   emptyIcon: { fontSize: 48 },
   emptyText: { fontSize: 15, color: Colors.textSecondary, fontWeight: '500' },
 

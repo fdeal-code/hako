@@ -25,6 +25,7 @@ import Animated, {
 import { Colors, Spacing, Radii } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/services/supabase';
+import { ActionButton } from '@/components/ui/ActionButton';
 import { tripEvents } from '@/utils/events';
 import { MemberAvatar } from '@/components/ui/MemberAvatar';
 
@@ -567,15 +568,9 @@ export default function CreateTripScreen() {
               <Ionicons name="arrow-back" size={22} color={Colors.textSecondary} />
             </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.nextBtn, !canNext2 && styles.nextBtnDisabled]}
-              onPress={() => { if (canNext2) goToStep(3); }}
-              activeOpacity={canNext2 ? 0.85 : 1}
-            >
-              <Text style={[styles.nextBtnText, !canNext2 && styles.nextBtnTextDisabled]}>
-                Suivant
-              </Text>
-            </TouchableOpacity>
+            <View style={{ flex: 1 }}>
+              <ActionButton label="Suivant" onPress={() => goToStep(3)} disabled={!canNext2} />
+            </View>
           </View>
         </View>
 
@@ -738,15 +733,9 @@ export default function CreateTripScreen() {
             <TouchableOpacity onPress={handleBack} style={styles.backCircleBtn} activeOpacity={0.7}>
               <Ionicons name="arrow-back" size={22} color={Colors.textSecondary} />
             </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.nextBtn, !canNext3 && styles.nextBtnDisabled]}
-              onPress={() => { if (canNext3) goToStep(4); }}
-              activeOpacity={canNext3 ? 0.85 : 1}
-            >
-              <Text style={[styles.nextBtnText, !canNext3 && styles.nextBtnTextDisabled]}>
-                Suivant
-              </Text>
-            </TouchableOpacity>
+            <View style={{ flex: 1 }}>
+              <ActionButton label="Suivant" onPress={() => goToStep(4)} disabled={!canNext3} />
+            </View>
           </View>
         </View>
 
@@ -848,13 +837,9 @@ export default function CreateTripScreen() {
             <TouchableOpacity onPress={handleBack} style={styles.backCircleBtn} activeOpacity={0.7}>
               <Ionicons name="arrow-back" size={22} color={Colors.textSecondary} />
             </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.nextBtn}
-              onPress={() => goToStep(5)}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.nextBtnText}>Suivant</Text>
-            </TouchableOpacity>
+            <View style={{ flex: 1 }}>
+              <ActionButton label="Suivant" onPress={() => goToStep(5)} />
+            </View>
           </View>
         </View>
 
@@ -1002,17 +987,9 @@ export default function CreateTripScreen() {
             <TouchableOpacity onPress={handleBack} style={styles.backCircleBtn} activeOpacity={0.7}>
               <Ionicons name="arrow-back" size={22} color={Colors.textSecondary} />
             </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.nextBtn, creating && styles.nextBtnDisabled]}
-              onPress={handleCreate}
-              activeOpacity={creating ? 1 : 0.85}
-              disabled={creating}
-            >
-              {creating
-                ? <ActivityIndicator size="small" color={Colors.white} />
-                : <Text style={styles.nextBtnText}>Créer le voyage ✈️</Text>
-              }
-            </TouchableOpacity>
+            <View style={{ flex: 1 }}>
+              <ActionButton label="Créer le voyage ✈️" onPress={handleCreate} loading={creating} />
+            </View>
           </View>
         </View>
 

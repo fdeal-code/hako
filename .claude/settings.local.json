@@ -5,7 +5,9 @@
       "Bash(node -e \"require\\(''@expo/ngrok''\\)\")",
       "Bash(npx tsc --noEmit)",
       "Bash(grep -n \"function WishDetail\\\\|WishDetailModal\\\\|WishSheet\\\\|detail.*wish\\\\|wish.*detail\\\\|Modal.*wish\" /Users/pierre/Desktop/Félix/hako/app/trip/[id]/envies.tsx)",
-      "Bash(wc -l /Users/pierre/Desktop/Félix/hako/app/trip/[id]/envies.tsx)"
+      "Bash(wc -l /Users/pierre/Desktop/Félix/hako/app/trip/[id]/envies.tsx)",
+      "Bash(grep -n \"maxHeight\\\\|filterContent\\\\|filterRow\\\\|filterStrip\\\\|overflow.*hidden\" /Users/pierre/Desktop/Félix/hako/app/trip/[id]/documents.tsx)",
+      "Bash(grep -n \"date\\\\|Date\\\\|countdown\\\\|member\\\\|Member\\\\|addMember\\\\|avatar\\\\|Avatar\\\\|badge\\\\|Badge\\\\|zIndex\\\\|stack\\\\|Stack\" /Users/pierre/Desktop/Félix/hako/app/trip/[id]/dashboard.tsx)"
     ]
   }
 }

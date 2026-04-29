@@ -18,6 +18,7 @@ import {
 } from 'react-native';
 import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -26,6 +27,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { Colors, Spacing, Radii, Shadows } from '@/constants/theme';
 import { supabase } from '@/services/supabase';
 import { useAuth } from '@/contexts/AuthContext';
+import { Tag } from '@/components/ui/Tag';
 
 /* ─── Types ──────────────────────────────────────────────────── */
 type BudgetLevel  = 'free' | '€' | '€€' | '€€€';
@@ -285,7 +287,7 @@ export default function PlanningDetailScreen() {
     <View style={[s.root, { paddingTop: insets.top }]}>
       <ScrollView
         style={s.scroll}
-        contentContainerStyle={[s.scrollContent, { paddingBottom: Math.max(insets.bottom, 16) + 100 }]}
+        contentContainerStyle={[s.scrollContent, { paddingBottom: Math.max(insets.bottom, 16) + 120 }]}
         showsVerticalScrollIndicator={false}
       >
         {/* ── Hero image ── */}
@@ -303,15 +305,6 @@ export default function PlanningDetailScreen() {
           </LinearGradient>
         )}
 
-        {/* ── Back button (flottant sur l'image) ── */}
-        <TouchableOpacity
-          style={[s.backFab, { top: 12 }]}
-          onPress={() => router.back()}
-          activeOpacity={0.85}
-        >
-          <Ionicons name="arrow-back" size={20} color="#fff" />
-        </TouchableOpacity>
-
         {/* ── Content ── */}
         <View style={s.content}>
 
@@ -320,20 +313,28 @@ export default function PlanningDetailScreen() {
 
           {/* ── Badges ── */}
           <View style={s.badgeRow}>
-            <View style={[s.badge, { backgroundColor: catInfo.color + '18' }]}>
-              <Text style={[s.badgeTxt, { color: catInfo.color }]}>
-                {catInfo.emoji} {catInfo.label}
-              </Text>
-            </View>
+            <Tag
+              label={catInfo.label}
+              emoji={catInfo.emoji}
+              color={
+                catInfo.color === '#F97316' ? 'orange' :
+                catInfo.color === '#8B5CF6' ? 'blue'   :
+                catInfo.color === '#22C55E' ? 'green'  :
+                catInfo.color === '#EC4899' ? 'red'    :
+                catInfo.color === '#3B82F6' ? 'blue'   : 'gray'
+              }
+            />
             {wish && (
-              <View style={[s.badge, { backgroundColor: statusMeta.bg }]}>
-                <Text style={[s.badgeTxt, { color: statusMeta.color }]}>{statusMeta.label}</Text>
-              </View>
+              <Tag
+                label={statusMeta.label}
+                color={
+                  wish.status === 'validated' ? 'green' :
+                  wish.status === 'debate'    ? 'orange' : 'gray'
+                }
+              />
             )}
             {item.is_locked && (
-              <View style={[s.badge, { backgroundColor: '#F0F0F0' }]}>
-                <Text style={[s.badgeTxt, { color: '#444' }]}>🔒 Réservation fixe</Text>
-              </View>
+              <Tag label="Réservation fixe" emoji="🔒" color="gray" />
             )}
           </View>
 
@@ -525,15 +526,22 @@ export default function PlanningDetailScreen() {
         </View>
       </ScrollView>
 
-      {/* ── Bouton sticky en bas ── */}
-      <View style={[s.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-        <TouchableOpacity
-          style={s.footerBtnDanger}
-          onPress={removeFromPlanning}
-          activeOpacity={0.85}
-        >
-          <Ionicons name="trash-outline" size={17} color="#DC2626" />
-          <Text style={s.footerBtnDangerTxt}>Retirer du planning</Text>
+      {/* ── Floating bottom nav ── */}
+      <View style={[s.floatingNav, { bottom: Math.max(insets.bottom, 16) + 8 }]}>
+        <TouchableOpacity style={s.navBackBtn} onPress={() => router.back()} activeOpacity={0.85}>
+          <BlurView intensity={20} tint="light" style={[StyleSheet.absoluteFill, { borderRadius: Radii.full }]} />
+          <LinearGradient
+            colors={['rgba(255,255,255,0.7)', 'rgba(255,255,255,0.2)']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={[StyleSheet.absoluteFill, { borderRadius: Radii.full }]}
+          />
+          <Ionicons name="arrow-back" size={22} color={Colors.textPrimary} />
+        </TouchableOpacity>
+
+        <TouchableOpacity style={s.navDeleteBtn} onPress={removeFromPlanning} activeOpacity={0.85}>
+          <Ionicons name="trash-outline" size={18} color="#fff" />
+          <Text style={s.navDeleteTxt}>Retirer du planning</Text>
         </TouchableOpacity>
       </View>
 
@@ -690,19 +698,6 @@ const s = StyleSheet.create({
   },
   heroEmoji: {
     fontSize: 64,
-  },
-
-  /* Back FAB */
-  backFab: {
-    position: 'absolute',
-    left: 16,
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...Shadows.sm,
   },
 
   /* Content */
@@ -954,47 +949,42 @@ const s = StyleSheet.create({
     lineHeight: 22,
   },
 
-  /* Footer */
-  footer: {
+  /* Floating bottom nav */
+  floatingNav: {
+    position: 'absolute',
+    left: 20,
+    right: 20,
     flexDirection: 'row',
+    alignItems: 'center',
     gap: 12,
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
   },
-  footerBtnSecondary: {
-    flex: 1,
-    flexDirection: 'row',
+  navBackBtn: {
+    width: 56,
+    height: 56,
+    borderRadius: Radii.full,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 16,
-    borderRadius: 14,
-    backgroundColor: '#F5F5F5',
-  },
-  footerBtnSecondaryTxt: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: Colors.textPrimary,
-  },
-  footerBtnDanger: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 16,
-    borderRadius: 14,
-    backgroundColor: 'rgba(220,38,38,0.08)',
+    overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(220,38,38,0.25)',
+    borderColor: 'rgba(255,255,255,0.8)',
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    ...Shadows.md,
   },
-  footerBtnDangerTxt: {
+  navDeleteBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    height: 56,
+    borderRadius: Radii.pill,
+    backgroundColor: '#DC2626',
+    ...Shadows.md,
+  },
+  navDeleteTxt: {
     fontSize: 15,
-    fontWeight: '600',
-    color: '#DC2626',
+    fontWeight: '700',
+    color: '#fff',
   },
 
   /* Edit schedule sheet */
