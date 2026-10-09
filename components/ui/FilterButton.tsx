@@ -1,6 +1,7 @@
 import React from 'react';
-import { TouchableOpacity, Text, StyleSheet } from 'react-native';
-import { Colors, Radii, Shadows, Spacing, Typography } from '@/constants/theme';
+import { Text, StyleSheet } from 'react-native';
+import { Colors, Motion, Radii, Shadows, Spacing, Typography } from '@/constants/theme';
+import { AnimatedPressable } from '@/components/ui/AnimatedPressable';
 
 // Pastille de filtre — composant « Filtre » des maquettes V2 :
 // actif = noir / texte blanc, inactif = crème + contour noir fin.
@@ -13,16 +14,18 @@ export type FilterButtonProps = {
 
 export function FilterButton({ label, active, onPress, count }: FilterButtonProps) {
   return (
-    <TouchableOpacity
+    <AnimatedPressable
       style={[s.btn, active && s.btnActive]}
       onPress={onPress}
-      activeOpacity={0.75}
+      scaleTo={Motion.pressScaleSmall}
+      haptic="selection"
+      accessibilityRole="button"
       accessibilityState={{ selected: active }}
     >
       <Text style={[s.label, active && s.labelActive]}>
         {label}{count != null ? ` · ${count}` : ''}
       </Text>
-    </TouchableOpacity>
+    </AnimatedPressable>
   );
 }
 

@@ -10,6 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { Colors, Fonts, Radii, Shadows, Spacing, Typography } from '@/constants/theme';
+import { AnimatedPressable } from '@/components/ui/AnimatedPressable';
 import {
   FoundPlace, LINK_SOURCE_META, LinkPreview, PlaceSuggestion, WISH_VIBES, WishVibe,
 } from '@/types/wishDraft';
@@ -79,7 +80,7 @@ export function OptionRow({ icon, title, subtitle, onPress }: {
   icon: IoniconName; title: string; subtitle: string; onPress: () => void;
 }) {
   return (
-    <TouchableOpacity style={styles.option} onPress={onPress} activeOpacity={0.85} accessibilityRole="button">
+    <AnimatedPressable style={styles.option} onPress={onPress} accessibilityRole="button" accessibilityLabel={title}>
       <View style={[styles.iconCircle, styles.iconCream]}>
         <Ionicons name={icon} size={20} color={Colors.textInk} />
       </View>
@@ -88,7 +89,7 @@ export function OptionRow({ icon, title, subtitle, onPress }: {
         <Text style={styles.rowSub} numberOfLines={1}>{subtitle}</Text>
       </View>
       <Ionicons name="chevron-forward" size={18} color={Colors.textInk} />
-    </TouchableOpacity>
+    </AnimatedPressable>
   );
 }
 

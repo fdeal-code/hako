@@ -10,7 +10,6 @@
 
 import React from 'react';
 import {
-  TouchableOpacity,
   View,
   Text,
   StyleSheet,
@@ -19,7 +18,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { Colors, Radii, Shadows, Spacing } from '@/constants/theme';
+import { Colors, Motion, Radii, Shadows, Spacing, Typography } from '@/constants/theme';
+import { AnimatedPressable } from '@/components/ui/AnimatedPressable';
 
 /* ─── Tokens ──────────────────────────────────────────────────── */
 const SIZE = 64; // diamètre du bouton rond
@@ -61,7 +61,14 @@ export function NavButton({
   const spec = VARIANTS[variant];
 
   return (
-    <TouchableOpacity onPress={onPress} activeOpacity={0.75} style={style}>
+    <AnimatedPressable
+      onPress={onPress}
+      style={style}
+      scaleTo={Motion.pressScaleSmall}
+      haptic={variant === 'accent' ? 'light' : undefined}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+    >
       <View
         style={[
           styles.base,
@@ -72,7 +79,7 @@ export function NavButton({
         <Ionicons name={icon} size={iconSize} color={spec.content} />
         {isPill && <Text style={[styles.label, { color: spec.content }]}>{label}</Text>}
       </View>
-    </TouchableOpacity>
+    </AnimatedPressable>
   );
 }
 
@@ -95,7 +102,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
   },
   label: {
-    fontSize: 16,
+    ...Typography.button,
     fontWeight: '700',
     letterSpacing: 0.2,
   },

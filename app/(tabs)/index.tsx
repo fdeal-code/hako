@@ -9,7 +9,7 @@ import { useFocusEffect } from 'expo-router/react-navigation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { Easing, withTiming } from 'react-native-reanimated';
+import Animated, { Easing, FadeInDown, ReduceMotion, withTiming } from 'react-native-reanimated';
 
 import { ExpandedDashboard, CardLayout } from '@/components/home/ExpandedDashboard';
 import { FirstTripEmpty } from '@/components/home/FirstTripEmpty';
@@ -18,7 +18,7 @@ import { NextTripCard } from '@/components/home/NextTripCard';
 import { OtherTripCard } from '@/components/home/OtherTripCard';
 import { TripMatchEntryCard } from '@/components/match/TripMatchEntryCard';
 import { Avatar } from '@/components/ui/Avatar';
-import { Colors, Fonts, Radii, Shadows, Spacing, Typography } from '@/constants/theme';
+import { Colors, Fonts, Motion, Radii, Shadows, Spacing, Typography } from '@/constants/theme';
 import { Trip } from '@/constants/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { useHomeExpand } from '@/contexts/HomeExpandContext';
@@ -189,10 +189,14 @@ export default function HomeScreen() {
           <FirstTripEmpty onCreate={() => router.push('/trip/create')} />
         ) : (
           <>
-            {nextTrip && <NextTripCard trip={nextTrip} onExpand={layout => handleExpand(nextTrip, layout)} />}
+            {nextTrip && (
+              <Animated.View entering={FadeInDown.duration(Motion.enter).reduceMotion(ReduceMotion.System)}>
+                <NextTripCard trip={nextTrip} onExpand={layout => handleExpand(nextTrip, layout)} />
+              </Animated.View>
+            )}
 
             {others.length > 0 && (
-              <View style={styles.section}>
+              <Animated.View entering={FadeInDown.delay(Motion.stagger * 2).duration(Motion.enter).reduceMotion(ReduceMotion.System)} style={styles.section}>
                 <View style={styles.sectionRow}>
                   <Text style={styles.sectionLabel}>TES AUTRES VOYAGES</Text>
                   {others.length > OTHER_TRIPS_PREVIEW && (
@@ -209,10 +213,10 @@ export default function HomeScreen() {
                     {row.length === 1 && <View style={styles.otherSpacer} />}
                   </View>
                 ))}
-              </View>
+              </Animated.View>
             )}
             {pastTrips.length > 0 && (
-              <View style={styles.section}>
+              <Animated.View entering={FadeInDown.delay(Motion.stagger * 4).duration(Motion.enter).reduceMotion(ReduceMotion.System)} style={styles.section}>
                 <View style={styles.sectionRow}>
                   <Text style={styles.sectionLabel}>TES SOUVENIRS</Text>
                   {pastTrips.length > OTHER_TRIPS_PREVIEW && (
@@ -229,7 +233,7 @@ export default function HomeScreen() {
                     {row.length === 1 && <View style={styles.otherSpacer} />}
                   </View>
                 ))}
-              </View>
+              </Animated.View>
             )}
           </>
         )}

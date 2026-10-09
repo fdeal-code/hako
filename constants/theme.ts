@@ -213,3 +213,15 @@ export const Shadows = {
     elevation:     8,
   },
 };
+
+// ─────────────────────────────────────────────
+// MOUVEMENT — micro-animations (react-native-reanimated)
+// ─────────────────────────────────────────────
+export const Motion = {
+  pressScale:      0.96,  // boutons, cartes : léger enfoncement au toucher
+  pressScaleSmall: 0.9,   // petits éléments (pastilles, ronds)
+  spring:  { damping: 18, stiffness: 320, mass: 0.6 }, // retour élastique, sans rebond mou
+  enter:   320,  // durée d'apparition (ms)
+  stagger: 60,   // décalage entre éléments d'une liste (ms)
+  maxStaggerItems: 8, // au-delà, tout apparaît en même temps
+} as const;

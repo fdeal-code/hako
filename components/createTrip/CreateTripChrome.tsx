@@ -3,10 +3,12 @@
 // d'étape (Bricolage Grotesque), barre d'actions ⟵ / « Continuer → ».
 
 import { ComponentProps } from 'react';
-import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import Animated, { useAnimatedStyle, withTiming } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 
-import { Colors, Radii, Shadows, Spacing, Typography } from '@/constants/theme';
+import { Colors, Motion, Radii, Shadows, Spacing, Typography } from '@/constants/theme';
+import { AnimatedPressable } from '@/components/ui/AnimatedPressable';
 
 const CLOSE_SIZE = 56;
 const ACTION_SIZE = 64;
@@ -19,14 +21,15 @@ export function CreateTripHeader({ onClose, title = 'Nouveau voyage' }: { onClos
   return (
     <View style={styles.header}>
       <Text style={styles.headerTitle}>{title}</Text>
-      <TouchableOpacity
+      <AnimatedPressable
         style={styles.closeBtn}
         onPress={onClose}
-        activeOpacity={0.8}
+        scaleTo={Motion.pressScaleSmall}
+        accessibilityRole="button"
         accessibilityLabel="Fermer"
       >
         <Ionicons name="close" size={24} color={Colors.textPrimary} />
-      </TouchableOpacity>
+      </AnimatedPressable>
     </View>
   );
 }
@@ -35,9 +38,19 @@ export function CreateTripHeader({ onClose, title = 'Nouveau voyage' }: { onClos
 export function ProgressSegments({ total, current }: { total: number; current: number }) {
   return (
     <View style={styles.segments} accessibilityLabel={`Étape ${current} sur ${total}`}>
-      {Array.from({ length: total }, (_, i) => (
-        <View key={i} style={[styles.segment, i < current && styles.segmentDone]} />
-      ))}
+      {Array.from({ length: total }, (_, i) => <Segment key={i} done={i < current} />)}
+    </View>
+  );
+}
+
+// Segment qui se remplit de gauche à droite quand l'étape est atteinte
+function Segment({ done }: { done: boolean }) {
+  const fill = useAnimatedStyle(() => ({
+    transform: [{ scaleX: withTiming(done ? 1 : 0, { duration: Motion.enter }) }],
+  }));
+  return (
+    <View style={styles.segment}>
+      <Animated.View style={[styles.segmentFill, fill]} />
     </View>
   );
 }
@@ -80,15 +93,22 @@ export function StepActions({
 }: StepActionsProps) {
   return (
     <View style={[styles.actions, { paddingBottom: Math.max(bottomInset, Spacing.md) }]}>
-      <TouchableOpacity style={styles.backBtn} onPress={onBack} activeOpacity={0.8} accessibilityLabel="Retour">
+      <AnimatedPressable
+        style={styles.backBtn}
+        onPress={onBack}
+        scaleTo={Motion.pressScaleSmall}
+        accessibilityRole="button"
+        accessibilityLabel="Retour"
+      >
         <Ionicons name="caret-back" size={22} color={Colors.textPrimary} />
-      </TouchableOpacity>
-      <TouchableOpacity
+      </AnimatedPressable>
+      <AnimatedPressable
         style={[styles.cta, variant === 'accent' && styles.ctaAccent, (disabled || loading) && styles.ctaDisabled]}
         onPress={onNext}
         disabled={disabled || loading}
-        activeOpacity={0.85}
+        haptic="light"
         accessibilityRole="button"
+        accessibilityState={{ disabled: disabled || loading }}
       >
         {loading ? (
           <ActivityIndicator color={Colors.textInverted} />
@@ -98,7 +118,7 @@ export function StepActions({
             <Ionicons name={icon} size={22} color={Colors.textInverted} />
           </>
         )}
-      </TouchableOpacity>
+      </AnimatedPressable>
     </View>
   );
 }
@@ -166,9 +186,13 @@ const styles = StyleSheet.create({
     height: SEGMENT_HEIGHT,
     borderRadius: Radii.full,
     backgroundColor: Colors.line,
+    overflow: 'hidden',
   },
-  segmentDone: {
+  segmentFill: {
+    position: 'absolute', top: 0, bottom: 0, left: 0, right: 0,
+    borderRadius: Radii.full,
     backgroundColor: Colors.primary,
+    transformOrigin: 'left',
   },
   titleWrap: {
     gap: 6,

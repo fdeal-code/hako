@@ -2,10 +2,11 @@
 // Grandes tuiles (envie, document) + petites tuiles en grille 2 colonnes.
 
 import { ComponentProps } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { Colors, Radii, Shadows, Spacing, Typography } from '@/constants/theme';
+import { AnimatedPressable } from '@/components/ui/AnimatedPressable';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -21,10 +22,10 @@ export function HeroShortcut({ icon, title, subtitle, tone, onPress }: {
   icon: IoniconName; title: string; subtitle: string; tone: HeroTone; onPress: () => void;
 }) {
   return (
-    <TouchableOpacity
+    <AnimatedPressable
       style={[styles.hero, tone === 'accent' ? styles.heroAccent : styles.heroDark]}
       onPress={onPress}
-      activeOpacity={0.88}
+      haptic="light"
       accessibilityRole="button"
       accessibilityLabel={title}
     >
@@ -38,7 +39,7 @@ export function HeroShortcut({ icon, title, subtitle, tone, onPress }: {
           <Ionicons name="add" size={20} color={tone === 'accent' ? Colors.accent : Colors.primary} />
         </View>
       </View>
-    </TouchableOpacity>
+    </AnimatedPressable>
   );
 }
 
@@ -47,7 +48,7 @@ export function ShortcutTile({ icon, title, subtitle, onPress }: {
   icon: IoniconName; title: string; subtitle: string; onPress: () => void;
 }) {
   return (
-    <TouchableOpacity style={styles.tile} onPress={onPress} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel={title}>
+    <AnimatedPressable style={styles.tile} onPress={onPress} accessibilityRole="button" accessibilityLabel={title}>
       <View style={styles.iconCircle}>
         <Ionicons name={icon} size={20} color={Colors.textInk} />
       </View>
@@ -55,7 +56,7 @@ export function ShortcutTile({ icon, title, subtitle, onPress }: {
         <Text style={styles.tileTitle} numberOfLines={1}>{title}</Text>
         <Text style={styles.tileSub} numberOfLines={1}>{subtitle}</Text>
       </View>
-    </TouchableOpacity>
+    </AnimatedPressable>
   );
 }
 

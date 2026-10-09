@@ -6,15 +6,19 @@
 
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
+import Animated, { FadeInDown, ReduceMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Colors, Spacing, Typography } from '@/constants/theme';
+import { Colors, Motion, Spacing, Typography } from '@/constants/theme';
 import { CreateTripHeader } from '@/components/createTrip/CreateTripChrome';
 import { ClipboardBanner, OptionRow, SectionTitle } from '@/components/envies/NewWishParts';
 import { HeroShortcut, ShortcutTile, TileGrid } from '@/components/trip/AddShortcuts';
 import { useClipboardLink } from '@/hooks/useClipboardLink';
 import { useTripOverview } from '@/hooks/useTripOverview';
 import { localDayIso } from '@/utils/tripStops';
+
+// Apparition en cascade des blocs
+const enter = (i: number) => FadeInDown.delay(i * Motion.stagger * 2).duration(Motion.enter).reduceMotion(ReduceMotion.System);
 
 export default function AddToTripScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -51,7 +55,7 @@ export default function AddToTripScreen() {
         {clipboard && <ClipboardBanner url={clipboard.url} onPaste={() => { void pasteLink(); }} />}
 
         {/* Les deux ajouts les plus fréquents */}
-        <View style={styles.heroRow}>
+        <Animated.View entering={enter(0)} style={styles.heroRow}>
           <HeroShortcut
             icon="heart"
             title="Une envie"
@@ -66,9 +70,9 @@ export default function AddToTripScreen() {
             tone="dark"
             onPress={() => go({ pathname: '/trip/[id]/document/new', params: { id: tripId } })}
           />
-        </View>
+        </Animated.View>
 
-        <View style={styles.section}>
+        <Animated.View entering={enter(1)} style={styles.section}>
           <SectionTitle>ORGANISER</SectionTitle>
           <TileGrid>
             {[
@@ -116,9 +120,9 @@ export default function AddToTripScreen() {
               />,
             ]}
           </TileGrid>
-        </View>
+        </Animated.View>
 
-        <View style={styles.section}>
+        <Animated.View entering={enter(2)} style={styles.section}>
           <SectionTitle>LE GROUPE & LE TRAJET</SectionTitle>
           <OptionRow
             icon="person-add-outline"
@@ -140,7 +144,7 @@ export default function AddToTripScreen() {
               onPress={() => go({ pathname: '/trip/[id]/past-photos', params: { id: tripId } })}
             />
           )}
-        </View>
+        </Animated.View>
       </ScrollView>
 
     </View>

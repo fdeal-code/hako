@@ -10,12 +10,12 @@ import React from "react";
 import {
   Image,
   StyleSheet,
-  TouchableOpacity,
   View,
   ViewStyle,
 } from "react-native";
 
 import { Colors, Radii, Shadows, Spacing } from "@/constants/theme";
+import { AnimatedPressable } from '@/components/ui/AnimatedPressable';
 
 export type GlassCardVariant = 'light' | 'dark' | 'accentDashed' | 'accent';
 
@@ -68,9 +68,9 @@ export function GlassCard({
 
   if (onPress) {
     return (
-      <TouchableOpacity style={outerStyle} onPress={onPress} activeOpacity={0.85}>
+      <AnimatedPressable style={outerStyle} onPress={onPress} accessibilityRole="button">
         {content}
-      </TouchableOpacity>
+      </AnimatedPressable>
     );
   }
 

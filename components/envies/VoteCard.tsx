@@ -3,9 +3,11 @@
 // et les deux boutons Bof / Partant ! directement sur la carte.
 
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import Animated, { ZoomIn } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 
-import { Colors, Fonts, Radii, Shadows, Spacing, Typography } from '@/constants/theme';
+import { Colors, Motion, Fonts, Radii, Shadows, Spacing, Typography } from '@/constants/theme';
+import { AnimatedPressable } from '@/components/ui/AnimatedPressable';
 
 export type VoteValue = 'up' | 'down';
 
@@ -117,24 +119,33 @@ export function VoteCard({
         </View>
 
         <View style={styles.buttons}>
-          <TouchableOpacity
+          <AnimatedPressable
             style={[styles.btn, styles.btnGhost, myVote === 'down' && styles.btnGhostOn]}
             onPress={() => onVote('down')}
-            activeOpacity={0.85}
+            scaleTo={Motion.pressScaleSmall}
+            haptic="light"
+            accessibilityRole="button"
             accessibilityState={{ selected: myVote === 'down' }}
           >
-            <Ionicons name="thumbs-down-outline" size={18} color={myVote === 'down' ? Colors.textInverted : Colors.textPrimary} />
+            {/* Le pouce « saute » quand on vient de voter */}
+            <Animated.View key={`down-${myVote === 'down'}`} entering={myVote === 'down' ? ZoomIn.springify() : undefined}>
+              <Ionicons name="thumbs-down-outline" size={18} color={myVote === 'down' ? Colors.textInverted : Colors.textPrimary} />
+            </Animated.View>
             <Text style={[styles.btnText, myVote === 'down' && styles.btnTextOn]}>Bof</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
+          </AnimatedPressable>
+          <AnimatedPressable
             style={[styles.btn, styles.btnAccent, myVote === 'up' && styles.btnAccentOn]}
             onPress={() => onVote('up')}
-            activeOpacity={0.85}
+            scaleTo={Motion.pressScaleSmall}
+            haptic={myVote === 'up' ? 'light' : 'success'}
+            accessibilityRole="button"
             accessibilityState={{ selected: myVote === 'up' }}
           >
-            <Ionicons name={myVote === 'up' ? 'thumbs-up' : 'thumbs-up-outline'} size={18} color={Colors.textInverted} />
+            <Animated.View key={`up-${myVote === 'up'}`} entering={myVote === 'up' ? ZoomIn.springify() : undefined}>
+              <Ionicons name={myVote === 'up' ? 'thumbs-up' : 'thumbs-up-outline'} size={18} color={Colors.textInverted} />
+            </Animated.View>
             <Text style={[styles.btnText, styles.btnTextOn]}>Partant !</Text>
-          </TouchableOpacity>
+          </AnimatedPressable>
         </View>
       </View>
     </TouchableOpacity>
