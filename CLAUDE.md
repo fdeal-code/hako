@@ -168,7 +168,10 @@ Tables principales :
 
 ### Sécurité
 
-- ✅ RLS activé sur toutes les tables (avec triggers automatiques)
+- ✅ RLS activé sur toutes les tables depuis la migration `20261009160000_rls_core_tables` (avant, 11 tables étaient ouvertes) : on ne voit et ne modifie que les voyages dont on est membre. Exceptions : création d'un voyage, invitation reçue (aperçu + s'ajouter soi-même), l'organisateur ajoute des membres (Trip Match), profils lisibles par les connectés.
+- Helpers SQL (SECURITY DEFINER) : `is_trip_member`, `is_trip_owner`, `has_trip_invitation`, `is_wish_member`, `is_expense_member`.
+- Test : `npx supabase db query --linked -f supabase/tests/rls_core_test.sql` (21 scénarios, tout est annulé à la fin).
+- La clé publique (anon) ne lit plus rien sans connexion : les scripts de démo passent par `npx supabase db query --linked`.
 - `.env` non tracké par git → recréer avec :
   - `EXPO_PUBLIC_SUPABASE_URL` + `EXPO_PUBLIC_SUPABASE_ANON_KEY`
   - `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY` — ⚠️ pas `..._GOOGLE_PLACES_...` : c'est ce nom exact que lit le code (autocomplete + geocoding ; activer les APIs "Places" ET "Geocoding" sur la clé)

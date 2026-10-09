@@ -162,3 +162,7 @@ Le bucket `photos` n'avait aucune règle d'accès : tout envoi était refusé. L
 ## Envoi de fichiers (app)
 
 Tous les envois passent par `services/storageService.ts` (`uploadLocalFile`) : le fichier est lu en binaire avec expo-file-system. Le FormData « façon React Native » (`{ uri, name, type }`) n'est plus accepté par le fetch d'Expo (« Unsupported FormDataPart implementation »).
+
+## Migration `20261009160000_rls_core_tables.sql` — Sécurité des tables principales
+
+RLS activé sur `trips`, `trip_members`, `wishes`, `wish_votes`, `planning_items`, `documents`, `expenses`, `expense_splits`, `invitations`, `friendships`, `profiles` (elles étaient ouvertes à la clé publique). Règle générale : réservé aux membres du voyage. Ajoute un trigger qui crée le profil à l'inscription, et limite l'écriture des buckets `covers` / `avatars` au dossier de l'utilisateur. Test : `supabase/tests/rls_core_test.sql`.
