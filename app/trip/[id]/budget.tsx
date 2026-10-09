@@ -17,40 +17,51 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-import { Colors, Spacing, Radii, Shadows } from '@/constants/theme';
+import { Colors, Fonts, Spacing, Radii, Shadows, Typography } from '@/constants/theme';
 import { supabase } from '@/services/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { MemberAvatar } from '@/components/ui/MemberAvatar';
 import { NavButton } from '@/components/ui/NavButton';
 import { FilterButton } from '@/components/ui/FilterButton';
+import { useTripStops } from '@/hooks/useTripStops';
+import { TripStop } from '@/types/tripStops';
+import { stopForDay } from '@/utils/tripStops';
 
 /* ─── Types ──────────────────────────────────────────────────────── */
 interface DbSplit   { id: string; expense_id: string; user_id: string; amount: number; }
-interface DbExpense { id: string; trip_id: string; paid_by: string; title: string; amount: number; category: string; date: string | null; notes: string | null; expense_splits: DbSplit[]; }
+interface DbExpense { id: string; trip_id: string; paid_by: string; title: string; amount: number; category: string; date: string | null; notes: string | null; expense_splits: DbSplit[]; stop_id?: string | null; }
+
+/** Aujourd'hui "YYYY-MM-DD" en heure locale (toISOString renvoyait la veille après 22h/23h en France). */
+function localToday(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 interface Member    { id: string; nickname: string | null; avatar_url: string | null; }
-interface Debt      { from: string; to: string; amount: number; }
 
 /* ─── Constants ──────────────────────────────────────────────────── */
-const MEMBER_COLORS = ['#FF4B6E', '#5C6BC0', '#26A69A', '#FFA726', '#AB47BC', '#EC407A'];
 
 const FILTER_CATS = [
-  { key: 'all',           label: 'Toutes',      emoji: '' },
-  { key: 'food',          label: 'Resto',        emoji: '🍽️' },
+  { key: 'all',           label: 'Tout',         emoji: '' },
+  { key: 'food',          label: 'Repas',        emoji: '🍽️' },
   { key: 'transport',     label: 'Transport',    emoji: '✈️' },
-  { key: 'accommodation', label: 'Hébergement',  emoji: '🏨' },
-  { key: 'activity',      label: 'Activité',     emoji: '🎭' },
-  { key: 'grocery',       label: 'Courses',      emoji: '🛒' },
+  { key: 'accommodation', label: 'Logement',     emoji: '🏨' },
+  { key: 'activity',      label: 'Activités',    emoji: '🎭' },
+  // « Courses » = 'shopping' : valeur acceptée par la contrainte expenses_category_check
+  { key: 'shopping',      label: 'Courses',      emoji: '🛒' },
   { key: 'other',         label: 'Autre',        emoji: '📦' },
 ];
 
 const FORM_CATS = FILTER_CATS.filter(c => c.key !== 'all');
 
-const CAT_COLORS: Record<string, string> = {
-  transport: '#5C6BC0', accommodation: '#26A69A', food: '#FFA726',
-  activity:  '#FF4B6E', grocery:       '#22C55E', other: '#ADADAD',
-};
 
 const STEP_LABELS = ["C'est quoi ?", 'Qui a payé ?', 'Pour qui ?'];
+
+/* Icône Ionicons par catégorie (cartes « Dernières dépenses » des maquettes V2) */
+const CAT_ICON: Record<string, React.ComponentProps<typeof Ionicons>['name']> = {
+  food: 'restaurant-outline', transport: 'airplane-outline', accommodation: 'bed-outline',
+  activity: 'ticket-outline', shopping: 'cart-outline', other: 'cube-outline',
+};
+const BALANCE_EPSILON = 0.01;
 
 /* ─── Helpers ────────────────────────────────────────────────────── */
 function fmt(n: number) {
@@ -63,29 +74,6 @@ function fmtShort(n: number) {
 function memberName(members: Member[], id: string, currentUserId: string) {
   if (id === currentUserId) return 'Toi';
   return members.find(m => m.id === id)?.nickname ?? 'Membre';
-}
-function calculateDebts(expenses: DbExpense[]): Debt[] {
-  const balances: Record<string, number> = {};
-  for (const exp of expenses) {
-    balances[exp.paid_by] = (balances[exp.paid_by] ?? 0) + exp.amount;
-    for (const split of exp.expense_splits) {
-      balances[split.user_id] = (balances[split.user_id] ?? 0) - split.amount;
-    }
-  }
-  const debtors   = Object.entries(balances).filter(([, v]) => v < -0.01).map(([id, v]) => ({ id, amount: Math.abs(v) })).sort((a, b) => b.amount - a.amount);
-  const creditors = Object.entries(balances).filter(([, v]) => v >  0.01).map(([id, v]) => ({ id, amount: v })).sort((a, b) => b.amount - a.amount);
-  const debts: Debt[] = [];
-  let i = 0, j = 0;
-  while (i < debtors.length && j < creditors.length) {
-    const d = debtors[i], c = creditors[j];
-    if (!d || !c) break;
-    const amount = Math.min(d.amount, c.amount);
-    if (amount > 0.01) debts.push({ from: d.id, to: c.id, amount });
-    d.amount -= amount; c.amount -= amount;
-    if (d.amount < 0.01) i++;
-    if (c.amount < 0.01) j++;
-  }
-  return debts;
 }
 
 /* ─── ExpenseItem (swipe to delete) ─────────────────────────────── */
@@ -136,8 +124,6 @@ function ExpenseItem({
     </TouchableOpacity>
   );
 
-  const catColor   = CAT_COLORS[exp.category] ?? '#ADADAD';
-  const catEmoji   = FILTER_CATS.find(c => c.key === exp.category)?.emoji ?? '💰';
   const payer      = memberName(members, exp.paid_by, currentUserId);
   const splitCount = exp.expense_splits.length || 1;
   const perPerson  = exp.amount / splitCount;
@@ -151,18 +137,15 @@ function ExpenseItem({
         rightThreshold={40}
       >
         <View style={s.expenseCard}>
-          <View style={[s.expIconBox, { backgroundColor: catColor + '18' }]}>
-            <Text style={s.expIconEmoji}>{catEmoji}</Text>
-          </View>
-          <View style={{ flex: 1 }}>
+          <View style={s.expTitleRow}>
+            <Ionicons name={CAT_ICON[exp.category] ?? CAT_ICON.other} size={16} color={Colors.textInk} />
             <Text style={s.expTitle} numberOfLines={1}>{exp.title}</Text>
-            <Text style={s.expMeta}>
-              Payé par {payer}{exp.date ? ` · ${exp.date.slice(8, 10)}/${exp.date.slice(5, 7)}` : ''}
-            </Text>
           </View>
-          <View style={{ alignItems: 'flex-end' }}>
-            <Text style={s.expAmount}>{fmt(exp.amount)}</Text>
-            <Text style={s.expPer}>{fmt(perPerson)}/pers.</Text>
+          <View style={s.expMetaRow}>
+            <Text style={s.expMeta}>{fmtShort(exp.amount)}</Text>
+            <Text style={s.expMeta}>Payé par {payer}</Text>
+            {splitCount > 1 && <Text style={s.expMetaMuted}>{fmtShort(perPerson)}/pers.</Text>}
+            {exp.date && <Text style={s.expMetaMuted}>{exp.date.slice(8, 10)}/{exp.date.slice(5, 7)}</Text>}
           </View>
         </View>
       </Swipeable>
@@ -172,7 +155,7 @@ function ExpenseItem({
 
 /* ─── Main Component ─────────────────────────────────────────────── */
 export default function BudgetScreen() {
-  const { id: tripId } = useLocalSearchParams<{ id: string }>();
+  const { id: tripId, add } = useLocalSearchParams<{ id: string; add?: string }>(); // add=1 : raccourci « Ajouter »
   const insets         = useSafeAreaInsets();
   const { session }    = useAuth();
   const currentUserId  = session?.user?.id ?? '';
@@ -181,7 +164,8 @@ export default function BudgetScreen() {
   const [members,  setMembers]  = useState<Member[]>([]);
   const [loading,  setLoading]  = useState(true);
   const [filter,   setFilter]   = useState('all');
-  const [showAdd,  setShowAdd]  = useState(false);
+  const [showAdd,  setShowAdd]  = useState(add === '1');
+  const { stops } = useTripStops(tripId);
 
   const fetchData = useCallback(async () => {
     if (!tripId) return;
@@ -205,13 +189,20 @@ export default function BudgetScreen() {
   }, []);
 
   const total    = expenses.reduce((s, e) => s + e.amount, 0);
-  const debts    = calculateDebts(expenses);
   const filtered = filter === 'all' ? expenses : expenses.filter(e => e.category === filter);
-  const memberSpend = members.map(m => ({
-    member: m,
-    paid: expenses.filter(e => e.paid_by === m.id).reduce((acc, e) => acc + e.amount, 0),
-  })).sort((a, b) => b.paid - a.paid);
-  const maxSpend = Math.max(...memberSpend.map(m => m.paid), 1);
+  /* Le total suit le filtre : « REPAS · 416 € » quand on filtre sur Repas */
+  const shownTotal = filtered.reduce((acc, e) => acc + e.amount, 0);
+  const perPerson = members.length > 0 ? shownTotal / members.length : 0;
+  const filterLabel = FILTER_CATS.find(c => c.key === filter)?.label ?? '';
+  const myBalance = (() => {
+    let v = 0;
+    for (const exp of expenses) {
+      if (exp.paid_by === currentUserId) v += exp.amount;
+      for (const split of exp.expense_splits) if (split.user_id === currentUserId) v -= split.amount;
+    }
+    return v;
+  })();
+  const openBalance = () => router.push({ pathname: '/trip/[id]/balance', params: { id: tripId ?? '' } });
 
   return (
     <View style={[s.root, { paddingTop: insets.top }]}>
@@ -219,12 +210,14 @@ export default function BudgetScreen() {
       {/* ── Header ── */}
       <View style={s.header}>
         <Text style={s.headerTitle}>Budget</Text>
-        {!loading && (
-          <Text style={s.headerSub}>
-            {expenses.length} dépense{expenses.length !== 1 ? 's' : ''} · {members.length} participant{members.length !== 1 ? 's' : ''}
-          </Text>
-        )}
       </View>
+
+      {/* ── Filtres catégories (maquette : sous le titre) ── */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.filterStrip} contentContainerStyle={s.filterRow}>
+        {FILTER_CATS.map(cat => (
+          <FilterButton key={cat.key} label={cat.label} active={filter === cat.key} onPress={() => setFilter(cat.key)} />
+        ))}
+      </ScrollView>
 
       {loading ? (
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
@@ -234,106 +227,68 @@ export default function BudgetScreen() {
         <ScrollView
           style={{ flex: 1 }}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={[s.scroll, { paddingBottom: insets.bottom + 100 }]}
+          contentContainerStyle={[s.scroll, { paddingBottom: insets.bottom + 110 }]}
         >
-          {/* ── Total ── */}
+          {/* ── Total dépensé ── */}
           <View style={s.totalCard}>
-            <Text style={s.totalLabel}>Total dépensé</Text>
-            <Text style={s.totalAmount}>{fmt(total)}</Text>
+            <Text style={s.totalLabel}>{filter === 'all' ? 'TOTAL DÉPENSÉ' : `${filterLabel.toUpperCase()} · ${Math.round((shownTotal / Math.max(total, 1)) * 100)} % DU TOTAL`}</Text>
+            <Text style={s.totalAmount} adjustsFontSizeToFit numberOfLines={1}>{fmtShort(shownTotal)}</Text>
+            <View style={s.totalPerRow}>
+              <Text style={s.totalPerAmount}>{fmtShort(perPerson)}</Text>
+              <Text style={s.totalPerLabel}>par personne</Text>
+            </View>
           </View>
 
-          {/* ── Dettes ── */}
-          {debts.length > 0 && (
-            <View style={s.section}>
-              <Text style={s.sectionTitle}>Qui doit combien à qui</Text>
-              {debts.map((d, i) => (
-                <View key={i} style={s.debtRow}>
-                  <MemberAvatar member={members.find(m => m.id === d.from) ?? {}} size={32} index={0} />
-                  <Text style={s.debtText}>
-                    <Text style={s.debtName}>{memberName(members, d.from, currentUserId)}</Text>
-                    {' doit '}
-                    <Text style={s.debtAmount}>{fmt(d.amount)}</Text>
-                    {' à '}
-                    <Text style={s.debtName}>{memberName(members, d.to, currentUserId)}</Text>
-                  </Text>
-                  <MemberAvatar member={members.find(m => m.id === d.to) ?? {}} size={32} index={1} />
-                </View>
-              ))}
-            </View>
+          {/* ── Équilibre (page dédiée : qui doit quoi, par ville, par catégorie) ── */}
+          {total > 0 && (
+            <TouchableOpacity style={s.balanceLink} onPress={openBalance} activeOpacity={0.85} accessibilityRole="button">
+              <View style={s.balanceLinkIcon}>
+                <Ionicons name="pie-chart-outline" size={20} color={Colors.white} />
+              </View>
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={s.balanceName}>Équilibre</Text>
+                <Text style={[s.balanceLabel, myBalance < -BALANCE_EPSILON && s.balanceNegative]}>
+                  {Math.abs(myBalance) < BALANCE_EPSILON ? 'Tu es à jour'
+                    : myBalance > 0 ? `On te doit ${fmtShort(myBalance)}` : `Tu dois ${fmtShort(-myBalance)}`}
+                  {' · qui doit quoi, par ville, par catégorie'}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={Colors.textInk} />
+            </TouchableOpacity>
           )}
 
-          {/* ── Par participant ── */}
-          {memberSpend.length > 0 && total > 0 && (
-            <View style={s.section}>
-              <Text style={s.sectionTitle}>Par participant</Text>
-              {memberSpend.map((ms, i) => (
-                <View key={ms.member.id} style={s.memberSpendRow}>
-                  <MemberAvatar member={ms.member} size={32} index={i} />
-                  <View style={{ flex: 1 }}>
-                    <View style={s.memberSpendHeader}>
-                      <Text style={s.memberSpendName}>
-                        {ms.member.id === currentUserId ? 'Toi' : (ms.member.nickname ?? 'Membre')}
-                      </Text>
-                      <Text style={s.memberSpendAmount}>{fmtShort(ms.paid)}</Text>
-                    </View>
-                    <View style={s.barBg}>
-                      <View style={[s.barFill, {
-                        width: `${(ms.paid / maxSpend) * 100}%` as any,
-                        backgroundColor: MEMBER_COLORS[i % MEMBER_COLORS.length],
-                      }]} />
-                    </View>
-                  </View>
-                </View>
-              ))}
-            </View>
-          )}
-
-          {/* ── Filtre catégories ── */}
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={s.filterRow}
-          >
-            {FILTER_CATS.map(cat => (
-              <FilterButton
-                key={cat.key}
-                label={cat.key !== 'all' ? `${cat.emoji} ${cat.label}` : cat.label}
-                active={filter === cat.key}
-                onPress={() => setFilter(cat.key)}
-              />
-            ))}
-          </ScrollView>
-
-          {/* ── Liste dépenses ── */}
-          {filtered.length === 0 ? (
-            <View style={s.empty}>
-              <Text style={s.emptyIcon}>💸</Text>
-              <Text style={s.emptyText}>Aucune dépense pour l'instant.</Text>
-              <TouchableOpacity style={s.emptyBtn} onPress={() => setShowAdd(true)} activeOpacity={0.8}>
-                <Text style={s.emptyBtnText}>Ajouter une dépense</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <View style={s.expenseList}>
-              {filtered.map(exp => (
-                <ExpenseItem
-                  key={exp.id}
-                  exp={exp}
-                  members={members}
-                  currentUserId={currentUserId}
-                  onDeleted={handleExpenseDeleted}
-                />
-              ))}
-            </View>
-          )}
+          {/* ── Dernières dépenses ── */}
+          <View style={s.block}>
+            <Text style={s.sectionTitle}>DERNIÈRES DÉPENSES</Text>
+            {filtered.length === 0 ? (
+              <View style={s.empty}>
+                <Text style={s.emptyText}>Aucune dépense pour l’instant.</Text>
+                <TouchableOpacity style={s.emptyBtn} onPress={() => setShowAdd(true)} activeOpacity={0.8}>
+                  <Text style={s.emptyBtnText}>Ajouter une dépense</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={s.expenseList}>
+                {filtered.map(exp => (
+                  <ExpenseItem
+                    key={exp.id}
+                    exp={exp}
+                    members={members}
+                    currentUserId={currentUserId}
+                    onDeleted={handleExpenseDeleted}
+                  />
+                ))}
+              </View>
+            )}
+          </View>
         </ScrollView>
       )}
 
       {/* ── Bottom nav ── */}
       <View style={[s.bottomNav, { bottom: Math.max(insets.bottom, 10) + 16 }]} pointerEvents="box-none">
         <NavButton icon="arrow-back-outline" onPress={() => router.back()} />
-        <NavButton icon="add" iconSize={28} onPress={() => setShowAdd(true)} />
-        <NavButton icon="options-outline" onPress={() => {}} />
+        <NavButton icon="add" iconSize={28} variant="accent" onPress={() => setShowAdd(true)} />
+        <NavButton icon="pie-chart-outline" onPress={openBalance} />
       </View>
 
       <AddExpenseModal
@@ -343,6 +298,7 @@ export default function BudgetScreen() {
         members={members}
         currentUserId={currentUserId}
         onSaved={() => { setShowAdd(false); fetchData(); }}
+        stops={stops}
       />
     </View>
   );
@@ -350,7 +306,7 @@ export default function BudgetScreen() {
 
 /* ─── AddExpenseModal — formulaire 3 étapes ─────────────────────── */
 function AddExpenseModal({
-  visible, onClose, tripId, members, currentUserId, onSaved,
+  visible, onClose, tripId, members, currentUserId, onSaved, stops,
 }: {
   visible: boolean;
   onClose: () => void;
@@ -358,6 +314,8 @@ function AddExpenseModal({
   members: Member[];
   currentUserId: string;
   onSaved: () => void;
+  /** Étapes : la dépense est rattachée à la ville du jour (multi-étapes). */
+  stops: readonly TripStop[];
 }) {
   const insets    = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -416,8 +374,9 @@ function AddExpenseModal({
           title:      title.trim(),
           amount:     n,
           category,
-          date:       new Date().toISOString().split('T')[0],
+          date:       localToday(),
           split_type: 'equal',
+          ...(stopForDay(stops, localToday()) ? { stop_id: stopForDay(stops, localToday())?.id } : {}),
         })
         .select('id')
         .single();
@@ -487,7 +446,7 @@ function AddExpenseModal({
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={ms.stepPad}
               >
-                <Text style={ms.stepTitle}>C'est quoi cette{'\n'}dépense ?</Text>
+                <Text style={ms.stepTitle}>C’est quoi cette{'\n'}dépense ?</Text>
 
                 <Text style={ms.label}>Titre</Text>
                 <TextInput
@@ -645,48 +604,70 @@ function AddExpenseModal({
 /* ─── Main Styles ─────────────────────────────────────────────────── */
 const s = StyleSheet.create({
   root:        { flex: 1, backgroundColor: Colors.background },
-  header:      { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 },
-  headerTitle: { fontSize: 32, fontWeight: '800', color: Colors.textPrimary, letterSpacing: -1 },
-  headerSub:   { fontSize: 13, color: Colors.textSecondary, fontWeight: '500', marginTop: 2 },
+  header:      { paddingHorizontal: Spacing.md2, paddingTop: Spacing.md, paddingBottom: Spacing.sm },
+  headerTitle: { ...Typography.displayTitle, color: Colors.textPrimary },
   bottomNav:   { position: 'absolute', left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', gap: 14, zIndex: 10 },
 
-  scroll:    { paddingHorizontal: Spacing.md, paddingTop: 8, gap: Spacing.md },
-  filterRow: { gap: 8, paddingVertical: 8, alignItems: 'center' as const },
+  filterStrip: { flexGrow: 0, maxHeight: 64 },
+  filterRow:   { gap: Spacing.sm, paddingHorizontal: Spacing.md2, paddingVertical: Spacing.sm2, alignItems: 'center' as const },
+  scroll:      { paddingHorizontal: Spacing.md2, paddingTop: Spacing.sm2, gap: Spacing.sm2 },
 
-  totalCard:   { backgroundColor: Colors.primary, borderRadius: Radii.lg, padding: Spacing.lg, alignItems: 'center', ...Shadows.md },
-  totalLabel:  { fontSize: 12, color: 'rgba(255,255,255,0.65)', fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.6 },
-  totalAmount: { fontSize: 44, fontWeight: '900', color: '#fff', letterSpacing: -1, marginTop: 4 },
+  totalCard: {
+    height: 150, borderRadius: Radii.pill, padding: Spacing.md2,
+    backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'space-between', ...Shadows.md,
+  },
+  totalLabel:     { alignSelf: 'flex-start', ...Typography.displayLabel, color: Colors.surfaceAlt },
+  totalAmount:    { fontFamily: Fonts.display, fontSize: 48, color: Colors.white },
+  totalPerRow:    { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+  totalPerAmount: { ...Typography.displayLabel, color: Colors.accent },
+  totalPerLabel:  { ...Typography.body, color: Colors.offWhite },
 
-  section:      { backgroundColor: Colors.surface, borderRadius: Radii.lg, padding: Spacing.md, borderWidth: 1, borderColor: Colors.border, ...Shadows.sm },
-  sectionTitle: { fontSize: 11, fontWeight: '700', color: Colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.7, marginBottom: Spacing.sm },
+  block:        { gap: Spacing.sm2 },
+  sectionTitle: { ...Typography.displayLabel, color: Colors.textPrimary, paddingTop: Spacing.sm },
 
-  debtRow:    { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingVertical: 6 },
-  debtText:   { flex: 1, fontSize: 14, color: Colors.textSecondary },
-  debtName:   { fontWeight: '700', color: Colors.textPrimary },
-  debtAmount: { fontWeight: '700', color: '#EF4444' },
+  balanceLink: {
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.sm2,
+    padding: Spacing.md, borderRadius: Radii.lg, backgroundColor: Colors.surface, ...Shadows.card,
+  },
+  balanceLinkIcon: {
+    width: 40, height: 40, borderRadius: Radii.full, backgroundColor: Colors.accent,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  balanceName:     { ...Typography.cardTitle, color: Colors.textInk },
+  balanceLabel:    { ...Typography.bodySmall, color: Colors.textMuted },
+  balanceAmount:   { ...Typography.cardTitle, color: Colors.textInk },
+  balanceNegative: { color: Colors.accent },
 
+  cityCard: { padding: Spacing.md, borderRadius: Radii.lg, backgroundColor: Colors.surface, gap: Spacing.sm, ...Shadows.card },
   memberSpendRow:    { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingVertical: 5 },
   memberSpendHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
-  memberSpendName:   { fontSize: 14, fontWeight: '600', color: Colors.textPrimary },
-  memberSpendAmount: { fontSize: 14, fontWeight: '700', color: Colors.textPrimary },
-  barBg:  { height: 6, backgroundColor: Colors.border, borderRadius: 3, overflow: 'hidden' },
+  memberSpendName:   { fontSize: 14, fontWeight: '600', color: Colors.textInk },
+  memberSpendAmount: { fontSize: 14, fontWeight: '600', color: Colors.textInk },
+  barBg:  { height: 6, backgroundColor: Colors.line, borderRadius: 3, overflow: 'hidden' },
   barFill: { height: 6, borderRadius: 3 },
+  stopBadge:     { width: 32, height: 32, borderRadius: Radii.full, alignItems: 'center', justifyContent: 'center' },
+  stopBadgeText: { fontSize: 13, fontWeight: '700', color: Colors.textInverted },
 
-  expenseList:  { gap: Spacing.sm },
-  expenseCard:  { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, backgroundColor: Colors.surface, borderRadius: Radii.lg, padding: Spacing.md, borderWidth: 1, borderColor: Colors.border },
-  expIconBox:   { width: 44, height: 44, borderRadius: Radii.md, alignItems: 'center', justifyContent: 'center' },
-  expIconEmoji: { fontSize: 22 },
-  expTitle:     { fontSize: 15, fontWeight: '700', color: Colors.textPrimary },
-  expMeta:      { fontSize: 12, color: Colors.textSecondary, marginTop: 2 },
-  expAmount:    { fontSize: 15, fontWeight: '700', color: Colors.textPrimary },
-  expPer:       { fontSize: 11, color: Colors.textTertiary, marginTop: 1 },
-  deleteAction: { backgroundColor: '#ff3b30', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20, borderTopRightRadius: Radii.lg, borderBottomRightRadius: Radii.lg },
+  expenseList: { gap: Spacing.sm2 },
+  expenseCard: {
+    minHeight: 82, justifyContent: 'center', gap: Spacing.sm2,
+    paddingVertical: Spacing.md, paddingHorizontal: Spacing.xl,
+    borderRadius: Radii.lg, backgroundColor: Colors.surface, ...Shadows.card,
+  },
+  expTitleRow:  { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
+  expTitle:     { flex: 1, ...Typography.cardTitle, color: Colors.textInk, textTransform: 'uppercase' },
+  expMetaRow:   { flexDirection: 'row', flexWrap: 'wrap', columnGap: Spacing.md, rowGap: 2 },
+  expMeta:      { ...Typography.bodySmall, color: Colors.textInk },
+  expMetaMuted: { ...Typography.bodySmall, color: Colors.textMuted },
+  deleteAction: {
+    backgroundColor: Colors.negative, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20,
+    borderTopRightRadius: Radii.lg, borderBottomRightRadius: Radii.lg,
+  },
 
-  empty:        { alignItems: 'center', paddingVertical: Spacing.xxl, gap: Spacing.sm },
-  emptyIcon:    { fontSize: 48 },
-  emptyText:    { fontSize: 15, color: Colors.textSecondary },
+  empty:        { alignItems: 'center', paddingVertical: Spacing.xl, gap: Spacing.sm },
+  emptyText:    { ...Typography.body, color: Colors.textMuted },
   emptyBtn:     { marginTop: Spacing.sm, backgroundColor: Colors.primary, paddingHorizontal: Spacing.xl, paddingVertical: Spacing.md, borderRadius: Radii.full },
-  emptyBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+  emptyBtnText: { color: Colors.white, fontWeight: '700', fontSize: 15 },
 });
 
 /* ─── Modal Styles ───────────────────────────────────────────────── */

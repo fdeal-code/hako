@@ -1,10 +1,16 @@
+import { takePendingInvite } from '@/utils/pendingInvite';
 import React, { useEffect } from 'react';
 import { View, ActivityIndicator } from 'react-native';
-import { DefaultTheme, ThemeProvider } from '@react-navigation/native';
+import { DefaultTheme, ThemeProvider } from 'expo-router/react-navigation';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import {
+  useFonts,
+  BricolageGrotesque_600SemiBold,
+  BricolageGrotesque_700Bold,
+} from '@expo-google-fonts/bricolage-grotesque';
 
 import { Colors } from '@/constants/theme';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
@@ -31,13 +37,17 @@ function AuthGate() {
     if (loading) return;
 
     const inAuthGroup = segments[0] === '(auth)';
+    // Lien d'invitation : l'aperçu du voyage est visible sans compte
+    const inJoinFlow  = segments[0] === 'join';
 
-    if (!session && !inAuthGroup) {
+    if (!session && !inAuthGroup && !inJoinFlow) {
       // Pas connecté → login
       router.replace('/(auth)/login');
     } else if (session && inAuthGroup) {
-      // Connecté mais sur la page login → accueil
-      router.replace('/(tabs)');
+      // Connecté : retour à l'invitation en attente, sinon accueil
+      void takePendingInvite().then(token => {
+        router.replace(token ? `/join/${token}` : '/(tabs)');
+      });
     }
   }, [session, loading, segments]);
 
@@ -64,6 +74,30 @@ function AuthGate() {
       <Stack.Screen name="trip/[id]/documents" options={{ headerShown: false }} />
       <Stack.Screen name="trip/[id]/budget"          options={{ headerShown: false }} />
       <Stack.Screen name="trip/[id]/planning-detail" options={{ headerShown: false }} />
+      <Stack.Screen name="trip/[id]/help"            options={{ headerShown: false }} />
+      <Stack.Screen name="trip/[id]/itinerary"       options={{ headerShown: false }} />
+      <Stack.Screen name="trip/[id]/document/new"     options={{ headerShown: false }} />
+      <Stack.Screen name="trip/[id]/wish/new"         options={{ headerShown: false }} />
+      <Stack.Screen name="trip/[id]/recap"            options={{ headerShown: false }} />
+      <Stack.Screen name="trip/[id]/plan-add"         options={{ headerShown: false }} />
+      <Stack.Screen name="trip/[id]/past-photos"      options={{ headerShown: false }} />
+      <Stack.Screen name="trip/[id]/past-avis"        options={{ headerShown: false }} />
+      <Stack.Screen name="trip/[id]/print-album"      options={{ headerShown: false }} />
+      <Stack.Screen name="trip/[id]/balance"          options={{ headerShown: false }} />
+      <Stack.Screen name="trip/[id]/settings"         options={{ headerShown: false }} />
+      <Stack.Screen name="trip/[id]/add"              options={{ headerShown: false, presentation: 'fullScreenModal' }} />
+      <Stack.Screen name="trip/[id]/document/[docId]" options={{ headerShown: false }} />
+      <Stack.Screen name="join/[token]"              options={{ headerShown: false }} />
+      <Stack.Screen name="settings/notifications"    options={{ headerShown: false }} />
+      <Stack.Screen name="notifications"             options={{ headerShown: false }} />
+      <Stack.Screen
+        name="match/create"
+        options={{ presentation: 'modal', headerShown: false }}
+      />
+      <Stack.Screen name="match/[id]/questionnaire"  options={{ headerShown: false }} />
+      <Stack.Screen name="match/[id]/waiting"        options={{ headerShown: false }} />
+      <Stack.Screen name="match/[id]/reveal"         options={{ headerShown: false }} />
+      <Stack.Screen name="match/[id]/proposals"      options={{ headerShown: false }} />
     </Stack>
   );
 }
@@ -74,12 +108,27 @@ export const unstable_settings = {
 };
 
 export default function RootLayout() {
+  // Titres des maquettes V2 (Fonts.display / Fonts.displayBold dans constants/theme)
+  const [fontsLoaded, fontError] = useFonts({
+    BricolageGrotesque_600SemiBold,
+    BricolageGrotesque_700Bold,
+  });
+
+  // En cas d'échec de chargement, on continue avec la police système
+  if (!fontsLoaded && !fontError) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.background }}>
+        <ActivityIndicator size="large" color={Colors.primary} />
+      </View>
+    );
+  }
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AuthProvider>
         <ThemeProvider value={hakoTheme}>
           <AuthGate />
-          <StatusBar style="dark" backgroundColor={Colors.background} />
+          <StatusBar style="dark" />
         </ThemeProvider>
       </AuthProvider>
     </GestureHandlerRootView>

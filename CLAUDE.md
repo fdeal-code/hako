@@ -113,6 +113,27 @@ Développer **step by step**, feature par feature, jamais tout d'un coup.
 - Création de trip en 5 étapes : Google Places autocomplete → nom (avec suggestions) → date picker natif → grille Unsplash → invitation d'amis
 - Dashboard du trip avec hero cover, countdown, membres, raccourcis et actions rapides
 
+### ✅ Phase 3b — Multi-étapes, aide & votes (code prêt, migrations à appliquer)
+
+> Migrations à appliquer dans l'ordre : voir `supabase/README.md` (4 fichiers `20261008*`).
+
+- **Voyages multi-étapes** : table `trip_stops` (`types/tripStops.ts`, `services/tripStopService.ts`, `hooks/useTripStops.ts`, calculs purs dans `utils/tripStops.ts`)
+- **Création en 6 étapes** : Destinations (1+ villes) → Dates → *Une nuit, un lieu* (si plusieurs villes) → Qui embarque → Nom & couverture → Style & budget (`components/createTrip/`)
+- **Itinéraire** : `app/trip/[id]/itinerary.tsx` (réordonner, ajouter, retirer une ville, répartir les nuits)
+- **Cartes** : étapes + tracé sur les DEUX cartes (`ExpandedMapView` et `map.tsx`) via `components/map/StopMarkers.tsx`
+- **Planning** : points de couleur par ville, bandeau « où est-on » / jour de transfert, `stop_id` sur les items
+- **Dashboard** : carte coupée en deux + Vos envies (compteur « à voter »), tuile **On t'aide** + Budget
+- **On t'aide** : `app/trip/[id]/help.tsx`, liens partenaires pré-filtrés (`utils/affiliateLinks.ts`)
+- **Envies** : vote à la **majorité** (`utils/wishVotes.ts`), relance WhatsApp, rangement auto dans la ville la plus proche + filtre par ville
+- **Documents** : checklist « Prêt pour le départ ? » partagée (`trip_checklist`) avec eSIM / assurance partenaires
+- **Notifications** : activité des voyages (triggers SQL) dans la sheet de la cloche (`components/notifications/TripActivityList.tsx`)
+- **Accueil** : « Prochain voyage · J-x » + « n envies à voter » sur la carte voyage
+- **Lien d'invitation** : `app/join/[token].tsx` (aperçu sans compte → connexion → rejoindre), bouton WhatsApp dans `InviteSheet`
+- **Budget** : répartition par ville, `stop_id` sur les nouvelles dépenses
+- **Événements sur place** : Edge Function `fetch-trip-events` (Ticketmaster, cache 24 h dans `trip_events`) → onglet Activités de « On t'aide », ajout aux envies en 1 tap
+- **Réglages notifications** : `app/settings/notifications.tsx` (`notification_prefs`, triggers qui respectent « off »)
+- **Tests** : `npm run test:utils` (fonctions pures de `utils/`, lanceur intégré de Node ≥ 22, sans dépendance)
+
 ### ➡️ Phase 3 — En cours
 
 - **Module Wishes** : les 3 types de cartes (Lieu, Inspi, Orga), votes +1/-1, mood tags, filtres
@@ -148,13 +169,23 @@ Tables principales :
 ### Sécurité
 
 - ✅ RLS activé sur toutes les tables (avec triggers automatiques)
-- `.env` non tracké par git → recréer avec `EXPO_PUBLIC_SUPABASE_URL` + `EXPO_PUBLIC_SUPABASE_ANON_KEY`
+- `.env` non tracké par git → recréer avec :
+  - `EXPO_PUBLIC_SUPABASE_URL` + `EXPO_PUBLIC_SUPABASE_ANON_KEY`
+  - `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY` — ⚠️ pas `..._GOOGLE_PLACES_...` : c'est ce nom exact que lit le code (autocomplete + geocoding ; activer les APIs "Places" ET "Geocoding" sur la clé)
+  - `EXPO_PUBLIC_UNSPLASH_ACCESS_KEY` (photos destinations/covers)
+  - Optionnels — identifiants affiliés (sans eux les liens marchent, sans commission) :
+    `EXPO_PUBLIC_BOOKING_AID`, `EXPO_PUBLIC_HOSTELWORLD_AFFILIATE`, `EXPO_PUBLIC_GETYOURGUIDE_PARTNER_ID`,
+    `EXPO_PUBLIC_VIATOR_PID`, `EXPO_PUBLIC_AIRALO_REF`, `EXPO_PUBLIC_HEYMONDO_REF`
 
 ## ⚠️ PIÈGES CRITIQUES
 
-### 1. Bug Map — mauvais fichier
+### 1. Carte — un seul écran
 
-La carte du Dashboard ouvre `ExpandedMapView` (`components/map/ExpandedMapView.tsx`), **PAS** `app/trip/[id]/map.tsx`. TOUJOURS vérifier le chemin exact avant d'éditer.
+Depuis octobre 2026, toutes les cartes ouvrent **`app/trip/[id]/map.tsx`** (plein écran, maquette « Carte »). `components/map/ExpandedMapView.tsx` n'est plus utilisé (gardé pour mémoire). Briques : `components/map/TripMapParts.tsx`, données `hooks/useTripMap.ts`, calculs `utils/tripMap.ts`.
+
+### 1b. Deux dashboards
+
+Ouvrir un voyage depuis l'accueil affiche `components/home/ExpandedDashboard.tsx` (overlay animé), **PAS** `app/trip/[id]/dashboard.tsx`. Les tuiles sont partagées : `components/dashboard/FutureBento.tsx` (à venir), `components/ongoing/NowCard.tsx` + `FutureBento` (en cours : carte noire « en ce moment » au-dessus des tuiles habituelles), `components/past/PastBento.tsx` (terminé) → modifier là, les deux dashboards suivent.
 
 ### 2. Debugging — première étape
 
@@ -164,7 +195,11 @@ Quand une feature ne marche pas → ajouter des `console.log` AVANT de changer d
 - Mauvais composant édité ?
 - Requête Supabase avec erreur de relation ?
 
-### 3. Supabase free tier
+### 3. Dates : jamais `toISOString()` sur une date locale
+
+`new Date(y, m, d).toISOString()` renvoie la veille en France (UTC+1/+2). Utiliser des chaînes `"YYYY-MM-DD"` et les helpers UTC de `utils/tripStops.ts` (`addDays`, `nightsBetween`, `tripDays`). Corrigé dans `create.tsx` et `planning.tsx` ; d'autres `toISOString().split('T')[0]` subsistent (dashboard « aujourd'hui »).
+
+### 4. Supabase free tier
 
 Le projet peut se pauser sans prévenir. Restaurer via le dashboard (pas de perte de données).
 

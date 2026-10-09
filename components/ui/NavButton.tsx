@@ -1,14 +1,11 @@
 /**
  * NavButton — bouton de navigation flottant (tab bar & dashboard)
+ * DA V2 : opaque (fini le blur/gradient), 3 variants :
+ *  - 'light'  : crème + bordure fine sombre (défaut)
+ *  - 'dark'   : noir, contenu crème (pill Home active)
+ *  - 'accent' : orange, contenu blanc (FAB +)
  *
- * Specs :
- *  - 64×64 px (round) | même hauteur + largeur auto (pill actif)
- *  - border-radius 99px, padding H:24 V:16, gap 10
- *  - Fill  : LinearGradient 100% opacité
- *  - Stroke : 1px inside LinearGradient
- *  - Blur  : 20px en arrière-plan
- *  - Shadow: y:10, blur:30, spread:0, rgba(0,0,0,0.25)
- *  - Couleur icône/texte : #424242
+ * Specs : 64×64 round | pill (icône + label) même hauteur, radius 99.
  */
 
 import React from 'react';
@@ -20,33 +17,35 @@ import {
   StyleProp,
   ViewStyle,
 } from 'react-native';
-import { BlurView } from 'expo-blur';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 
-/* ─── Tokens ──────────────────────────────────────────────────── */
-const ICON_TEXT_COLOR = '#424242';
-const SIZE            = 64;   // diamètre du bouton rond
-const BORDER_W        = 1;    // épaisseur du stroke
+import { Colors, Radii, Shadows, Spacing } from '@/constants/theme';
 
-// Gradient du FILL (fond du bouton) — top-left → bottom-right
-const FILL_COLORS: [string, string] = [
-  'rgba(255,255,255,0.70)',
-  'rgba(255,255,255,0.30)',
-];
-// Gradient du STROKE (bordure 1px)
-const STROKE_COLORS: [string, string] = [
-  'rgba(255,255,255,0.95)',
-  'rgba(180,202,222,0.60)',
-];
+/* ─── Tokens ──────────────────────────────────────────────────── */
+const SIZE = 64; // diamètre du bouton rond
+
+export type NavButtonVariant = 'light' | 'dark' | 'accent';
+
+interface VariantSpec {
+  background: string;
+  border: string;
+  content: string; // couleur icône + label
+}
+
+const VARIANTS: Record<NavButtonVariant, VariantSpec> = {
+  light:  { background: Colors.background, border: Colors.borderDark, content: Colors.textPrimary },
+  dark:   { background: Colors.primary,    border: Colors.primary,    content: Colors.background },
+  accent: { background: Colors.accent,     border: Colors.accent,     content: Colors.white },
+};
 
 /* ─── Props ───────────────────────────────────────────────────── */
 export interface NavButtonProps {
   icon: keyof typeof Ionicons.glyphMap;
-  label?: string;          // si fourni → pill active (icône + texte)
+  label?: string;          // si fourni → pill (icône + texte)
   onPress?: () => void;
   style?: StyleProp<ViewStyle>;
   iconSize?: number;
+  variant?: NavButtonVariant;
 }
 
 /* ─── Composant ───────────────────────────────────────────────── */
@@ -56,48 +55,22 @@ export function NavButton({
   onPress,
   style,
   iconSize = 24,
+  variant = 'light',
 }: NavButtonProps) {
   const isPill = !!label;
+  const spec = VARIANTS[variant];
 
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.75} style={style}>
-      {/* ─ Ombre portée ─ */}
-      <View style={[styles.shadow, isPill ? styles.pillShadow : styles.circleShadow]}>
-
-        {/* ─ Gradient STROKE (1px border) ─ */}
-        <LinearGradient
-          colors={STROKE_COLORS}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={[StyleSheet.absoluteFill, styles.strokeGradient]}
-        />
-
-        {/* ─ Contenu intérieur (blur + fill gradient + éléments) ─ */}
-        <View
-          style={[
-            styles.inner,
-            isPill ? styles.pillInner : styles.circleInner,
-          ]}
-        >
-          {/* Blur de fond 20px */}
-          <BlurView intensity={20} tint="light" style={StyleSheet.absoluteFill} />
-
-          {/* Fill gradient */}
-          <LinearGradient
-            colors={FILL_COLORS}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={StyleSheet.absoluteFill}
-          />
-
-          {/* Icône + label */}
-          <View style={styles.content}>
-            <Ionicons name={icon} size={iconSize} color={ICON_TEXT_COLOR} />
-            {isPill && (
-              <Text style={styles.label}>{label}</Text>
-            )}
-          </View>
-        </View>
+      <View
+        style={[
+          styles.base,
+          isPill ? styles.pill : styles.circle,
+          { backgroundColor: spec.background, borderColor: spec.border },
+        ]}
+      >
+        <Ionicons name={icon} size={iconSize} color={spec.content} />
+        {isPill && <Text style={[styles.label, { color: spec.content }]}>{label}</Text>}
       </View>
     </TouchableOpacity>
   );
@@ -105,59 +78,25 @@ export function NavButton({
 
 /* ─── Styles ──────────────────────────────────────────────────── */
 const styles = StyleSheet.create({
-  /* Ombre portée (y:10, blur:30, black 25%) */
-  shadow: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.25,
-    shadowRadius: 15,   // ≈ blur/2 en React Native
-    elevation: 12,
-  },
-  circleShadow: {
-    width: SIZE,
+  base: {
     height: SIZE,
-    borderRadius: 99,
-  },
-  pillShadow: {
-    height: SIZE,
-    borderRadius: 99,
-  },
-
-  /* Gradient de bordure (wraps l'inner avec 1px de marge) */
-  strokeGradient: {
-    borderRadius: 99,
-  },
-
-  /* Zone intérieure (décalée de BORDER_W pour laisser apparaître le stroke) */
-  inner: {
-    margin: BORDER_W,
-    overflow: 'hidden',
-    borderRadius: 99,
-  },
-  circleInner: {
-    width: SIZE - BORDER_W * 2,
-    height: SIZE - BORDER_W * 2,
-  },
-  pillInner: {
-    height: SIZE - BORDER_W * 2,
-    paddingHorizontal: 24 - BORDER_W,
-    paddingVertical: 16,
-  },
-
-  /* Contenu (icône ± label) */
-  content: {
+    borderRadius: Radii.full,
+    borderWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    // Centrage dans le cercle
-    flex: 1,
     justifyContent: 'center',
+    gap: Spacing.sm + 2,
+    ...Shadows.md,
   },
-
+  circle: {
+    width: SIZE,
+  },
+  pill: {
+    paddingHorizontal: Spacing.lg,
+  },
   label: {
     fontSize: 16,
     fontWeight: '700',
-    color: ICON_TEXT_COLOR,
     letterSpacing: 0.2,
   },
 });

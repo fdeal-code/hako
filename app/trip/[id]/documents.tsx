@@ -1,39 +1,34 @@
 /**
- * Documents screen — liste, upload, viewer
+ * Documents screen — liste groupée par ville (maquette « Documents · Liste »).
+ * L'ajout (document/new) et le billet (document/[docId]) sont des pages.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  FlatList,
   ScrollView,
-  Modal,
-  Image,
-  Alert,
-  TextInput,
-  Switch,
   ActivityIndicator,
-  Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useLocalSearchParams, router } from 'expo-router';
+import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
-import * as DocumentPicker from 'expo-document-picker';
 
-import { Colors, Spacing, Radii, Shadows } from '@/constants/theme';
+import { Colors, Spacing, Radii, Shadows, Typography } from '@/constants/theme';
 import { NavButton } from '@/components/ui/NavButton';
 import { FilterButton } from '@/components/ui/FilterButton';
-import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/services/supabase';
+import { DepartureChecklist } from '@/components/documents/DepartureChecklist';
+import { nightsBetween, stopForDay } from '@/utils/tripStops';
+import { useTripStops } from '@/hooks/useTripStops';
 
 /* ─── Types ──────────────────────────────────────────────────── */
+// Valeurs de la contrainte documents_category_check (en base)
 type DocCategory =
-  | 'vol' | 'hotel' | 'restaurant' | 'transport'
-  | 'passeport' | 'assurance' | 'visa' | 'activite' | 'autre';
+  | 'flight' | 'hotel' | 'restaurant' | 'transport'
+  | 'passport' | 'insurance' | 'visa' | 'activity' | 'other';
 
 type FilterKey = 'all' | 'vol' | 'hotel' | 'transport' | 'identite' | 'autre';
 
@@ -58,44 +53,53 @@ interface Trip {
   id: string;
   name: string;
   destination?: string;
+  start_date?: string | null;
+  end_date?: string | null;
+}
+
+/** Aujourd'hui en "YYYY-MM-DD" (heure locale). */
+function todayIso(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 /* ─── Config ─────────────────────────────────────────────────── */
 const CAT_META: Record<DocCategory, { emoji: string; label: string; color: string }> = {
-  vol:        { emoji: '✈️',  label: 'Vol',         color: '#4F7BE8' },
+  flight:        { emoji: '✈️',  label: 'Vol',         color: '#4F7BE8' },
   hotel:      { emoji: '🏨',  label: 'Hôtel',       color: '#0EA5E9' },
   restaurant: { emoji: '🍽️', label: 'Restaurant',  color: '#F97316' },
   transport:  { emoji: '🚗',  label: 'Transport',   color: '#8B5CF6' },
-  passeport:  { emoji: '🛂',  label: 'Passeport',   color: '#EAB308' },
-  assurance:  { emoji: '🛡️', label: 'Assurance',   color: '#22C55E' },
+  passport:  { emoji: '🛂',  label: 'Passeport',   color: '#EAB308' },
+  insurance:  { emoji: '🛡️', label: 'Assurance',   color: '#22C55E' },
   visa:       { emoji: '📋',  label: 'Visa',        color: '#EC4899' },
-  activite:   { emoji: '🎭',  label: 'Activité',    color: '#14B8A6' },
-  autre:      { emoji: '📄',  label: 'Autre',       color: '#6B7280' },
+  activity:   { emoji: '🎭',  label: 'Activité',    color: '#14B8A6' },
+  other:      { emoji: '📄',  label: 'Autre',       color: '#6B7280' },
 };
 
-const UPLOAD_CATEGORIES: { key: DocCategory; emoji: string; label: string }[] = [
-  { key: 'vol',        emoji: '✈️',  label: 'Vol'        },
-  { key: 'hotel',      emoji: '🏨',  label: 'Hôtel'      },
-  { key: 'restaurant', emoji: '🍽️', label: 'Restaurant' },
-  { key: 'transport',  emoji: '🚗',  label: 'Transport'  },
-  { key: 'passeport',  emoji: '🛂',  label: 'Passeport'  },
-  { key: 'assurance',  emoji: '🛡️', label: 'Assurance'  },
-  { key: 'visa',       emoji: '📋',  label: 'Visa'       },
-  { key: 'activite',   emoji: '🎭',  label: 'Activité'   },
-  { key: 'autre',      emoji: '📄',  label: 'Autre'      },
-];
-
 const FILTERS: { key: FilterKey; label: string }[] = [
-  { key: 'all',       label: 'Tous'       },
-  { key: 'vol',       label: '✈️ Vols'    },
-  { key: 'hotel',     label: '🏨 Hôtels'  },
-  { key: 'transport', label: '🚗 Transport'},
-  { key: 'identite',  label: '🛂 Identité' },
-  { key: 'autre',     label: '📄 Autres'  },
+  { key: 'all',       label: 'Tout'      },
+  { key: 'vol',       label: 'Billets'   },
+  { key: 'hotel',     label: 'Logements' },
+  { key: 'transport', label: 'Transport' },
+  { key: 'identite',  label: 'Perso'     },
+  { key: 'autre',     label: 'Autres'    },
 ];
 
-const IDENTITE_CATS: DocCategory[] = ['passeport', 'visa'];
-const AUTRE_CATS:    DocCategory[] = ['assurance', 'restaurant', 'activite', 'autre'];
+/* Icône Ionicons par catégorie (cartes de la maquette « Documents · Liste ») */
+const CAT_ICON: Record<DocCategory, React.ComponentProps<typeof Ionicons>['name']> = {
+  flight: 'airplane-outline', hotel: 'bed-outline', restaurant: 'restaurant-outline',
+  transport: 'train-outline', passport: 'card-outline', insurance: 'shield-checkmark-outline',
+  visa: 'document-text-outline', activity: 'ticket-outline', other: 'document-outline',
+};
+const MONTHS_UPPER = ['JANV.', 'FÉVR.', 'MARS', 'AVR.', 'MAI', 'JUIN', 'JUIL.', 'AOÛT', 'SEPT.', 'OCT.', 'NOV.', 'DÉC.'];
+
+function groupDay(iso: string): string {
+  const [, m, d] = iso.split('-').map(Number);
+  return `${String(d ?? '').padStart(2, '0')} ${MONTHS_UPPER[(m ?? 1) - 1] ?? ''}`;
+}
+
+const IDENTITE_CATS: DocCategory[] = ['passport', 'visa'];
+const AUTRE_CATS:    DocCategory[] = ['insurance', 'restaurant', 'activity', 'other'];
 
 /* ─── Helpers ────────────────────────────────────────────────── */
 function formatFileSize(bytes?: number): string {
@@ -109,14 +113,9 @@ function formatDate(dateStr?: string): string {
   const d = new Date(dateStr + 'T00:00:00');
   return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
 }
-function isImage(fileType?: string, url?: string): boolean {
-  const t = (fileType ?? '').toLowerCase();
-  const u = (url ?? '').toLowerCase();
-  return t.startsWith('image/') || u.endsWith('.jpg') || u.endsWith('.jpeg') || u.endsWith('.png') || u.endsWith('.webp');
-}
 function filterDocs(docs: Doc[], filter: FilterKey): Doc[] {
   if (filter === 'all') return docs;
-  if (filter === 'vol')       return docs.filter(d => d.category === 'vol');
+  if (filter === 'vol')       return docs.filter(d => d.category === 'flight');
   if (filter === 'hotel')     return docs.filter(d => d.category === 'hotel');
   if (filter === 'transport') return docs.filter(d => d.category === 'transport');
   if (filter === 'identite')  return docs.filter(d => IDENTITE_CATS.includes(d.category));
@@ -128,36 +127,18 @@ function filterDocs(docs: Doc[], filter: FilterKey): Doc[] {
 export default function DocumentsScreen() {
   const { id: tripId } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
-  const { user } = useAuth();
 
   const [trip,      setTrip]      = useState<Trip | null>(null);
   const [docs,      setDocs]      = useState<Doc[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [filter,    setFilter]    = useState<FilterKey>('all');
 
-  /* Upload sheet */
-  const [showUploadSheet,  setShowUploadSheet]  = useState(false);
-  const [showUploadForm,   setShowUploadForm]   = useState(false);
-  const [uploadFile,       setUploadFile]       = useState<{
-    uri: string; name: string; type: string; size?: number;
-  } | null>(null);
-  const [uploadTitle,    setUploadTitle]    = useState('');
-  const [uploadCategory, setUploadCategory] = useState<DocCategory>('autre');
-  const [uploadDate,     setUploadDate]     = useState('');
-  const [uploadNotes,    setUploadNotes]    = useState('');
-  const [uploadShared,   setUploadShared]   = useState(true);
-  const [isSaving,       setIsSaving]       = useState(false);
-
-  /* Viewer */
-  const [viewerDoc,  setViewerDoc]  = useState<Doc | null>(null);
-  const [showViewer, setShowViewer] = useState(false);
-
   /* ── Load ── */
   const loadTrip = useCallback(async () => {
     if (!tripId) return;
     const { data } = await supabase
       .from('trips')
-      .select('id, name, destination')
+      .select('id, name, destination, start_date, end_date')
       .eq('id', tripId)
       .single();
     if (data) setTrip(data);
@@ -173,143 +154,46 @@ export default function DocumentsScreen() {
     setDocs(data ?? []);
   }, [tripId]);
 
-  useEffect(() => {
-    setIsLoading(true);
-    Promise.all([loadTrip(), loadDocs()]).finally(() => setIsLoading(false));
-  }, [loadTrip, loadDocs]);
+  /* Rechargé au retour de l'écran d'ajout / du billet */
+  useFocusEffect(
+    useCallback(() => {
+      void Promise.all([loadTrip(), loadDocs()]).finally(() => setIsLoading(false));
+    }, [loadTrip, loadDocs]),
+  );
 
   /* ── Filtered list ── */
   const filtered  = filterDocs(docs, filter);
   const totalCount = docs.length;
 
-  /* ── Pick handlers ── */
-  const pickCamera = async () => {
-    setShowUploadSheet(false);
-    const perm = await ImagePicker.requestCameraPermissionsAsync();
-    if (!perm.granted) { Alert.alert('Permission requise', 'Autorise la caméra.'); return; }
-    const res = await ImagePicker.launchCameraAsync({ quality: 0.8 });
-    if (res.canceled) return;
-    const asset = res.assets[0];
-    const ext = asset.uri.split('.').pop() ?? 'jpg';
-    setUploadFile({ uri: asset.uri, name: `photo_${Date.now()}.${ext}`, type: `image/${ext}`, size: asset.fileSize });
-    setUploadTitle(`photo_${Date.now()}`);
-    setShowUploadForm(true);
-  };
-
-  const pickGallery = async () => {
-    setShowUploadSheet(false);
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) { Alert.alert('Permission requise', 'Autorise la galerie.'); return; }
-    const res = await ImagePicker.launchImageLibraryAsync({ quality: 0.8 });
-    if (res.canceled) return;
-    const asset = res.assets[0];
-    const ext = asset.uri.split('.').pop() ?? 'jpg';
-    const name = asset.fileName ?? `image_${Date.now()}.${ext}`;
-    setUploadFile({ uri: asset.uri, name, type: `image/${ext}`, size: asset.fileSize });
-    setUploadTitle(name.replace(/\.[^.]+$/, ''));
-    setShowUploadForm(true);
-  };
-
-  const pickFile = async () => {
-    setShowUploadSheet(false);
-    const res = await DocumentPicker.getDocumentAsync({ type: ['application/pdf', 'image/*'], copyToCacheDirectory: true });
-    if (res.canceled) return;
-    const asset = res.assets[0];
-    setUploadFile({ uri: asset.uri, name: asset.name, type: asset.mimeType ?? 'application/octet-stream', size: asset.size });
-    setUploadTitle(asset.name.replace(/\.[^.]+$/, ''));
-    setShowUploadForm(true);
-  };
-
-  /* ── Upload ── */
-  const handleSave = async () => {
-    if (!uploadFile || !uploadTitle.trim()) {
-      Alert.alert('Titre requis', 'Donne un titre au document.');
-      return;
+  /* ── Groupes par ville (date du document → étape du jour) ── */
+  const { stops } = useTripStops(tripId);
+  const groups = (() => {
+    const byStop = new Map<string, Doc[]>();
+    for (const doc of filtered) {
+      const stop = doc.event_date ? stopForDay(stops, doc.event_date.slice(0, 10)) : null;
+      const key = stop?.id ?? 'none';
+      byStop.set(key, [...(byStop.get(key) ?? []), doc]);
     }
-    setIsSaving(true);
-    try {
-      const ext = uploadFile.name.split('.').pop() ?? 'bin';
-      const filePath = `${tripId}/${Date.now()}_${uploadFile.name}`;
-
-      const formData = new FormData();
-      formData.append('file', {
-        uri: uploadFile.uri,
-        name: uploadFile.name,
-        type: uploadFile.type,
-      } as any);
-
-      const { error: uploadError } = await supabase.storage
-        .from('documents')
-        .upload(filePath, formData, { upsert: true, contentType: uploadFile.type });
-
-      if (uploadError) throw uploadError;
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('documents')
-        .getPublicUrl(filePath);
-
-      const { error: insertError } = await supabase.from('documents').insert({
-        trip_id:    tripId,
-        uploaded_by: user?.id ?? null,
-        title:      uploadTitle.trim(),
-        category:   uploadCategory,
-        file_url:   publicUrl,
-        file_type:  uploadFile.type,
-        file_size:  uploadFile.size ?? null,
-        notes:      uploadNotes.trim() || null,
-        event_date: uploadDate || null,
-        is_shared:  uploadShared,
-      });
-
-      if (insertError) throw insertError;
-
-      setShowUploadForm(false);
-      resetUploadForm();
-      loadDocs();
-    } catch (e: any) {
-      Alert.alert('Erreur', e.message ?? "Impossible d'uploader le fichier");
-    }
-    setIsSaving(false);
-  };
-
-  const resetUploadForm = () => {
-    setUploadFile(null);
-    setUploadTitle('');
-    setUploadCategory('autre');
-    setUploadDate('');
-    setUploadNotes('');
-    setUploadShared(true);
-  };
-
-  /* ── Open doc ── */
-  const openDoc = (doc: Doc) => {
-    if (isImage(doc.file_type, doc.file_url)) {
-      setViewerDoc(doc);
-      setShowViewer(true);
-    } else {
-      Linking.openURL(doc.file_url);
-    }
-  };
-
-  /* ── Delete ── */
-  const handleDelete = (doc: Doc) => {
-    Alert.alert('Supprimer', `Supprimer "${doc.title}" ?`, [
-      { text: 'Annuler', style: 'cancel' },
-      {
-        text: 'Supprimer', style: 'destructive',
-        onPress: async () => {
-          await supabase.from('documents').delete().eq('id', doc.id);
-          setShowViewer(false);
-          loadDocs();
-        },
-      },
-    ]);
-  };
+    const result = stops
+      .filter(st => byStop.has(st.id))
+      .map(st => ({
+        key: st.id,
+        title: `${st.place_name.toUpperCase()} · ${groupDay(st.start_date)} → ${groupDay(st.end_date)}`,
+        docs: byStop.get(st.id) ?? [],
+      }));
+    const rest = byStop.get('none') ?? [];
+    if (rest.length > 0) result.push({ key: 'none', title: stops.length > 0 ? 'TOUT LE VOYAGE' : 'DOCUMENTS', docs: rest });
+    return result;
+  })();
 
   const navBottom = Math.max(insets.bottom, 10) + 16;
   const navH      = 64;
 
-  /* ── Render ── */
+  /* ── Navigation : ajout et détail (billet) sont des pages plein écran ── */
+  const openDoc = (doc: Doc) => {
+    router.push({ pathname: '/trip/[id]/document/[docId]', params: { id: tripId ?? '', docId: doc.id } });
+  };
+
   if (isLoading) {
     return (
       <View style={[s.root, { paddingTop: insets.top, justifyContent: 'center', alignItems: 'center' }]}>
@@ -323,10 +207,7 @@ export default function DocumentsScreen() {
 
       {/* Header */}
       <View style={s.header}>
-        <Text style={s.title}>Documents</Text>
-        <Text style={s.subtitle}>
-          {totalCount} document{totalCount !== 1 ? 's' : ''}{trip ? ` · ${trip.name}` : ''}
-        </Text>
+        <Text style={s.title}>Vos documents</Text>
       </View>
 
       {/* Filters */}
@@ -350,6 +231,16 @@ export default function DocumentsScreen() {
         })}
       </ScrollView>
 
+      {/* Checklist de départ — tant que le voyage n'est pas terminé */}
+      {tripId && (!trip?.end_date || trip.end_date >= todayIso()) && (
+        <DepartureChecklist
+          tripId={tripId}
+          daysUntilStart={trip?.start_date && trip.start_date >= todayIso()
+            ? nightsBetween(todayIso(), trip.start_date)
+            : null}
+        />
+      )}
+
       {/* List */}
       {filtered.length === 0 ? (
         <View style={s.empty}>
@@ -362,245 +253,54 @@ export default function DocumentsScreen() {
           </Text>
         </View>
       ) : (
-        <FlatList
+        <ScrollView
           style={{ flex: 1 }}
-          data={filtered}
-          keyExtractor={d => d.id}
           contentContainerStyle={[s.list, { paddingBottom: navH + navBottom + 20 }]}
           showsVerticalScrollIndicator={false}
-          renderItem={({ item }) => {
-            const meta = CAT_META[item.category] ?? CAT_META.autre;
-            return (
-              <TouchableOpacity style={s.card} onPress={() => openDoc(item)} activeOpacity={0.8}>
-                {/* Icon */}
-                <View style={[s.iconBox, { backgroundColor: meta.color + '18' }]}>
-                  <Text style={s.iconEmoji}>{meta.emoji}</Text>
-                </View>
-
-                {/* Info */}
-                <View style={s.cardInfo}>
-                  <Text style={s.cardTitle} numberOfLines={1}>{item.title}</Text>
-                  <View style={s.cardMeta}>
-                    {item.event_date ? (
-                      <Text style={s.cardMetaTxt}>{formatDate(item.event_date)}</Text>
-                    ) : null}
-                    {item.file_size ? (
-                      <Text style={s.cardMetaTxt}>{formatFileSize(item.file_size)}</Text>
-                    ) : null}
-                    <View style={s.sharedBadge}>
-                      <Ionicons
-                        name={item.is_shared ? 'people-outline' : 'lock-closed-outline'}
-                        size={11}
-                        color={Colors.textTertiary}
-                      />
-                      <Text style={s.sharedTxt}>{item.is_shared ? 'Partagé' : 'Privé'}</Text>
+        >
+          {groups.map(group => (
+            <View key={group.key} style={s.group}>
+              <View style={s.groupHeader}>
+                <Text style={s.groupTitle}>{group.title}</Text>
+                <Text style={s.groupCount}>{group.docs.length} doc{group.docs.length > 1 ? 's' : ''}</Text>
+              </View>
+              {group.docs.map(item => {
+                const meta = CAT_META[item.category] ?? CAT_META.other;
+                const details = [
+                  meta.label,
+                  item.event_date ? formatDate(item.event_date) : null,
+                  formatFileSize(item.file_size) || null,
+                ].filter(Boolean).join(' · ');
+                return (
+                  <TouchableOpacity key={item.id} style={s.card} onPress={() => openDoc(item)} activeOpacity={0.85}>
+                    <View style={s.iconBox}>
+                      <Ionicons name={CAT_ICON[item.category] ?? CAT_ICON.other} size={22} color={Colors.textInk} />
                     </View>
-                  </View>
-                </View>
-
-                <Ionicons name="chevron-forward" size={16} color={Colors.textTertiary} />
-              </TouchableOpacity>
-            );
-          }}
-        />
+                    <View style={s.cardInfo}>
+                      <Text style={s.cardTitle} numberOfLines={1}>{item.title}</Text>
+                      <Text style={s.cardMetaTxt} numberOfLines={1}>
+                        {item.is_shared ? details : `Perso · visible que par toi`}
+                      </Text>
+                    </View>
+                    <Ionicons
+                      name={item.is_shared ? 'cloud-done-outline' : 'lock-closed'}
+                      size={18}
+                      color={item.is_shared ? Colors.textMuted : Colors.accent}
+                    />
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          ))}
+        </ScrollView>
       )}
 
       {/* Bottom nav */}
       <View style={[s.bottomNav, { bottom: navBottom }]} pointerEvents="box-none">
         <NavButton icon="arrow-back-outline" onPress={() => router.back()} />
-        <NavButton icon="add" iconSize={28} onPress={() => setShowUploadSheet(true)} />
+        <NavButton icon="add" iconSize={28} variant="accent" onPress={() => router.push({ pathname: '/trip/[id]/document/new', params: { id: tripId ?? '' } })} />
         <NavButton icon="options-outline" onPress={() => {}} />
       </View>
-
-      {/* ── Upload pick sheet ── */}
-      <Modal visible={showUploadSheet} transparent animationType="slide" onRequestClose={() => setShowUploadSheet(false)}>
-        <TouchableOpacity style={s.sheetBackdrop} activeOpacity={1} onPress={() => setShowUploadSheet(false)} />
-        <View style={[s.sheet, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-          <View style={s.sheetHandle} />
-          <Text style={s.sheetTitle}>Ajouter un document</Text>
-
-          <TouchableOpacity style={s.sheetRow} onPress={pickCamera} activeOpacity={0.75}>
-            <View style={[s.sheetIcon, { backgroundColor: '#FF6B6B18' }]}>
-              <Text style={s.sheetEmoji}>📸</Text>
-            </View>
-            <View style={s.sheetRowInfo}>
-              <Text style={s.sheetRowTitle}>Prendre une photo</Text>
-              <Text style={s.sheetRowSub}>Ouvre la caméra</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={16} color={Colors.textTertiary} />
-          </TouchableOpacity>
-
-          <TouchableOpacity style={s.sheetRow} onPress={pickGallery} activeOpacity={0.75}>
-            <View style={[s.sheetIcon, { backgroundColor: '#4F7BE818' }]}>
-              <Text style={s.sheetEmoji}>🖼️</Text>
-            </View>
-            <View style={s.sheetRowInfo}>
-              <Text style={s.sheetRowTitle}>Choisir depuis la galerie</Text>
-              <Text style={s.sheetRowSub}>Photos et images</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={16} color={Colors.textTertiary} />
-          </TouchableOpacity>
-
-          <TouchableOpacity style={s.sheetRow} onPress={pickFile} activeOpacity={0.75}>
-            <View style={[s.sheetIcon, { backgroundColor: '#22C55E18' }]}>
-              <Text style={s.sheetEmoji}>📄</Text>
-            </View>
-            <View style={s.sheetRowInfo}>
-              <Text style={s.sheetRowTitle}>Importer un fichier</Text>
-              <Text style={s.sheetRowSub}>PDF, images…</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={16} color={Colors.textTertiary} />
-          </TouchableOpacity>
-        </View>
-      </Modal>
-
-      {/* ── Upload form ── */}
-      <Modal visible={showUploadForm} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => { setShowUploadForm(false); resetUploadForm(); }}>
-        <View style={[s.formRoot, { paddingTop: Spacing.md, paddingBottom: Math.max(insets.bottom, 16) }]}>
-          <View style={s.sheetHandle} />
-
-          {/* Header form */}
-          <View style={s.formHeader}>
-            <TouchableOpacity onPress={() => { setShowUploadForm(false); resetUploadForm(); }} activeOpacity={0.7}>
-              <Ionicons name="close" size={24} color={Colors.textPrimary} />
-            </TouchableOpacity>
-            <Text style={s.formTitle}>Nouveau document</Text>
-            <TouchableOpacity
-              style={[s.saveBtn, isSaving && { opacity: 0.5 }]}
-              onPress={handleSave}
-              disabled={isSaving}
-              activeOpacity={0.8}
-            >
-              {isSaving
-                ? <ActivityIndicator size="small" color="#fff" />
-                : <Text style={s.saveBtnTxt}>Sauvegarder</Text>
-              }
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={s.formScroll}>
-
-            {/* Preview */}
-            {uploadFile && (
-              <View style={s.previewBox}>
-                {isImage(uploadFile.type) ? (
-                  <Image source={{ uri: uploadFile.uri }} style={s.previewImg} resizeMode="cover" />
-                ) : (
-                  <View style={s.previewPdf}>
-                    <Text style={s.previewPdfEmoji}>📄</Text>
-                    <Text style={s.previewPdfName} numberOfLines={2}>{uploadFile.name}</Text>
-                    {uploadFile.size ? <Text style={s.previewPdfSize}>{formatFileSize(uploadFile.size)}</Text> : null}
-                  </View>
-                )}
-              </View>
-            )}
-
-            {/* Titre */}
-            <Text style={s.label}>Titre</Text>
-            <TextInput
-              style={s.input}
-              value={uploadTitle}
-              onChangeText={setUploadTitle}
-              placeholder="Ex: Billet Paris–Tokyo"
-              placeholderTextColor={Colors.textTertiary}
-            />
-
-            {/* Catégorie */}
-            <Text style={s.label}>Catégorie</Text>
-            <View style={s.catGrid}>
-              {UPLOAD_CATEGORIES.map(c => (
-                <TouchableOpacity
-                  key={c.key}
-                  style={[s.catBtn, uploadCategory === c.key && s.catBtnOn]}
-                  onPress={() => setUploadCategory(c.key)}
-                  activeOpacity={0.75}
-                >
-                  <Text style={s.catEmoji}>{c.emoji}</Text>
-                  <Text style={[s.catLabel, uploadCategory === c.key && s.catLabelOn]}>{c.label}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            {/* Date */}
-            <Text style={s.label}>Date de l'événement (optionnel)</Text>
-            <TextInput
-              style={s.input}
-              value={uploadDate}
-              onChangeText={setUploadDate}
-              placeholder="AAAA-MM-JJ"
-              placeholderTextColor={Colors.textTertiary}
-              keyboardType="numeric"
-            />
-
-            {/* Partager */}
-            <View style={s.toggleRow}>
-              <View>
-                <Text style={s.toggleLabel}>Partager avec le groupe</Text>
-                <Text style={s.toggleSub}>Visible par tous les membres</Text>
-              </View>
-              <Switch
-                value={uploadShared}
-                onValueChange={setUploadShared}
-                trackColor={{ false: Colors.border, true: Colors.primary }}
-                thumbColor="#fff"
-              />
-            </View>
-
-            {/* Notes */}
-            <Text style={s.label}>Notes (optionnel)</Text>
-            <TextInput
-              style={[s.input, s.inputMulti]}
-              value={uploadNotes}
-              onChangeText={setUploadNotes}
-              placeholder="Informations utiles…"
-              placeholderTextColor={Colors.textTertiary}
-              multiline
-            />
-
-          </ScrollView>
-        </View>
-      </Modal>
-
-      {/* ── Viewer image ── */}
-      <Modal visible={showViewer} transparent animationType="fade" onRequestClose={() => setShowViewer(false)}>
-        <View style={s.viewer}>
-          {/* Close */}
-          <TouchableOpacity style={[s.viewerClose, { top: insets.top + 12 }]} onPress={() => setShowViewer(false)}>
-            <Ionicons name="close" size={22} color="#fff" />
-          </TouchableOpacity>
-
-          {viewerDoc && isImage(viewerDoc.file_type, viewerDoc.file_url) && (
-            <Image
-              source={{ uri: viewerDoc.file_url }}
-              style={s.viewerImg}
-              resizeMode="contain"
-            />
-          )}
-
-          {/* Bottom bar */}
-          {viewerDoc && (
-            <View style={[s.viewerBar, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-              <Text style={s.viewerTitle} numberOfLines={1}>{viewerDoc.title}</Text>
-              <View style={s.viewerActions}>
-                <TouchableOpacity style={s.viewerBtn} onPress={() => Linking.openURL(viewerDoc.file_url)} activeOpacity={0.8}>
-                  <Ionicons name="share-outline" size={20} color="#fff" />
-                  <Text style={s.viewerBtnTxt}>Partager</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={s.viewerBtn} onPress={() => Linking.openURL(viewerDoc.file_url)} activeOpacity={0.8}>
-                  <Ionicons name="download-outline" size={20} color="#fff" />
-                  <Text style={s.viewerBtnTxt}>Télécharger</Text>
-                </TouchableOpacity>
-                {viewerDoc.uploaded_by === user?.id && (
-                  <TouchableOpacity style={[s.viewerBtn, s.viewerBtnDanger]} onPress={() => handleDelete(viewerDoc)} activeOpacity={0.8}>
-                    <Ionicons name="trash-outline" size={20} color="#fff" />
-                    <Text style={s.viewerBtnTxt}>Supprimer</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            </View>
-          )}
-        </View>
-      </Modal>
 
     </View>
   );
@@ -615,34 +315,25 @@ const s = StyleSheet.create({
 
   /* Header */
   header: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 8,
+    paddingHorizontal: Spacing.md2,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.sm,
   },
   title: {
-    fontSize: 32,
-    fontWeight: '800',
+    ...Typography.displayTitle,
     color: Colors.textPrimary,
-    letterSpacing: -1,
-  },
-  subtitle: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    fontWeight: '500',
-    marginTop: 2,
   },
 
   /* Filters */
   filterStrip: {
-    maxHeight: 52,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    maxHeight: 64,
+    flexGrow: 0,
   },
   filterRow: {
-    paddingHorizontal: 20,
-    gap: 8,
+    paddingHorizontal: Spacing.md2,
+    gap: Spacing.sm,
     alignItems: 'center',
-    paddingVertical: 4,
+    paddingVertical: Spacing.sm2,
   },
   filterChip: {
     paddingHorizontal: 14,
@@ -668,33 +359,47 @@ const s = StyleSheet.create({
 
   /* List */
   list: {
-    paddingHorizontal: Spacing.md,
-    paddingTop: 8,
-    gap: Spacing.sm,
+    paddingHorizontal: Spacing.md2,
+    paddingTop: Spacing.sm,
+    gap: Spacing.md,
+  },
+  group: {
+    gap: Spacing.sm2 - 2,
+  },
+  groupHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  groupTitle: {
+    ...Typography.displayLabel,
+    color: Colors.textPrimary,
+  },
+  groupCount: {
+    ...Typography.bodySmall,
+    color: Colors.textMuted,
   },
 
   /* Card */
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.white,
+    backgroundColor: Colors.surface,
     borderRadius: Radii.lg,
-    padding: Spacing.md,
-    gap: Spacing.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    ...Shadows.sm,
+    paddingLeft: Spacing.sm2 - 2,
+    paddingRight: Spacing.md,
+    paddingVertical: Spacing.sm2 - 2,
+    gap: Spacing.sm2,
+    ...Shadows.card,
   },
   iconBox: {
-    width: 48,
-    height: 48,
-    borderRadius: Radii.md,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: Colors.background,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
-  },
-  iconEmoji: {
-    fontSize: 22,
   },
   cardInfo: {
     flex: 1,
@@ -702,28 +407,12 @@ const s = StyleSheet.create({
   },
   cardTitle: {
     fontSize: 15,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-  },
-  cardMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    flexWrap: 'wrap',
+    fontWeight: '600',
+    color: Colors.textInk,
   },
   cardMetaTxt: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    fontWeight: '500',
-  },
-  sharedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-  },
-  sharedTxt: {
-    fontSize: 11,
-    color: Colors.textTertiary,
+    ...Typography.bodySmall,
+    color: Colors.textMuted,
   },
 
   /* Empty */

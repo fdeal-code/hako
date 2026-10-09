@@ -1,27 +1,38 @@
-// HAKO Design System — aligné sur les maquettes Figma
-// Glassmorphism, photo-first, grille 8px, coins arrondis, base blanche
+// HAKO Design System — DA V2 (maquettes Figma "accueilV2" / "dashboardV2")
+// Base crème, accent orange, cards opaques à bordure fine (fin du glassmorphism),
+// photo-first, grille 8px, coins arrondis
 
 // ─────────────────────────────────────────────
 // COULEURS
 // ─────────────────────────────────────────────
 export const Colors = {
   // Backgrounds
-  background: '#f7f9fb',        // bg.primary — fond d'écran
+  background: '#FBF8F2',        // bg.primary — fond d'écran (crème)
   surface:    '#ffffff',        // bg.card — cartes et listes
-  primary:    '#1c1c1c',        // bg.dark — filtre actif, boutons primaires
+  surfaceAlt: '#F4EFE7',        // nappe crème du dashboard (sheet)
+  primary:    '#1A1815',        // bg.dark — filtre actif, boutons primaires
+  accent:     '#E4572E',        // orange V2 — FAB, badges, accents
   white:      '#ffffff',
-  offWhite:   '#f7f9fb',  // compat — identique à background
+  offWhite:   '#FBF8F2',  // compat — identique à background
 
   // Text
-  textPrimary:   '#1c1c1c',
-  textSecondary: '#8e8e8e',
+  textPrimary:   '#1A1815',
+  textSecondary: '#8A8883',
   textTertiary:  '#cccccc',
   textInverted:  '#ffffff',
+  textMuted:     '#6B6155',  // gris chaud des maquettes V2 (sous-titres, libellés)
+  textInk:       '#1C1C1C',  // texte des cartes blanches (maquettes V2)
 
   // UI
   border:      '#EBEBEB',
+  borderDark:  'rgba(26,24,21,0.15)', // bordure fine des cards opaques V2
   borderLight: 'rgba(255,255,255,0.3)',
+  line:        '#EDE7DD',   // segments inactifs, plage de dates (maquettes V2)
+  textOnDark:  '#B8AD9F',   // sous-texte sur fond noir (bandeau « Lien copié »)
   overlay:     'rgba(0,0,0,0.2)',
+  scrimClear:  'rgba(0,0,0,0)',    // dégradé photo/vidéo : haut transparent…
+  scrimStrong: 'rgba(0,0,0,0.7)',  // …bas sombre pour lire la légende
+  glassLight:  'rgba(255,255,255,0.9)', // bouton lecture sur vidéo
 
   // Budget
   positive: '#22C55E',   // montants positifs
@@ -41,6 +52,20 @@ export const Colors = {
     orga:   { start: 'rgba(67,100,61,0.8)',  end: 'rgba(45,78,46,0.6)' },
     tiktok: { start: 'rgba(255,65,5,0.6)',   end: 'rgba(255,65,5,0.4)' },
   },
+
+  // Étapes d'un voyage multi-villes (1re ville, 2e, 3e…) — repris en boucle
+  stopPalette: ['#1A1815', '#E4572E', '#8A8883', '#C9A227', '#3B7A57'] as const,
+  // Repères de la carte, par type de lieu
+  placeColors: {
+    hotel:      '#1A1815',
+    restaurant: '#E4572E',
+    cafe:       '#B5651D',
+    bar:        '#8E44AD',
+    monument:   '#C9A227',
+    activity:   '#3B7A57',
+    photo_spot: '#2E86C1',
+    other:      '#6B6155',
+  } as const,
 
   // Tab bar
   tabBar: {
@@ -75,9 +100,27 @@ export const Glass = {
 };
 
 // ─────────────────────────────────────────────
+// POLICES — Bricolage Grotesque (titres des maquettes V2), chargée dans
+// app/_layout.tsx via @expo-google-fonts/bricolage-grotesque. Tant qu'elle
+// n'est pas chargée, React Native retombe sur la police système.
+// ─────────────────────────────────────────────
+export const Fonts = {
+  display:     'BricolageGrotesque_600SemiBold',
+  displayBold: 'BricolageGrotesque_700Bold',
+} as const;
+
+// ─────────────────────────────────────────────
 // TYPOGRAPHIE — SF Pro (interface) + Inter (contenu)
 // ─────────────────────────────────────────────
 export const Typography = {
+  // Bricolage Grotesque — titres des maquettes V2
+  displayTitle: { fontFamily: Fonts.display, fontSize: 32 },      // « Où part-on ? »
+  displayValue: { fontFamily: Fonts.display, fontSize: 24 },      // « 02 juin »
+  displayLabel: { fontFamily: Fonts.displayBold, fontSize: 14 },  // « DÉPART », « TES AMIS »
+  // SF Pro — maquettes V2
+  headerSmall: { fontSize: 20, fontWeight: '600' as const },     // « Nouveau voyage »
+  cardTitle:   { fontSize: 16, fontWeight: '600' as const },     // titres des cartes blanches
+  button:      { fontSize: 16, fontWeight: '500' as const },     // « Continuer »
   // SF Pro — titres, nav, badges, filtres
   titlePage: { fontSize: 28, fontWeight: '900' as const },  // SF Pro Black
   titleHero: { fontSize: 98, fontWeight: '900' as const },  // nom destination sur card voyage
@@ -86,6 +129,8 @@ export const Typography = {
   // Inter — listes, descriptions
   body:      { fontSize: 14, fontWeight: '500' as const },
   bodySmall: { fontSize: 12, fontWeight: '500' as const },
+  rowTitle:  { fontSize: 15, fontWeight: '600' as const },  // lignes des cartes blanches (maquettes V2)
+  chip:      { fontSize: 13, fontWeight: '600' as const },  // pastilles compactes (ambiances, « Coller »)
 };
 
 // ─────────────────────────────────────────────
@@ -110,7 +155,8 @@ export const Radii = {
   md:   20,  // cartes voyage
   lg:   24,  // large
   xl:   28,  // bottom sheets (compat)
-  pill: 30,  // filtres, badges (pills)
+  pill: 30,  // filtres, badges (pills), tuiles du dashboard V2
+  sheet: 32, // nappe crème du dashboard V2
   full: 99,  // boutons circulaires
 };
 
@@ -133,6 +179,14 @@ export const Shadows = {
     shadowOpacity: 0.10,
     shadowRadius:  30,
     elevation:     4,
+  },
+  // carte blanche des maquettes V2 (champs, listes)
+  card: {
+    shadowColor:   '#000',
+    shadowOffset:  { width: 0, height: 10 },
+    shadowOpacity: 0.15,
+    shadowRadius:  30,
+    elevation:     5,
   },
   // heavy — navigation flottante
   lg: {

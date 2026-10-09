@@ -19,6 +19,7 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Share,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -27,6 +28,8 @@ import { Colors, Spacing } from '@/constants/theme';
 import { supabase } from '@/services/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { MemberAvatar } from '@/components/ui/MemberAvatar';
+import { getOrCreateInviteToken } from '@/services/inviteLinkService';
+import { buildTripInviteMessage } from '@/utils/shareLinks';
 
 /* ─── Types ─────────────────────────────────────────────────── */
 interface Invitation {
@@ -66,6 +69,23 @@ export function InviteSheet({ visible, onClose, tripId }: Props) {
   const [sending,     setSending]     = useState(false);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [loading,     setLoading]     = useState(false);
+  const [sharingLink, setSharingLink] = useState(false);
+
+  /* Lien d'invitation partagé via la feuille de partage native (WhatsApp…) */
+  const handleShareLink = useCallback(async () => {
+    const userId = session?.user?.id;
+    if (!userId || !tripId) return;
+    setSharingLink(true);
+    const { data: token, error } = await getOrCreateInviteToken(tripId, userId);
+    if (error !== null) {
+      setSharingLink(false);
+      Alert.alert('Oups', error);
+      return;
+    }
+    const { data: trip } = await supabase.from('trips').select('name').eq('id', tripId).single();
+    setSharingLink(false);
+    await Share.share({ message: buildTripInviteMessage(token, (trip as { name: string } | null)?.name ?? 'notre voyage') });
+  }, [session?.user?.id, tripId]);
 
   /* Friends */
   const [friends,          setFriends]          = useState<FriendDisplay[]>([]);
@@ -216,6 +236,19 @@ export function InviteSheet({ visible, onClose, tripId }: Props) {
                 <Ionicons name="close" size={22} color="#888" />
               </TouchableOpacity>
             </View>
+
+            {/* ── Lien d'invitation (WhatsApp) ── */}
+            <TouchableOpacity
+              style={s.shareLinkBtn}
+              onPress={() => { void handleShareLink(); }}
+              disabled={sharingLink}
+              activeOpacity={0.85}
+            >
+              {sharingLink
+                ? <ActivityIndicator color={Colors.textInverted} />
+                : <Ionicons name="logo-whatsapp" size={20} color={Colors.textInverted} />}
+              <Text style={s.shareLinkText}>Partager un lien d’invitation</Text>
+            </TouchableOpacity>
 
             {/* ── Mes amis ── */}
             {friends.length > 0 && (
@@ -383,6 +416,21 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
 
+  shareLinkBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.sm,
+    height: 52,
+    borderRadius: 99,
+    backgroundColor: Colors.accent,
+    marginBottom: Spacing.lg,
+  },
+  shareLinkText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.textInverted,
+  },
   sectionLabel: {
     fontSize: 11,
     fontWeight: '600',

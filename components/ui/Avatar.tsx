@@ -1,5 +1,5 @@
 import { View, Image, Text, StyleSheet, ViewStyle } from 'react-native';
-import { Colors, Radii } from '@/constants/theme';
+import { Colors } from '@/constants/theme';
 
 interface AvatarProps {
   uri?: string;
@@ -36,7 +36,7 @@ export function Avatar({ uri, name, size = 36, style }: AvatarProps) {
 }
 
 interface AvatarGroupProps {
-  users: Array<{ id: string; name?: string; avatar_url?: string }>;
+  users: { id: string; name?: string; avatar_url?: string }[];
   max?: number;
   size?: number;
   style?: ViewStyle;

@@ -1,195 +1,208 @@
-import React, { useState, useEffect, useCallback } from 'react';
+// HAKO — Album photo du voyage (après le voyage)
+// Grille de toutes les photos du groupe, import de plusieurs photos d'un coup,
+// visionneuse plein écran (qui l'a ajoutée, quand), suppression de ses photos.
+
+import { useMemo, useState } from 'react';
 import {
-  View, Text, ScrollView, StyleSheet, TouchableOpacity,
-  Image, Alert, ActivityIndicator, Modal,
+  ActivityIndicator, Alert, FlatList, Image, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View,
+  useWindowDimensions,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useLocalSearchParams, router, Stack } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Colors, Spacing, Radii } from '@/constants/theme';
-import { NavButton } from '@/components/ui/NavButton';
-import { supabase } from '@/services/supabase';
-import { useAuth } from '@/contexts/AuthContext';
+import { Colors, Radii, Spacing, Typography } from '@/constants/theme';
+import { CreateTripHeader, StepActions } from '@/components/createTrip/CreateTripChrome';
+import { Avatar } from '@/components/ui/Avatar';
+import { PrintAlbumBanner } from '@/components/past/PrintAlbumBanner';
+import { usePastTrip } from '@/hooks/usePastTrip';
+import { PastMember, TripPhoto } from '@/types/pastTrip';
+import { plural } from '@/utils/dashboardSummary';
 
-interface Photo {
-  id: string;
-  photo_url: string;
-  uploaded_by: string;
-  uploader_name?: string;
+const COLUMNS = 3;
+const GRID_GAP = Spacing.xs;
+const ACTIONS_SPACE = 120;
+const MONTHS = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
+
+function addedOn(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? '' : `${d.getDate()} ${MONTHS[d.getMonth()] ?? ''}`;
 }
 
-export default function PastPhotosScreen() {
+export default function AlbumScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
-  const { session } = useAuth();
+  const { width } = useWindowDimensions();
+  const p = usePastTrip(id);
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
 
-  const [photos,    setPhotos]    = useState<Photo[]>([]);
-  const [uploading, setUploading] = useState(false);
-  const [loading,   setLoading]   = useState(true);
-  const [viewer,    setViewer]    = useState<Photo | null>(null);
+  const photos = p.data?.photos ?? [];
+  const members = useMemo(() => new Map((p.data?.members ?? []).map(m => [m.userId, m])), [p.data]);
+  const contributors = new Set(photos.map(ph => ph.uploadedBy)).size;
+  const cell = (width - Spacing.md2 * 2 - GRID_GAP * (COLUMNS - 1)) / COLUMNS;
 
-  const loadPhotos = useCallback(async () => {
-    const { data } = await supabase
-      .from('trip_photos')
-      .select('id, photo_url, uploaded_by')
-      .eq('trip_id', id)
-      .order('created_at', { ascending: false });
+  const importPhotos = () => { void p.importPhotos().then(error => { if (error) Alert.alert('Oups', error); }); };
 
-    const enriched = await Promise.all((data ?? []).map(async p => {
-      const { data: prof } = await supabase
-        .from('profiles').select('nickname').eq('id', p.uploaded_by).single();
-      return { ...p, uploader_name: prof?.nickname ?? 'Membre' } as Photo;
-    }));
-    setPhotos(enriched);
-    setLoading(false);
-  }, [id]);
-
-  useEffect(() => { loadPhotos(); }, [loadPhotos]);
-
-  const handleUpload = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsMultipleSelection: true,
-      quality: 0.8,
-    });
-    if (result.canceled) return;
-    setUploading(true);
-    try {
-      for (const asset of result.assets) {
-        const ext = asset.uri.split('.').pop() ?? 'jpg';
-        const filePath = `${id}/${Date.now()}_${Math.random().toString(36).substr(2, 9)}.${ext}`;
-        const formData = new FormData();
-        formData.append('file', { uri: asset.uri, name: `photo.${ext}`, type: `image/${ext}` } as any);
-        await supabase.storage.from('photos').upload(filePath, formData, { upsert: true });
-        const { data: { publicUrl } } = supabase.storage.from('photos').getPublicUrl(filePath);
-        await supabase.from('trip_photos').insert({
-          trip_id: id,
-          uploaded_by: session?.user?.id,
-          photo_url: publicUrl,
-        });
-      }
-      await loadPhotos();
-    } catch {
-      Alert.alert('Erreur', "Impossible d'envoyer les photos.");
-    }
-    setUploading(false);
-  };
-
-  const leftCol  = photos.filter((_, i) => i % 2 === 0);
-  const rightCol = photos.filter((_, i) => i % 2 !== 0);
+  const confirmDelete = (photo: TripPhoto) => Alert.alert('Retirer cette photo ?', 'Elle disparaît de l’album pour tout le groupe.', [
+    { text: 'Annuler', style: 'cancel' },
+    {
+      text: 'Retirer', style: 'destructive',
+      onPress: () => {
+        setViewerIndex(null);
+        void p.removePhoto(photo).then(error => { if (error) Alert.alert('Oups', error); });
+      },
+    },
+  ]);
 
   return (
-    <View style={[s.root, { paddingTop: insets.top }]}>
-      <Stack.Screen options={{ headerShown: false }} />
+    <View style={[styles.root, { paddingTop: insets.top }]}>
+      <CreateTripHeader title="Album" onClose={() => router.back()} />
 
-      {/* Header */}
-      <View style={s.header}>
-        <Text style={s.title}>Photos du voyage</Text>
-        <Text style={s.sub}>{photos.length} photo{photos.length > 1 ? 's' : ''}</Text>
-      </View>
-
-      {/* Content */}
-      {loading ? (
-        <View style={s.center}>
-          <ActivityIndicator color={Colors.textSecondary} />
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: ACTIONS_SPACE + insets.bottom }]} showsVerticalScrollIndicator={false}>
+        <View style={styles.titleBlock}>
+          <Text style={styles.title}>Nos photos</Text>
+          <Text style={styles.subtitle}>
+            {photos.length > 0
+              ? `${plural(photos.length, 'photo')} · par ${plural(contributors, 'voyageur')}`
+              : 'Chacun ajoute les siennes : l’album se remplit tout seul.'}
+          </Text>
         </View>
-      ) : photos.length === 0 ? (
-        <View style={s.center}>
-          <Text style={s.emptyEmoji}>📸</Text>
-          <Text style={s.emptyTitle}>Partagez vos souvenirs !</Text>
-          <Text style={s.emptySub}>Ajoutez des photos de votre voyage</Text>
-        </View>
-      ) : (
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={[s.grid, { paddingBottom: insets.bottom + 110 }]}
-        >
-          <View style={s.gridRow}>
-            <View style={s.col}>
-              {leftCol.map(photo => (
-                <TouchableOpacity key={photo.id} style={s.photoItem} onPress={() => setViewer(photo)} activeOpacity={0.9}>
-                  <Image source={{ uri: photo.photo_url }} style={s.photoImg} resizeMode="cover" />
-                  <Text style={s.photoBy} numberOfLines={1}>par {photo.uploader_name}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            <View style={s.col}>
-              {rightCol.map(photo => (
-                <TouchableOpacity key={photo.id} style={s.photoItem} onPress={() => setViewer(photo)} activeOpacity={0.9}>
-                  <Image source={{ uri: photo.photo_url }} style={s.photoImg} resizeMode="cover" />
-                  <Text style={s.photoBy} numberOfLines={1}>par {photo.uploader_name}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        </ScrollView>
-      )}
 
-      {/* Bottom nav */}
-      <View style={[s.bottomNav, { bottom: Math.max(insets.bottom, 10) + 16 }]} pointerEvents="box-none">
-        <NavButton icon="arrow-back-outline" onPress={() => router.back()} />
-        {uploading
-          ? <NavButton icon="hourglass-outline" onPress={() => {}} />
-          : <NavButton icon="add" iconSize={28} onPress={handleUpload} />
-        }
-      </View>
+        <PrintAlbumBanner tripId={id ?? ''} photoCount={photos.length} />
 
-      {/* Photo viewer plein écran avec zoom */}
-      {viewer && (
-        <Modal visible animationType="fade" transparent onRequestClose={() => setViewer(null)}>
-          <View style={pv.root}>
-            <TouchableOpacity
-              style={[pv.closeBtn, { top: insets.top + 8 }]}
-              onPress={() => setViewer(null)}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="close" size={24} color="#fff" />
-            </TouchableOpacity>
-            <ScrollView
-              style={{ flex: 1 }}
-              contentContainerStyle={pv.imgWrap}
-              maximumZoomScale={4}
-              minimumZoomScale={1}
-              showsHorizontalScrollIndicator={false}
-              showsVerticalScrollIndicator={false}
-              centerContent
-            >
-              <Image source={{ uri: viewer.photo_url }} style={pv.img} resizeMode="contain" />
-            </ScrollView>
-            <Text style={[pv.caption, { bottom: insets.bottom + 16 }]}>
-              par {viewer.uploader_name ?? 'Membre'}
-            </Text>
+        {!p.data ? (
+          p.error ? <Text style={styles.subtitle}>Chargement impossible : {p.error}</Text>
+            : <ActivityIndicator color={Colors.primary} style={styles.loader} />
+        ) : photos.length === 0 ? (
+          <TouchableOpacity style={styles.empty} onPress={importPhotos} activeOpacity={0.85} disabled={p.uploading}>
+            <View style={styles.emptyIcon}>
+              {p.uploading ? <ActivityIndicator color={Colors.white} /> : <Ionicons name="images" size={28} color={Colors.white} />}
+            </View>
+            <Text style={styles.emptyTitle}>Importe vos photos</Text>
+            <Text style={styles.emptySub}>Choisis-en plusieurs d’un coup dans ta galerie</Text>
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.grid}>
+            {photos.map((photo, index) => (
+              <TouchableOpacity key={photo.id} onPress={() => setViewerIndex(index)} activeOpacity={0.85}>
+                <Image source={{ uri: photo.photoUrl }} style={[styles.cell, { width: cell, height: cell }]} />
+              </TouchableOpacity>
+            ))}
           </View>
-        </Modal>
-      )}
+        )}
+      </ScrollView>
+
+      <StepActions
+        onBack={() => router.back()}
+        onNext={importPhotos}
+        label="Ajouter des photos"
+        icon="add"
+        loading={p.uploading}
+        variant="accent"
+        bottomInset={insets.bottom}
+      />
+
+      <PhotoViewer
+        photos={photos}
+        index={viewerIndex}
+        members={members}
+        currentUserId={p.userId}
+        onClose={() => setViewerIndex(null)}
+        onDelete={confirmDelete}
+      />
     </View>
   );
 }
 
-const s = StyleSheet.create({
-  root:       { flex: 1, backgroundColor: Colors.background },
-  header:     { paddingHorizontal: Spacing.md, paddingTop: 20, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: Colors.border },
-  title:      { fontSize: 28, fontWeight: '900', color: Colors.textPrimary, letterSpacing: -0.5 },
-  sub:        { fontSize: 14, color: Colors.textSecondary, fontWeight: '500', marginTop: 4 },
-  center:     { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
-  emptyEmoji: { fontSize: 48 },
-  emptyTitle: { fontSize: 18, fontWeight: '700', color: Colors.textPrimary },
-  emptySub:   { fontSize: 14, color: Colors.textSecondary, textAlign: 'center', paddingHorizontal: 32 },
-  grid:       { padding: 16 },
-  gridRow:    { flexDirection: 'row', gap: 8 },
-  col:        { flex: 1, gap: 8 },
-  photoItem:  { borderRadius: Radii.md, overflow: 'hidden' },
-  photoImg:   { width: '100%', aspectRatio: 0.85, borderRadius: Radii.md },
-  photoBy:    { fontSize: 11, color: Colors.textSecondary, marginTop: 4, paddingHorizontal: 2 },
-  bottomNav:  { position: 'absolute', left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', gap: 14 },
-});
+// ─── Visionneuse plein écran (balayage horizontal) ───────────────────────────
+function PhotoViewer({ photos, index, members, currentUserId, onClose, onDelete }: {
+  photos: readonly TripPhoto[];
+  index: number | null;
+  members: ReadonlyMap<string, PastMember>;
+  currentUserId: string | null;
+  onClose: () => void;
+  onDelete: (photo: TripPhoto) => void;
+}) {
+  const { width, height } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const [current, setCurrent] = useState(0);
+  const shown = index ?? 0;
+  const photo = photos[current] ?? photos[shown];
+  const author = photo ? members.get(photo.uploadedBy) : undefined;
 
-const pv = StyleSheet.create({
-  root:     { flex: 1, backgroundColor: '#000' },
-  closeBtn: { position: 'absolute', right: 16, zIndex: 10, width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center' },
-  imgWrap:  { flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: '100%' },
-  img:      { width: '100%', aspectRatio: 1 },
-  caption:  { position: 'absolute', left: 0, right: 0, textAlign: 'center', color: 'rgba(255,255,255,0.7)', fontSize: 13, fontWeight: '500' },
+  return (
+    <Modal visible={index !== null} animationType="fade" onRequestClose={onClose} onShow={() => setCurrent(shown)}>
+      <View style={styles.viewer}>
+        <FlatList
+          data={photos}
+          keyExtractor={item => item.id}
+          horizontal
+          pagingEnabled
+          initialScrollIndex={shown}
+          getItemLayout={(_, i) => ({ length: width, offset: width * i, index: i })}
+          onMomentumScrollEnd={e => setCurrent(Math.round(e.nativeEvent.contentOffset.x / width))}
+          showsHorizontalScrollIndicator={false}
+          renderItem={({ item }) => (
+            <Image source={{ uri: item.photoUrl }} style={{ width, height }} resizeMode="contain" />
+          )}
+        />
+        <View style={[styles.viewerTop, { top: insets.top + Spacing.sm }]}>
+          <TouchableOpacity style={styles.viewerBtn} onPress={onClose} accessibilityLabel="Fermer">
+            <Ionicons name="close" size={22} color={Colors.white} />
+          </TouchableOpacity>
+          {photo && photo.uploadedBy === currentUserId && (
+            <TouchableOpacity style={styles.viewerBtn} onPress={() => onDelete(photo)} accessibilityLabel="Retirer la photo">
+              <Ionicons name="trash-outline" size={20} color={Colors.white} />
+            </TouchableOpacity>
+          )}
+        </View>
+        {photo && (
+          <View style={[styles.viewerInfo, { bottom: insets.bottom + Spacing.md }]}>
+            <Avatar name={author?.nickname ?? 'Membre'} uri={author?.avatarUrl ?? undefined} size={32} />
+            <Text style={styles.viewerText} numberOfLines={1}>
+              {author?.nickname ?? 'Membre'} · {addedOn(photo.createdAt)}
+            </Text>
+            <Text style={styles.viewerCount}>{current + 1}/{photos.length}</Text>
+          </View>
+        )}
+      </View>
+    </Modal>
+  );
+}
+
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: Colors.background },
+  content: { paddingHorizontal: Spacing.md2, paddingTop: Spacing.lg, gap: Spacing.md2 },
+  titleBlock: { gap: 6 },
+  title: { ...Typography.displayTitle, color: Colors.textPrimary },
+  subtitle: { ...Typography.body, color: Colors.textMuted },
+  loader: { marginTop: Spacing.xxl },
+  empty: {
+    alignItems: 'center', gap: Spacing.sm, paddingVertical: Spacing.xxl, paddingHorizontal: Spacing.lg,
+    borderRadius: Radii.pill, borderWidth: 1.5, borderStyle: 'dashed', borderColor: Colors.accent,
+  },
+  emptyIcon: {
+    width: 64, height: 64, borderRadius: Radii.full, backgroundColor: Colors.accent,
+    alignItems: 'center', justifyContent: 'center', marginBottom: Spacing.sm,
+  },
+  emptyTitle: { ...Typography.cardTitle, color: Colors.textPrimary },
+  emptySub: { ...Typography.body, color: Colors.textMuted, textAlign: 'center' },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: GRID_GAP },
+  cell: { borderRadius: Radii.sm / 2, backgroundColor: Colors.line },
+  viewer: { flex: 1, backgroundColor: Colors.primary },
+  viewerTop: {
+    position: 'absolute', left: Spacing.md2, right: Spacing.md2,
+    flexDirection: 'row', justifyContent: 'space-between',
+  },
+  viewerBtn: {
+    width: 44, height: 44, borderRadius: Radii.full, backgroundColor: Colors.overlay,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  viewerInfo: {
+    position: 'absolute', left: Spacing.md2, right: Spacing.md2,
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
+    padding: Spacing.sm, borderRadius: Radii.full, backgroundColor: Colors.overlay,
+  },
+  viewerText: { flex: 1, ...Typography.body, color: Colors.white },
+  viewerCount: { ...Typography.bodySmall, color: Colors.textOnDark, marginRight: Spacing.sm },
 });

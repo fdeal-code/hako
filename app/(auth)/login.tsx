@@ -28,6 +28,7 @@ import { router } from 'expo-router';
 import { Colors, Spacing, Radii, Shadows } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/services/supabase';
+import { fileExtension, uploadLocalFile } from '@/services/storageService';
 
 /* ─── Password strength ──────────────────────────────────────── */
 function getPasswordStrength(pass: string) {
@@ -128,14 +129,13 @@ export default function LoginScreen() {
 
       let avatarUrl: string | null = null;
       if (photoUri && authData.user) {
-        const ext      = photoUri.split('.').pop() ?? 'jpg';
-        const filePath = `${authData.user.id}/profile.${ext}`;
-        const formData = new FormData();
-        formData.append('file', { uri: photoUri, name: `profile.${ext}`, type: `image/${ext}` } as any);
-        await supabase.storage.from('avatars').upload(filePath, formData, { upsert: true, contentType: `image/${ext}` });
-        const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(filePath);
-        avatarUrl = publicUrl;
-        await supabase.auth.updateUser({ data: { avatar_url: avatarUrl } });
+        const { data: publicUrl } = await uploadLocalFile(
+          'avatars', `${authData.user.id}/profile.${fileExtension(photoUri)}`, photoUri,
+        );
+        if (publicUrl) {
+          avatarUrl = publicUrl;
+          await supabase.auth.updateUser({ data: { avatar_url: avatarUrl } });
+        }
       }
 
       if (authData.user) {
@@ -229,7 +229,7 @@ export default function LoginScreen() {
             <TouchableOpacity onPress={() => { setMode('signup'); setStep(1); }} activeOpacity={0.7}>
               <Text style={s.switchText}>
                 Pas encore de compte ?{' '}
-                <Text style={s.switchLink}>S'inscrire</Text>
+                <Text style={s.switchLink}>S’inscrire</Text>
               </Text>
             </TouchableOpacity>
           </View>
@@ -267,7 +267,7 @@ export default function LoginScreen() {
           {step === 1 && (
             <View style={s.step}>
               <View>
-                <Text style={s.stepTitle}>Comment tu{'\n'}t'appelles ?</Text>
+                <Text style={s.stepTitle}>Comment tu{'\n'}t’appelles ?</Text>
                 <TextInput
                   style={s.bigInput}
                   placeholder="Ton prénom ou surnom"
@@ -318,7 +318,7 @@ export default function LoginScreen() {
             <View style={s.step}>
               <View>
                 <Text style={s.stepTitle}>Ton email</Text>
-                <Text style={s.stepSubtitle}>On ne t'enverra pas de spam, promis 😉</Text>
+                <Text style={s.stepSubtitle}>On ne t’enverra pas de spam, promis 😉</Text>
                 <TextInput
                   style={s.bigInput}
                   placeholder="tu@exemple.com"

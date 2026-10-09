@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from "react";
+import React, { useEffect } from "react";
 import {
   View,
   Text,
@@ -256,7 +256,7 @@ export function TripDashboardOverlay({
           pointerEvents="box-none"
         >
           <NavButton icon="arrow-back-outline" onPress={handleClose} />
-          <NavButton icon="add" iconSize={28} onPress={() => router.push('/trip/create')} />
+          <NavButton icon="add" iconSize={28} variant="accent" onPress={() => router.push('/trip/create')} />
           <NavButton icon="options-outline" />
         </View>
 
@@ -272,7 +272,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#0D1B2A',
   },
   bgDim: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(10,15,30,0.25)',
   },
   fg: {

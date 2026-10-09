@@ -1,6 +1,5 @@
 import { useRef, useState, useEffect } from 'react';
 import MaskedView from '@react-native-masked-view/masked-view';
-import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated, {
@@ -10,11 +9,13 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-import { Colors } from '@/constants/theme';
+import { Colors, Radii, Spacing } from '@/constants/theme';
 import { Trip } from '@/constants/types';
 import { supabase } from '@/services/supabase';
 import { CardLayout } from './ExpandedDashboard';
 import { MemberAvatar } from '@/components/ui/MemberAvatar';
+import { Ionicons } from '@expo/vector-icons';
+import { nightsBetween } from '@/utils/tripStops';
 
 interface MemberDisplay {
   user_id: string;
@@ -23,15 +24,10 @@ interface MemberDisplay {
 }
 
 /* ─── Tokens ─────────────────────────────────────────────────── */
-const BADGE_COLORS: [string, string] = [
-  'rgba(255,255,255,0.50)',
-  'rgba(255,255,255,0.15)',
-];
 const DEST_GRADIENT: [string, string] = [
   'rgba(255,255,255,1.0)',
   'rgba(255,255,255,0.10)',
 ];
-const AVATAR_BG = ['#E8C5A5', '#A5B8E0', '#A8D5B5', '#F0B0B0'];
 const PRESS_EASING = Easing.bezier(0.25, 0.1, 0.25, 1);
 
 /* ─── Helpers ────────────────────────────────────────────────── */
@@ -43,34 +39,21 @@ function formatDateLabel(start: string): string {
   return monthYear.charAt(0).toUpperCase() + monthYear.slice(1);
 }
 
-/* ─── Badge ──────────────────────────────────────────────────── */
-type BadgeVariant = 'future' | 'ongoing' | 'past';
+/* ─── Badge — DA V2 : pills opaques ──────────────────────────── */
+type BadgeVariant = 'next' | 'future' | 'ongoing' | 'past';
+
+const BADGE_STYLES: Record<BadgeVariant, { pill: object; text: object }> = {
+  next:    { pill: { backgroundColor: Colors.accent },     text: { color: Colors.white } },
+  future:  { pill: { backgroundColor: Colors.background }, text: { color: Colors.textPrimary } },
+  ongoing: { pill: { backgroundColor: 'rgba(34,197,94,0.90)' }, text: { color: Colors.white } },
+  past:    { pill: { backgroundColor: 'rgba(110,110,110,0.85)' }, text: { color: Colors.white, opacity: 0.85 } },
+};
 
 function Badge({ label, variant = 'future' }: { label: string; variant?: BadgeVariant }) {
-  if (variant === 'ongoing') {
-    return (
-      <View style={[styles.badge, styles.badgeOngoing]}>
-        <Text style={styles.badgeText}>{label}</Text>
-      </View>
-    );
-  }
-  if (variant === 'past') {
-    return (
-      <View style={[styles.badge, styles.badgePast]}>
-        <Text style={[styles.badgeText, styles.badgeTextPast]}>{label}</Text>
-      </View>
-    );
-  }
+  const v = BADGE_STYLES[variant];
   return (
-    <View style={styles.badge}>
-      <BlurView intensity={20} tint="light" style={StyleSheet.absoluteFill} />
-      <LinearGradient
-        colors={BADGE_COLORS}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={StyleSheet.absoluteFill}
-      />
-      <Text style={styles.badgeText}>{label}</Text>
+    <View style={[styles.badge, v.pill]}>
+      <Text style={[styles.badgeText, v.text]}>{label}</Text>
     </View>
   );
 }
@@ -103,6 +86,17 @@ export function TripCard({
   const isNext           = isNextTrip;
   const dateBadgeVariant = getDateBadgeVariant(trip);
   const isPast           = dateBadgeVariant === 'past';
+  const isFuture         = dateBadgeVariant === 'future';
+  const daysLeft         = isFuture && trip.start_date ? nightsBetween(getTodayISO(), trip.start_date) : null;
+
+  /* Prochaine action : envies qui attendent un vote */
+  const [toVoteCount, setToVoteCount] = useState(0);
+  useEffect(() => {
+    if (isPast) return;
+    supabase.from('wishes').select('id', { count: 'exact', head: true })
+      .eq('trip_id', trip.id).in('status', ['pending', 'debate'])
+      .then(({ count }) => setToVoteCount(count ?? 0));
+  }, [trip.id, isPast]);
 
   /* Fetch real members */
   const [localMembers, setLocalMembers] = useState<MemberDisplay[]>([]);
@@ -183,7 +177,12 @@ export function TripCard({
             <View style={styles.overlay} />
             <View style={styles.content}>
               <View style={styles.topRow}>
-                {isNext && <Badge label="Prochain voyage" />}
+                {isNext && (
+                  <Badge
+                    label={daysLeft !== null ? `Prochain voyage · J-${daysLeft}` : 'Prochain voyage'}
+                    variant="next"
+                  />
+                )}
                 <View style={{ flex: 1 }} />
                 <Badge label={dateLabel} variant={dateBadgeVariant} />
               </View>
@@ -206,15 +205,25 @@ export function TripCard({
                 </Text>
               </MaskedView>
 
-              <View style={styles.avatarsRow}>
-                {localMembers.slice(0, 3).map((m, i) => (
-                  <MemberAvatar
-                    key={m.user_id}
-                    member={{ avatar_url: m.avatar_url, nickname: m.name }}
-                    size={36}
-                    index={i}
-                  />
-                ))}
+              <View style={styles.bottomRow}>
+                <View style={styles.avatarsRow}>
+                  {localMembers.slice(0, 3).map((m, i) => (
+                    <MemberAvatar
+                      key={m.user_id}
+                      member={{ avatar_url: m.avatar_url, nickname: m.name }}
+                      size={36}
+                      index={i}
+                    />
+                  ))}
+                </View>
+                {toVoteCount > 0 && (
+                  <View style={styles.nextAction}>
+                    <Ionicons name="thumbs-up" size={13} color={Colors.accent} />
+                    <Text style={styles.nextActionText}>
+                      {toVoteCount} envie{toVoteCount > 1 ? 's' : ''} à voter
+                    </Text>
+                  </View>
+                )}
               </View>
             </View>
           </Animated.View>
@@ -238,7 +247,7 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
   overlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.20)',
   },
   content: { flex: 1, padding: 20 },
@@ -248,13 +257,8 @@ const styles = StyleSheet.create({
     borderRadius: 99,
     paddingHorizontal: 24,
     paddingVertical: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,1)',
   },
-  badgeText:     { color: Colors.white, fontSize: 14, fontWeight: '600' },
-  badgeOngoing:  { backgroundColor: 'rgba(34,197,94,0.35)',  borderColor: 'rgba(34,197,94,0.25)'  },
-  badgePast:     { backgroundColor: 'rgba(110,110,110,0.65)', borderColor: 'rgba(110,110,110,0.4)' },
-  badgeTextPast: { opacity: 0.75 },
+  badgeText: { fontSize: 14, fontWeight: '600' },
   destinationMask: { alignSelf: 'stretch', marginBottom: 16 },
   destination: {
     fontSize: 100,
@@ -264,6 +268,17 @@ const styles = StyleSheet.create({
     letterSpacing: 3,
   },
   avatarsRow: { flexDirection: 'row', alignItems: 'center' },
+  bottomRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  nextAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    paddingHorizontal: Spacing.sm2,
+    paddingVertical: Spacing.sm,
+    borderRadius: Radii.full,
+    backgroundColor: Colors.background,
+  },
+  nextActionText: { fontSize: 13, fontWeight: '700', color: Colors.textPrimary },
   avatar: {
     width: 40,
     height: 40,

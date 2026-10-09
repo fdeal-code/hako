@@ -1,3 +1,5 @@
+import { StopMarkers } from '@/components/map/StopMarkers';
+import { TripStop } from '@/types/tripStops';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
@@ -26,6 +28,7 @@ import MapView, { Marker } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavButton } from '@/components/ui/NavButton';
 import { AddToPlanningSheet } from '@/components/planning/AddToPlanningSheet';
+import { MapEmptyState } from '@/components/map/MapEmptyState';
 
 /* ─── Types ──────────────────────────────────────────────────── */
 export interface CardLayout {
@@ -35,13 +38,24 @@ export interface CardLayout {
   height: number;
 }
 
+export interface MapRegion {
+  latitude: number;
+  longitude: number;
+  latitudeDelta: number;
+  longitudeDelta: number;
+}
+
 interface Props {
   cardLayout: CardLayout;
   onClose: () => void;
   tripId?: string;
   destination?: string;
-  region?: { latitude: number; longitude: number; latitudeDelta: number; longitudeDelta: number };
+  region?: MapRegion;
+  /** Étapes du voyage (multi-villes) : tracé + repères numérotés. */
+  stops?: readonly TripStop[];
 }
+
+const REGION_DELTA = 0.3;
 
 /* ─── Category → emoji ───────────────────────────────────────── */
 const CATEGORY_EMOJI: Record<string, string> = {
@@ -79,7 +93,7 @@ const EASE_OUT = Easing.out(Easing.cubic);
 const EASE_IN  = Easing.in(Easing.cubic);
 
 /* ─── Component ──────────────────────────────────────────────── */
-export function ExpandedMapView({ cardLayout, onClose, tripId, destination, region }: Props) {
+export function ExpandedMapView({ cardLayout, onClose, tripId, destination, region, stops = [] }: Props) {
   const insets = useSafeAreaInsets();
   const { width: SCREEN_W, height: SCREEN_H } = useWindowDimensions();
   const mapRef = useRef<MapView>(null);
@@ -90,6 +104,7 @@ export function ExpandedMapView({ cardLayout, onClose, tripId, destination, regi
   const sheetTranslateY = useSharedValue(0);
 
   const [wishes,       setWishes]       = useState<any[]>([]);
+  const [wishesLoaded, setWishesLoaded] = useState(false);
   const [selectedWish, setSelectedWish] = useState<any | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [categories, setCategories] = useState<Record<CategoryKey, boolean>>({
@@ -116,6 +131,7 @@ export function ExpandedMapView({ cardLayout, onClose, tripId, destination, regi
       .not('longitude', 'is', null);
     if (error) console.warn('[MAP] loadWishes error:', JSON.stringify(error));
     if (data) setWishes(data);
+    setWishesLoaded(true);
   };
 
   useEffect(() => {
@@ -220,6 +236,20 @@ export function ExpandedMapView({ cardLayout, onClose, tripId, destination, regi
 
   const BOTTOM = Math.max(insets.bottom, 10) + 16;
 
+  /* ── Région d'affichage : coordonnées du trip, sinon première wish
+     localisée (fitToCoordinates recadre ensuite), sinon état vide ── */
+  const firstWish = wishes[0];
+  const mapRegion: MapRegion | null =
+    region ??
+    (firstWish
+      ? {
+          latitude: firstWish.latitude,
+          longitude: firstWish.longitude,
+          latitudeDelta: REGION_DELTA,
+          longitudeDelta: REGION_DELTA,
+        }
+      : null);
+
   return (
     <>
     <Modal visible transparent animationType="none" statusBarTranslucent>
@@ -231,21 +261,20 @@ export function ExpandedMapView({ cardLayout, onClose, tripId, destination, regi
           <Text style={styles.destLabelText}>{destination}</Text>
         </Animated.View>
 
-        {/* ── Map ── */}
+        {/* ── Map — ou état vide si aucune coordonnée disponible ── */}
+        {mapRegion === null ? (
+          wishesLoaded && <MapEmptyState tone="dark" />
+        ) : (
         <MapView
           ref={mapRef}
           style={StyleSheet.absoluteFill}
-          initialRegion={{
-            latitude:      region?.latitude  ?? 48.8566,
-            longitude:     region?.longitude ?? 2.3522,
-            latitudeDelta:  0.3,
-            longitudeDelta: 0.3,
-          }}
+          initialRegion={mapRegion}
           scrollEnabled
           zoomEnabled
           rotateEnabled
           pitchEnabled
         >
+          <StopMarkers stops={stops} showLabels />
           {filteredWishes.map(wish => {
             const borderColor =
               wish.status === 'validated' ? '#22C55E' :
@@ -292,6 +321,7 @@ export function ExpandedMapView({ cardLayout, onClose, tripId, destination, regi
             );
           })}
         </MapView>
+        )}
 
         {/* ── Tap-outside to close filters ── */}
         {showFilters && (

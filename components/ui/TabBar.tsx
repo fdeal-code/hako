@@ -1,6 +1,6 @@
 import { View, StyleSheet, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
+import { BottomTabBarProps } from 'expo-router/js-tabs';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import Animated, { useAnimatedStyle, interpolate } from 'react-native-reanimated';
@@ -56,17 +56,20 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
           <NavButton
             icon={activeRoute === 'index' ? TABS.index.icon : TABS.index.iconOutline}
             label={activeRoute === 'index' ? TABS.index.label : undefined}
+            variant={activeRoute === 'index' ? 'dark' : 'light'}
             onPress={() => navigate('index')}
           />
           <NavButton
             icon={activeRoute === 'profile' ? TABS.profile.icon : TABS.profile.iconOutline}
             label={activeRoute === 'profile' ? TABS.profile.label : undefined}
+            variant={activeRoute === 'profile' ? 'dark' : 'light'}
             onPress={() => navigate('profile')}
             style={{ marginLeft: 4 }}
           />
           <NavButton
             icon="add"
             iconSize={28}
+            variant="accent"
             onPress={openCreate}
             style={{ marginLeft: 16 }}
           />

@@ -27,12 +27,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: Radii.full,
-    backgroundColor: '#F0F0F0',
+    backgroundColor: Colors.background,
+    borderWidth: 1,
+    borderColor: Colors.borderDark,
     alignItems: 'center',
     justifyContent: 'center',
   },
   chipActive: {
     backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
   },
   label: {
     fontSize: 14,

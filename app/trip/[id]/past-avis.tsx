@@ -1,358 +1,197 @@
-import React, { useState, useEffect, useCallback } from 'react';
+// HAKO — Avis après le voyage : noter les logements et les activités
+// Une carte par envie validée (ou réservée) : moyenne du groupe, ma note
+// en un tap (enregistrée tout de suite), un mot optionnel, et ce qu'en
+// pensent les autres.
+
+import { useMemo, useState } from 'react';
 import {
-  View, Text, ScrollView, StyleSheet, TouchableOpacity,
-  Image, Alert, ActivityIndicator, Modal, TextInput,
+  ActivityIndicator, Alert, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useLocalSearchParams, router, Stack } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Colors, Spacing, Radii } from '@/constants/theme';
-import { NavButton } from '@/components/ui/NavButton';
-import { MemberAvatar } from '@/components/ui/MemberAvatar';
-import { supabase } from '@/services/supabase';
-import { useAuth } from '@/contexts/AuthContext';
+import { Colors, Radii, Shadows, Spacing, Typography } from '@/constants/theme';
+import { CreateTripHeader } from '@/components/createTrip/CreateTripChrome';
+import { StarRating } from '@/components/past/StarRating';
+import { usePastTrip } from '@/hooks/usePastTrip';
+import { PastMember, ReviewableItem, ReviewRow } from '@/types/pastTrip';
 
-interface Review {
-  id: string;
-  user_id: string;
-  rating: number;
-  comment?: string | null;
-  created_at?: string;
-  reviewer_name?: string;
-  reviewer_avatar?: string | null;
-}
+const THUMB = 64;
+const MAX_OTHER_COMMENTS = 2;
 
-interface Place {
-  id: string;
-  title: string;
-  image_url?: string | null;
-  address?: string | null;
-  reviews: Review[];
-  avgRating: number;
-}
-
-export default function PastAvisScreen() {
+export default function ReviewsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
-  const { session } = useAuth();
+  const p = usePastTrip(id);
 
-  const [places,   setPlaces]   = useState<Place[]>([]);
-  const [loading,  setLoading]  = useState(true);
-  const [selected, setSelected] = useState<Place | null>(null);
+  const members = useMemo(() => new Map((p.data?.members ?? []).map(m => [m.userId, m])), [p.data]);
+  const stopNames = useMemo(() => new Map(p.stops.map(s => [s.id, s.place_name])), [p.stops]);
+  const lodging = p.reviewables.filter(r => r.kind === 'lodging');
+  const activities = p.reviewables.filter(r => r.kind === 'activity');
+  const rated = p.reviewables.length - p.toRateCount;
 
-  const loadPlaces = useCallback(async () => {
-    const { data: wishData } = await supabase
-      .from('wishes')
-      .select('id, title, image_url, address')
-      .eq('trip_id', id)
-      .eq('type', 'place')
-      .eq('status', 'validated');
+  const rate = (item: ReviewableItem, rating: number, comment: string | null) => {
+    void p.rate(item.wishId, rating, comment).then(error => { if (error) Alert.alert('Oups', error); });
+  };
 
-    const enriched = await Promise.all((wishData ?? []).map(async place => {
-      const { data: rvws } = await supabase
-        .from('activity_reviews').select('*').eq('wish_id', place.id);
-      const enrichedRvws = await Promise.all((rvws ?? []).map(async r => {
-        const { data: prof } = await supabase
-          .from('profiles').select('nickname, avatar_url').eq('id', r.user_id).single();
-        return {
-          ...r,
-          reviewer_name:   prof?.nickname   ?? 'Membre',
-          reviewer_avatar: prof?.avatar_url ?? null,
-        } as Review;
-      }));
-      const avgRating = enrichedRvws.length > 0
-        ? enrichedRvws.reduce((s, r) => s + r.rating, 0) / enrichedRvws.length
-        : 0;
-      return { ...place, reviews: enrichedRvws, avgRating } as Place;
-    }));
-
-    setPlaces(enriched);
-    setLoading(false);
-  }, [id]);
-
-  useEffect(() => { loadPlaces(); }, [loadPlaces]);
+  const renderSection = (title: string, items: readonly ReviewableItem[]) => items.length > 0 && (
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle}>{title}</Text>
+      {items.map(item => (
+        <ReviewCard
+          key={item.wishId}
+          item={item}
+          stopName={item.stopId ? stopNames.get(item.stopId) ?? null : null}
+          others={(p.data?.reviews ?? []).filter(r => r.wish_id === item.wishId && r.user_id !== p.userId && r.comment)}
+          members={members}
+          onRate={(rating, comment) => rate(item, rating, comment)}
+        />
+      ))}
+    </View>
+  );
 
   return (
-    <View style={[s.root, { paddingTop: insets.top }]}>
-      <Stack.Screen options={{ headerShown: false }} />
+    <View style={[styles.root, { paddingTop: insets.top }]}>
+      <CreateTripHeader title="Avis" onClose={() => router.back()} />
 
-      {/* Header */}
-      <View style={s.header}>
-        <Text style={s.title}>Vos avis</Text>
-        <Text style={s.sub}>
-          {places.length} lieu{places.length > 1 ? 'x' : ''} visité{places.length > 1 ? 's' : ''}
-        </Text>
-      </View>
-
-      {loading ? (
-        <View style={s.center}>
-          <ActivityIndicator color={Colors.textSecondary} />
-        </View>
-      ) : places.length === 0 ? (
-        <View style={s.center}>
-          <Text style={s.emptyEmoji}>⭐</Text>
-          <Text style={s.emptyTitle}>Notez vos visites !</Text>
-          <Text style={s.emptySub}>Aucun lieu validé pour ce voyage</Text>
-        </View>
-      ) : (
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView
+          contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + Spacing.xl }]}
+          keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={[s.list, { paddingBottom: insets.bottom + 110 }]}
         >
-          {places.map(place => (
-            <TouchableOpacity
-              key={place.id}
-              style={s.placeRow}
-              onPress={() => setSelected(place)}
-              activeOpacity={0.8}
-            >
-              {place.image_url
-                ? <Image source={{ uri: place.image_url }} style={s.placeImg} resizeMode="cover" />
-                : <View style={[s.placeImg, s.placeImgFallback]}>
-                    <Text style={{ fontSize: 22 }}>📍</Text>
-                  </View>
-              }
-              <View style={{ flex: 1 }}>
-                <Text style={s.placeName} numberOfLines={1}>{place.title}</Text>
-                {place.address && (
-                  <Text style={s.placeAddr} numberOfLines={1}>{place.address}</Text>
-                )}
-              </View>
-              <View style={{ alignItems: 'flex-end', gap: 2 }}>
-                {place.avgRating > 0 ? (
-                  <StarRow value={Math.round(place.avgRating)} size={14} />
-                ) : (
-                  <Text style={s.placeNoRating}>–</Text>
-                )}
-                <Text style={s.placeCount}>{place.reviews.length} avis</Text>
-              </View>
-            </TouchableOpacity>
-          ))}
+          <View style={styles.titleBlock}>
+            <Text style={styles.title}>C’était comment ?</Text>
+            <Text style={styles.subtitle}>
+              {p.reviewables.length === 0
+                ? 'Les envies validées pendant le voyage apparaîtront ici.'
+                : p.toRateCount > 0
+                  ? `Il te reste ${p.toRateCount} ${p.toRateCount > 1 ? 'lieux' : 'lieu'} à noter.`
+                  : 'Merci ! Tu as tout noté.'}
+            </Text>
+          </View>
+
+          {p.reviewables.length > 0 && (
+            <View style={styles.progress} accessibilityLabel={`${rated} sur ${p.reviewables.length} notés`}>
+              <View style={[styles.progressFill, { flex: rated }]} />
+              <View style={{ flex: p.toRateCount }} />
+            </View>
+          )}
+
+          {!p.data ? (p.error
+            ? <Text style={styles.subtitle}>Chargement impossible : {p.error}</Text>
+            : <ActivityIndicator color={Colors.primary} style={styles.loader} />) : (
+            <>
+              {renderSection('LOGEMENTS', lodging)}
+              {renderSection('ACTIVITÉS & LIEUX', activities)}
+            </>
+          )}
         </ScrollView>
-      )}
-
-      {/* Bottom nav */}
-      <View style={[s.bottomNav, { bottom: Math.max(insets.bottom, 10) + 16 }]} pointerEvents="box-none">
-        <NavButton icon="arrow-back-outline" onPress={() => router.back()} />
-      </View>
-
-      {/* Review modal */}
-      {selected && (
-        <ReviewModal
-          place={selected}
-          currentUserId={session?.user?.id ?? ''}
-          onClose={() => setSelected(null)}
-          onSaved={(updated) => {
-            setPlaces(prev => prev.map(p => p.id === updated.id ? updated : p));
-            setSelected(updated);
-          }}
-        />
-      )}
+      </KeyboardAvoidingView>
     </View>
   );
 }
 
-/* ─── StarRow ────────────────────────────────────────────────── */
-function StarRow({
-  value, size = 28, onSelect,
-}: {
-  value: number;
-  size?: number;
-  onSelect?: (n: number) => void;
+// ─── Carte d'un lieu à noter ─────────────────────────────────────────────────
+function ReviewCard({ item, stopName, others, members, onRate }: {
+  item: ReviewableItem;
+  stopName: string | null;
+  others: readonly ReviewRow[];
+  members: ReadonlyMap<string, PastMember>;
+  onRate: (rating: number, comment: string | null) => void;
 }) {
+  const [draft, setDraft] = useState<string | null>(null); // null = commentaire enregistré
+  const comment = draft ?? item.myComment ?? '';
+
+  const saveComment = () => {
+    if (draft === null || item.myRating === null) return;
+    onRate(item.myRating, draft);
+    setDraft(null);
+  };
+
   return (
-    <View style={{ flexDirection: 'row', gap: 2 }}>
-      {[1, 2, 3, 4, 5].map(n => (
-        <TouchableOpacity key={n} onPress={() => onSelect?.(n)} activeOpacity={0.8} disabled={!onSelect}>
-          <Text style={{ fontSize: size, color: n <= value ? '#FFC107' : '#E0E0E0' }}>★</Text>
-        </TouchableOpacity>
+    <View style={styles.card}>
+      <View style={styles.head}>
+        {item.imageUrl ? (
+          <Image source={{ uri: item.imageUrl }} style={styles.thumb} />
+        ) : (
+          <View style={[styles.thumb, styles.thumbEmpty]}>
+            <Ionicons name={item.kind === 'lodging' ? 'bed-outline' : 'location-outline'} size={24} color={Colors.textMuted} />
+          </View>
+        )}
+        <View style={styles.headText}>
+          <Text style={styles.cardTitle} numberOfLines={2}>{item.title}</Text>
+          {stopName ? <Text style={styles.meta} numberOfLines={1}>{stopName}</Text> : null}
+          {item.avgRating !== null && (
+            <View style={styles.avgRow}>
+              <StarRating value={item.avgRating} size={12} />
+              <Text style={styles.meta}>
+                {item.avgRating.toFixed(1).replace('.', ',')} · {item.reviewCount} avis
+              </Text>
+            </View>
+          )}
+        </View>
+      </View>
+
+      <View style={styles.mine}>
+        <Text style={styles.mineLabel}>{item.myRating === null ? 'Ta note' : 'Ta note · modifiable'}</Text>
+        <StarRating value={item.myRating} size={30} onChange={rating => onRate(rating, item.myComment)} />
+      </View>
+
+      {item.myRating !== null && (
+        <TextInput
+          style={styles.comment}
+          value={comment}
+          onChangeText={setDraft}
+          onBlur={saveComment}
+          placeholder="Un mot pour le groupe ? (optionnel)"
+          placeholderTextColor={Colors.textMuted}
+          multiline
+          maxLength={280}
+        />
+      )}
+
+      {others.slice(0, MAX_OTHER_COMMENTS).map(r => (
+        <View key={r.user_id} style={styles.other}>
+          <Text style={styles.otherName}>{members.get(r.user_id)?.nickname ?? 'Membre'} · {r.rating}/5</Text>
+          <Text style={styles.otherText}>« {r.comment} »</Text>
+        </View>
       ))}
     </View>
   );
 }
 
-/* ─── ReviewModal ────────────────────────────────────────────── */
-function ReviewModal({
-  place, currentUserId, onClose, onSaved,
-}: {
-  place: Place;
-  currentUserId: string;
-  onClose: () => void;
-  onSaved: (updated: Place) => void;
-}) {
-  const insets = useSafeAreaInsets();
-  const [myRating, setMyRating] = useState(0);
-  const [comment,  setComment]  = useState('');
-  const [saving,   setSaving]   = useState(false);
-
-  const existing = place.reviews.find(r => r.user_id === currentUserId);
-  useEffect(() => {
-    if (existing) { setMyRating(existing.rating); setComment(existing.comment ?? ''); }
-  }, [existing]);
-
-  const avgRating = place.reviews.length > 0
-    ? place.reviews.reduce((s, r) => s + r.rating, 0) / place.reviews.length
-    : 0;
-
-  const handlePublish = async () => {
-    if (myRating === 0) { Alert.alert('Note requise', 'Sélectionne au moins 1 étoile.'); return; }
-    setSaving(true);
-    try {
-      await supabase.from('activity_reviews').upsert({
-        wish_id: place.id, user_id: currentUserId, rating: myRating, comment: comment.trim() || null,
-      });
-      const { data: rvws } = await supabase.from('activity_reviews').select('*').eq('wish_id', place.id);
-      const enriched = await Promise.all((rvws ?? []).map(async r => {
-        const { data: prof } = await supabase
-          .from('profiles').select('nickname, avatar_url').eq('id', r.user_id).single();
-        return {
-          ...r,
-          reviewer_name:   prof?.nickname   ?? 'Membre',
-          reviewer_avatar: prof?.avatar_url ?? null,
-        } as Review;
-      }));
-      const newAvg = enriched.length > 0 ? enriched.reduce((s, r) => s + r.rating, 0) / enriched.length : 0;
-      onSaved({ ...place, reviews: enriched, avgRating: newAvg });
-    } catch {
-      Alert.alert('Erreur', "Impossible d'enregistrer l'avis.");
-    }
-    setSaving(false);
-  };
-
-  return (
-    <Modal visible animationType="slide" transparent={false} onRequestClose={onClose}>
-      <View style={[rm.root, { paddingTop: insets.top }]}>
-        <View style={rm.topBar}>
-          <TouchableOpacity onPress={onClose} style={rm.backBtn} activeOpacity={0.75}>
-            <Ionicons name="arrow-back" size={22} color={Colors.textPrimary} />
-          </TouchableOpacity>
-          <Text style={rm.topTitle} numberOfLines={1}>{place.title}</Text>
-        </View>
-
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={[rm.scroll, { paddingBottom: insets.bottom + 24 }]}
-        >
-          {place.image_url && (
-            <Image source={{ uri: place.image_url }} style={rm.heroImg} resizeMode="cover" />
-          )}
-          <Text style={rm.placeName}>{place.title}</Text>
-          {place.address && <Text style={rm.placeAddr}>{place.address}</Text>}
-
-          {avgRating > 0 && (
-            <View style={rm.avgRow}>
-              <Text style={rm.avgNum}>{avgRating.toFixed(1)} / 5</Text>
-              <StarRow value={Math.round(avgRating)} size={20} />
-              <Text style={rm.avgCount}>({place.reviews.length} avis)</Text>
-            </View>
-          )}
-
-          <View style={rm.divider} />
-          <Text style={rm.subTitle}>Ton avis</Text>
-          <StarRow value={myRating} size={40} onSelect={setMyRating} />
-
-          <TextInput
-            style={rm.commentInput}
-            value={comment}
-            onChangeText={setComment}
-            placeholder="Ton avis sur ce lieu..."
-            placeholderTextColor={Colors.textTertiary}
-            multiline
-            numberOfLines={3}
-          />
-
-          <TouchableOpacity
-            style={[rm.publishBtn, (saving || myRating === 0) && { opacity: 0.4 }]}
-            onPress={handlePublish}
-            disabled={saving || myRating === 0}
-            activeOpacity={0.85}
-          >
-            {saving
-              ? <ActivityIndicator color="#fff" />
-              : <Text style={rm.publishBtnTxt}>Publier</Text>
-            }
-          </TouchableOpacity>
-
-          {place.reviews.length > 0 && (
-            <>
-              <View style={rm.divider} />
-              <Text style={rm.subTitle}>Avis du groupe</Text>
-              {place.reviews.map((r, i) => (
-                <View key={r.id ?? i} style={rm.reviewItem}>
-                  <MemberAvatar
-                    member={{ nickname: r.reviewer_name, avatar_url: r.reviewer_avatar }}
-                    size={36}
-                    index={i}
-                  />
-                  <View style={{ flex: 1 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                      <Text style={rm.reviewerName}>{r.reviewer_name ?? 'Membre'}</Text>
-                      <StarRow value={r.rating} size={13} />
-                    </View>
-                    {r.comment && <Text style={rm.reviewComment}>{r.comment}</Text>}
-                    {r.created_at && (
-                      <Text style={rm.reviewDate}>
-                        {new Date(r.created_at).toLocaleDateString('fr-FR')}
-                      </Text>
-                    )}
-                  </View>
-                </View>
-              ))}
-            </>
-          )}
-
-          {place.reviews.length === 0 && (
-            <Text style={rm.noReview}>Soyez les premiers à noter !</Text>
-          )}
-        </ScrollView>
-      </View>
-    </Modal>
-  );
-}
-
-/* ─── Styles liste ───────────────────────────────────────────── */
-const s = StyleSheet.create({
-  root:          { flex: 1, backgroundColor: Colors.background },
-  header:        { paddingHorizontal: Spacing.md, paddingTop: 20, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: Colors.border },
-  title:         { fontSize: 28, fontWeight: '900', color: Colors.textPrimary, letterSpacing: -0.5 },
-  sub:           { fontSize: 14, color: Colors.textSecondary, fontWeight: '500', marginTop: 4 },
-  center:        { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
-  emptyEmoji:    { fontSize: 48 },
-  emptyTitle:    { fontSize: 18, fontWeight: '700', color: Colors.textPrimary },
-  emptySub:      { fontSize: 14, color: Colors.textSecondary, textAlign: 'center', paddingHorizontal: 32 },
-  list:          { paddingHorizontal: Spacing.md, paddingTop: 8 },
-  placeRow:      { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: Colors.border },
-  placeImg:      { width: 60, height: 60, borderRadius: 30, flexShrink: 0 },
-  placeImgFallback: { backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center' },
-  placeName:     { fontSize: 15, fontWeight: '700', color: Colors.textPrimary },
-  placeAddr:     { fontSize: 12, color: Colors.textSecondary, marginTop: 2 },
-  placeNoRating: { fontSize: 16, color: Colors.textTertiary },
-  placeCount:    { fontSize: 11, color: Colors.textTertiary },
-  bottomNav:     { position: 'absolute', left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', gap: 14 },
-});
-
-/* ─── Styles modal review ────────────────────────────────────── */
-const rm = StyleSheet.create({
-  root:          { flex: 1, backgroundColor: '#fff' },
-  topBar:        { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 12, gap: 8, borderBottomWidth: 1, borderBottomColor: Colors.border },
-  backBtn:       { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  topTitle:      { flex: 1, fontSize: 16, fontWeight: '700', color: Colors.textPrimary },
-  scroll:        { paddingHorizontal: 20, paddingTop: 16, gap: 12 },
-  heroImg:       { width: '100%', height: 200, borderRadius: Radii.sm, marginBottom: 8 },
-  placeName:     { fontSize: 24, fontWeight: '900', color: Colors.textPrimary, letterSpacing: -0.5 },
-  placeAddr:     { fontSize: 13, color: Colors.textSecondary, marginTop: 4 },
-  avgRow:        { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 },
-  avgNum:        { fontSize: 20, fontWeight: '800', color: Colors.textPrimary },
-  avgCount:      { fontSize: 12, color: Colors.textSecondary },
-  divider:       { height: 1, backgroundColor: Colors.border, marginVertical: 16 },
-  subTitle:      { fontSize: 18, fontWeight: '800', color: Colors.textPrimary, marginBottom: 12 },
-  commentInput:  { backgroundColor: Colors.background, borderRadius: Radii.sm, padding: 14, fontSize: 14, color: Colors.textPrimary, borderWidth: 1, borderColor: Colors.border, minHeight: 80, textAlignVertical: 'top', marginTop: 12 },
-  publishBtn:    { backgroundColor: Colors.primary, borderRadius: Radii.full, paddingVertical: 15, alignItems: 'center', marginTop: 12 },
-  publishBtnTxt: { color: '#fff', fontWeight: '800', fontSize: 15 },
-  noReview:      { fontSize: 14, color: Colors.textTertiary, fontStyle: 'italic', textAlign: 'center', paddingVertical: 16 },
-  reviewItem:    { flexDirection: 'row', gap: 12, marginBottom: 14 },
-  reviewerName:  { fontSize: 14, fontWeight: '700', color: Colors.textPrimary },
-  reviewComment: { fontSize: 13, color: Colors.textSecondary, marginTop: 4 },
-  reviewDate:    { fontSize: 11, color: Colors.textTertiary, marginTop: 2 },
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: Colors.background },
+  flex: { flex: 1 },
+  content: { paddingHorizontal: Spacing.md2, paddingTop: Spacing.lg, gap: Spacing.md2 },
+  titleBlock: { gap: 6 },
+  title: { ...Typography.displayTitle, color: Colors.textPrimary },
+  subtitle: { ...Typography.body, color: Colors.textMuted },
+  loader: { marginTop: Spacing.xxl },
+  progress: { flexDirection: 'row', height: 6, borderRadius: Radii.full, backgroundColor: Colors.line, overflow: 'hidden' },
+  progressFill: { backgroundColor: Colors.accent },
+  section: { gap: Spacing.sm2 },
+  sectionTitle: { ...Typography.displayLabel, color: Colors.textPrimary },
+  card: { gap: Spacing.sm2, padding: Spacing.md, borderRadius: Radii.lg, backgroundColor: Colors.surface, ...Shadows.card },
+  head: { flexDirection: 'row', gap: Spacing.sm2 },
+  thumb: { width: THUMB, height: THUMB, borderRadius: Radii.sm, backgroundColor: Colors.line },
+  thumbEmpty: { alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.background },
+  headText: { flex: 1, gap: 2, justifyContent: 'center' },
+  cardTitle: { ...Typography.rowTitle, color: Colors.textInk },
+  meta: { ...Typography.bodySmall, color: Colors.textMuted },
+  avgRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
+  mine: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingTop: Spacing.sm2, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: Colors.line,
+  },
+  mineLabel: { ...Typography.body, fontWeight: '600', color: Colors.textInk },
+  comment: {
+    minHeight: 44, padding: Spacing.sm2, borderRadius: Radii.sm,
+    backgroundColor: Colors.background, ...Typography.body, color: Colors.textInk,
+  },
+  other: { gap: 2 },
+  otherName: { ...Typography.bodySmall, fontWeight: '600', color: Colors.textInk },
+  otherText: { ...Typography.body, color: Colors.textMuted },
 });

@@ -17,11 +17,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { BlurView } from 'expo-blur';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect } from 'expo-router/react-navigation';
+import { router } from 'expo-router';
 
 import { Colors, Spacing, Radii, Shadows } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/services/supabase';
+import { fileExtension, uploadLocalFile } from '@/services/storageService';
 import { MemberAvatar } from '@/components/ui/MemberAvatar';
 import { AddFriendSheet } from '@/components/friends/AddFriendSheet';
 
@@ -178,7 +180,7 @@ export default function ProfileScreen() {
             <ActivityIndicator color={Colors.primary} style={{ marginTop: Spacing.md }} />
           ) : friends.length === 0 ? (
             <View style={s.emptyFriends}>
-              <Text style={s.emptyFriendsText}>Pas encore d'amis ici...</Text>
+              <Text style={s.emptyFriendsText}>Pas encore d’amis ici...</Text>
             </View>
           ) : (
             <View style={s.friendsList}>
@@ -194,6 +196,17 @@ export default function ProfileScreen() {
             </View>
           )}
         </View>
+
+        {/* ── Réglages ── */}
+        <TouchableOpacity
+          style={s.settingsRow}
+          activeOpacity={0.85}
+          onPress={() => router.push('/settings/notifications')}
+        >
+          <Ionicons name="notifications-outline" size={18} color={Colors.textPrimary} />
+          <Text style={s.settingsText}>Notifications</Text>
+          <Ionicons name="chevron-forward" size={16} color={Colors.textTertiary} />
+        </TouchableOpacity>
 
         {/* ── Déconnexion ── */}
         <TouchableOpacity style={s.logoutBtn} activeOpacity={0.85} onPress={handleSignOut}>
@@ -308,17 +321,10 @@ function EditProfileSheet({
       let finalAvatarUrl = initialAvatarUrl;
 
       if (localUri) {
-        const ext      = localUri.split('.').pop() ?? 'jpg';
-        const filePath = `${userId}/profile.${ext}`;
-        const formData = new FormData();
-        formData.append('file', { uri: localUri, name: `profile.${ext}`, type: `image/${ext}` } as any);
-
-        const { error: uploadError } = await supabase.storage
-          .from('avatars')
-          .upload(filePath, formData, { upsert: true, contentType: `image/${ext}` });
-        if (uploadError) throw uploadError;
-
-        const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(filePath);
+        const { data: publicUrl, error: uploadError } = await uploadLocalFile(
+          'avatars', `${userId}/profile.${fileExtension(localUri)}`, localUri,
+        );
+        if (uploadError !== null) throw new Error(uploadError);
         finalAvatarUrl = `${publicUrl}?t=${Date.now()}`;
       }
 
@@ -559,6 +565,23 @@ const s = StyleSheet.create({
   },
 
   /* Logout */
+  settingsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm2,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+    borderRadius: Radii.lg,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.borderDark,
+  },
+  settingsText: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+  },
   logoutBtn: {
     flexDirection: 'row',
     alignItems: 'center',

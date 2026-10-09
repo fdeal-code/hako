@@ -1,5 +1,4 @@
 import { View, Text, StyleSheet, TouchableOpacity, ViewStyle } from 'react-native';
-import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { Chip } from '@/components/ui/Chip';
 import { Colors, Spacing, Radii, Shadows } from '@/constants/theme';
@@ -62,10 +61,9 @@ export function FilterTabs({
           />
         </TouchableOpacity>
 
-        {/* Menu glassmorphisme */}
+        {/* Menu tri — opaque V2 */}
         {showSortMenu && (
           <View style={styles.sortMenu}>
-            <BlurView intensity={40} tint="light" style={StyleSheet.absoluteFill} />
             <View style={styles.sortMenuInner}>
               {SORT_OPTIONS.map((opt, i) => (
                 <TouchableOpacity
@@ -117,12 +115,15 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: Radii.full,
-    backgroundColor: '#F0F0F0',
+    backgroundColor: Colors.background,
+    borderWidth: 1,
+    borderColor: Colors.borderDark,
     alignItems: 'center',
     justifyContent: 'center',
   },
   sortBtnActive: {
     backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
   },
 
   /* Menu déroulant */
@@ -134,12 +135,12 @@ const styles = StyleSheet.create({
     borderRadius: Radii.lg,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.55)',
+    borderColor: Colors.borderDark,
     ...Shadows.md,
     zIndex: 99,
   },
   sortMenuInner: {
-    backgroundColor: 'rgba(255,255,255,0.35)',
+    backgroundColor: Colors.background,
   },
   sortOption: {
     flexDirection: 'row',

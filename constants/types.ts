@@ -24,6 +24,10 @@ export interface Trip {
   created_by: string;
   members: TripMember[];
   created_at: string;
+  // Coordonnées stockées à la création (Trip Match) — absentes sur les
+  // trips du flow classique, qui sont géocodés à l'exécution.
+  destination_lat?: number | null;
+  destination_lng?: number | null;
 }
 
 export interface TripMember {

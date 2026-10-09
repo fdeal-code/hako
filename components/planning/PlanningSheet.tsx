@@ -35,7 +35,6 @@ const START_HOUR = 7;
 const END_HOUR   = 23;
 
 /* ─── Helpers ────────────────────────────────────────────────── */
-const MONTHS = ['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'];
 const DAYS   = ['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
 
 function generateDays(start: string, end: string): string[] {

@@ -1,7 +1,9 @@
 import React from 'react';
 import { TouchableOpacity, Text, StyleSheet } from 'react-native';
-import { Colors, Radii, Spacing } from '@/constants/theme';
+import { Colors, Radii, Shadows, Spacing, Typography } from '@/constants/theme';
 
+// Pastille de filtre — composant « Filtre » des maquettes V2 :
+// actif = noir / texte blanc, inactif = crème + contour noir fin.
 export type FilterButtonProps = {
   label:   string;
   active:  boolean;
@@ -15,9 +17,10 @@ export function FilterButton({ label, active, onPress, count }: FilterButtonProp
       style={[s.btn, active && s.btnActive]}
       onPress={onPress}
       activeOpacity={0.75}
+      accessibilityState={{ selected: active }}
     >
       <Text style={[s.label, active && s.labelActive]}>
-        {label}{count != null ? ` (${count})` : ''}
+        {label}{count != null ? ` · ${count}` : ''}
       </Text>
     </TouchableOpacity>
   );
@@ -25,20 +28,22 @@ export function FilterButton({ label, active, onPress, count }: FilterButtonProp
 
 const s = StyleSheet.create({
   btn: {
-    paddingHorizontal: Spacing.md2,
-    paddingVertical:   8,
-    borderRadius:      Radii.full,
-    backgroundColor:   Colors.surface,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical:   Spacing.sm2,
+    borderRadius:      Radii.pill,
+    borderWidth:       1,
+    borderColor:       Colors.primary,
+    backgroundColor:   Colors.background,
+    ...Shadows.md,
   },
   btnActive: {
     backgroundColor: Colors.primary,
   },
   label: {
-    fontSize:   14,
-    fontWeight: '600',
-    color:      Colors.textPrimary,
+    ...Typography.filter,
+    color: Colors.textPrimary,
   },
   labelActive: {
-    color: Colors.textInverted,
+    color: Colors.white,
   },
 });

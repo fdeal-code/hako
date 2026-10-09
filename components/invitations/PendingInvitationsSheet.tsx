@@ -1,6 +1,6 @@
 /**
- * PendingInvitationsSheet — Bottom sheet showing received trip invitations
- * and pending friend requests.
+ * PendingInvitationsSheet — Bottom sheet showing received trip invitations,
+ * pending friend requests and in-app notifications (Trip Match).
  */
 import React, { useState } from 'react';
 import {
@@ -24,6 +24,9 @@ import { supabase } from '@/services/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { tripEvents } from '@/utils/events';
 import { MemberAvatar } from '@/components/ui/MemberAvatar';
+import { MatchInviteList } from '@/components/notifications/MatchInviteList';
+import { TripActivityList } from '@/components/notifications/TripActivityList';
+import { MatchInviteNotification, TripActivityNotification } from '@/types/notifications';
 
 /* ─── Types ─────────────────────────────────────────────────── */
 export interface PendingInvitation {
@@ -57,6 +60,10 @@ interface Props {
   onRefresh: () => void;
   friendRequests: FriendRequest[];
   onFriendRequestsRefresh: () => void;
+  matchNotifications: MatchInviteNotification[];
+  onMatchNotificationPress: (notification: MatchInviteNotification) => void;
+  tripNotifications: TripActivityNotification[];
+  onTripNotificationPress: (notification: TripActivityNotification) => void;
 }
 
 /* ─── Helpers ────────────────────────────────────────────────── */
@@ -79,13 +86,19 @@ export function PendingInvitationsSheet({
   onRefresh,
   friendRequests,
   onFriendRequestsRefresh,
+  matchNotifications,
+  onMatchNotificationPress,
+  tripNotifications,
+  onTripNotificationPress,
 }: Props) {
   const insets = useSafeAreaInsets();
   const { session } = useAuth();
   const [processing,       setProcessing]       = useState<string | null>(null);
   const [processingFriend, setProcessingFriend] = useState<string | null>(null);
 
-  const isEmpty = invitations.length === 0 && friendRequests.length === 0;
+  const isEmpty =
+    invitations.length === 0 && friendRequests.length === 0 && matchNotifications.length === 0
+    && tripNotifications.length === 0;
 
   /* ── Trip invitation ── */
   const handleAccept = async (inv: PendingInvitation) => {
@@ -167,14 +180,26 @@ export function PendingInvitationsSheet({
             {isEmpty && (
               <View style={s.emptyState}>
                 <Text style={s.emptyIcon}>🔔</Text>
-                <Text style={s.emptyText}>Aucune notification pour l'instant.</Text>
+                <Text style={s.emptyText}>Aucune notification pour l’instant.</Text>
               </View>
             )}
+
+            {/* ── Activité des voyages (à faire + fil) ── */}
+            <TripActivityList
+              notifications={tripNotifications}
+              onPress={onTripNotificationPress}
+            />
+
+            {/* ── Invitations Trip Match ── */}
+            <MatchInviteList
+              notifications={matchNotifications}
+              onPress={onMatchNotificationPress}
+            />
 
             {/* ── Demandes d'amis ── */}
             {friendRequests.length > 0 && (
               <>
-                <Text style={s.sectionLabel}>Demandes d'amis</Text>
+                <Text style={s.sectionLabel}>Demandes d’amis</Text>
                 {friendRequests.map(req => {
                   const isProc = processingFriend === req.id;
                   const name   = req.requester?.nickname ?? "Quelqu'un";
@@ -215,7 +240,7 @@ export function PendingInvitationsSheet({
             {/* ── Invitations de voyage ── */}
             {invitations.length > 0 && (
               <>
-                <Text style={[s.sectionLabel, friendRequests.length > 0 && { marginTop: Spacing.lg }]}>
+                <Text style={[s.sectionLabel, (friendRequests.length > 0 || matchNotifications.length > 0) && { marginTop: Spacing.lg }]}>
                   Invitations de voyage
                 </Text>
                 {invitations.map(inv => {

@@ -12,7 +12,7 @@
  *  defaultWish absent  → vue "list" (choix d'une envie validée ou ajout manuel)
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -27,10 +27,13 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { durationMinutes, spanHours } from '@/utils/wishPriceDuration';
 
 import { Colors, Spacing, Radii, Shadows } from '@/constants/theme';
 import { ActionButton } from '@/components/ui/ActionButton';
 import { supabase } from '@/services/supabase';
+import { useTripStops } from '@/hooks/useTripStops';
+import { stopForDay, tripDays } from '@/utils/tripStops';
 
 /* ─── Constants ──────────────────────────────────────────────── */
 const START_HOUR = 7;
@@ -55,16 +58,15 @@ function getCat(key?: string | null) {
 /* ─── Helpers ────────────────────────────────────────────────── */
 const DAYS   = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
 
+// UTC (l'ancienne version via toISOString décalait les jours d'un cran en France)
 function generateDays(start: string, end: string): string[] {
-  const result: string[] = [];
-  const s = new Date(start + 'T00:00:00');
-  const e = new Date(end   + 'T00:00:00');
-  const cur = new Date(s);
-  while (cur <= e) {
-    result.push(cur.toISOString().split('T')[0]);
-    cur.setDate(cur.getDate() + 1);
-  }
-  return result;
+  return tripDays(start, end);
+}
+
+/** Aujourd'hui "YYYY-MM-DD" en heure locale. */
+function localToday(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 function formatDayChip(dateStr: string): string {
@@ -75,7 +77,7 @@ function formatDayChip(dateStr: string): string {
 }
 
 function isToday(dateStr: string): boolean {
-  return dateStr === new Date().toISOString().split('T')[0];
+  return dateStr === localToday();
 }
 
 function hourToTime(h: number): string {
@@ -89,6 +91,14 @@ export interface WishItem {
   image_url?: string | null;
   cover_url?: string | null;
   category?:  string | null;
+  stop_id?:   string | null;  // ville de l'envie (multi-étapes)
+  duration_minutes?: number | null;  // durée de l'envie → heure de fin proposée
+  duration?:  string | null;         // ancienne durée (lue en secours)
+}
+
+/** Heures occupées par une envie au planning (d'après sa durée, 1 h par défaut). */
+function wishSpanHours(wish: WishItem | null): number {
+  return spanHours(durationMinutes(wish?.duration_minutes, wish?.duration));
 }
 
 export interface AddToPlanningSheetProps {
@@ -116,6 +126,7 @@ export function AddToPlanningSheet({
   defaultWish, defaultHour, defaultDay, forceManual,
 }: AddToPlanningSheetProps) {
   const insets = useSafeAreaInsets();
+  const { stops } = useTripStops(tripId);
 
   /* ── Data ── */
   const [days,        setDays]        = useState<string[]>([]);
@@ -131,6 +142,20 @@ export function AddToPlanningSheet({
   const [startH, setStartH] = useState(9);
   const [endH,   setEndH]   = useState(10);
   const [locked, setLocked] = useState(false);
+
+  /* ── Multi-étapes : une envie rangée dans une ville ne se planifie que
+        pendant les jours passés dans cette ville ── */
+  const wishStop   = selWish?.stop_id ? stops.find(st => st.id === selWish.stop_id) ?? null : null;
+  const allowedDays = useMemo(
+    () => (wishStop ? tripDays(wishStop.start_date, wishStop.end_date) : null),
+    [wishStop],
+  );
+  const planningStopId = wishStop?.id ?? (selDay ? stopForDay(stops, selDay)?.id ?? null : null);
+  useEffect(() => {
+    if (!allowedDays || allowedDays.includes(selDay)) return;
+    const first = allowedDays.find(d => days.includes(d));
+    if (first) setSelDay(first);
+  }, [allowedDays, selDay, days]);
 
   /* ── Manual add ── */
   const [manualTitle, setManualTitle] = useState('');
@@ -155,7 +180,7 @@ export function AddToPlanningSheet({
       if (trip?.start_date && trip?.end_date) {
         const d = generateDays(trip.start_date, trip.end_date);
         setDays(d);
-        const today = new Date().toISOString().split('T')[0];
+        const today = localToday();
         // Priority: defaultDay > today > first day
         if (defaultDay && d.includes(defaultDay)) {
           setSelDay(defaultDay);
@@ -180,7 +205,7 @@ export function AddToPlanningSheet({
       // 2. Récupère toutes les envies validées
       const { data: allValidated, error: validatedError } = await supabase
         .from('wishes')
-        .select('id, title, image_url, category')
+        .select('*')  // inclut stop_id une fois la migration trip_stops appliquée
         .eq('trip_id', tripId)
         .eq('status', 'validated');
       console.log('[ADD TO PLANNING] ALL VALIDATED:', JSON.stringify(allValidated?.map((w: any) => ({ id: w.id, title: w.title }))));
@@ -221,6 +246,7 @@ export function AddToPlanningSheet({
     // Initial view
     if (defaultWish) {
       setSelWish(defaultWish);
+      setEndH(Math.min(hour + wishSpanHours(defaultWish), END_HOUR));
       setView('time');
     } else if (forceManual) {
       setSelWish(null);
@@ -233,10 +259,13 @@ export function AddToPlanningSheet({
     loadData();
   }, [visible]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /* ── Durée de l'envie : l'heure de fin suit le début ── */
+  const wishSpan = wishSpanHours(selWish);
+
   /* ── Select wish from list → go to time view ── */
   const handleSelectWish = (wish: WishItem) => {
-    console.log('[ADD TO PLANNING] wish selected:', wish.id, wish.title);
     setSelWish(wish);
+    setEndH(Math.min(startH + wishSpanHours(wish), END_HOUR));
     setView('time');
   };
 
@@ -280,6 +309,7 @@ export function AddToPlanningSheet({
       notes:      isManual ? (manualNotes.trim() || null) : null,
       added_by:   userId ?? null,
       sort_order: 0,
+      ...(planningStopId ? { stop_id: planningStopId } : {}),
     };
 
     console.log('[ADD TO PLANNING] INSERT:', JSON.stringify(payload));
@@ -336,11 +366,13 @@ export function AddToPlanningSheet({
           {days.map(d => {
             const active   = selDay === d;
             const todayDot = isToday(d);
+            const allowed  = allowedDays === null || allowedDays.includes(d);
             return (
               <TouchableOpacity
                 key={d}
-                style={[a.dayChip, active && a.dayChipOn]}
+                style={[a.dayChip, active && a.dayChipOn, !allowed && a.dayChipDisabled]}
                 onPress={() => setSelDay(d)}
+                disabled={!allowed}
                 activeOpacity={0.75}
               >
                 <Text style={[a.dayChipTxt, active && a.dayChipTxtOn]}>
@@ -358,13 +390,18 @@ export function AddToPlanningSheet({
         <View style={a.timeBlock}>
           <Text style={a.sectionLbl}>Début</Text>
           <View style={a.picker}>
-            <TouchableOpacity style={a.arrow} onPress={() => setStartH(h => Math.max(START_HOUR, h - 1))}>
+            <TouchableOpacity style={a.arrow} onPress={() => setStartH(h => {
+              const n = Math.max(START_HOUR, h - 1);
+              if (selWish) setEndH(Math.min(n + wishSpan, END_HOUR));
+              return n;
+            })}>
               <Ionicons name="chevron-back" size={20} color={Colors.textPrimary} />
             </TouchableOpacity>
             <Text style={a.timeVal}>{startH}h00</Text>
             <TouchableOpacity style={a.arrow} onPress={() => setStartH(h => {
               const n = Math.min(END_HOUR - 1, h + 1);
-              if (n >= endH) setEndH(n + 1);
+              if (selWish) setEndH(Math.min(n + wishSpan, END_HOUR));
+              else if (n >= endH) setEndH(n + 1);
               return n;
             })}>
               <Ionicons name="chevron-forward" size={20} color={Colors.textPrimary} />
@@ -448,7 +485,7 @@ export function AddToPlanningSheet({
               <View style={a.emptyWrap}>
                 <Text style={a.emptyTxt}>Aucune envie validée disponible</Text>
                 <Text style={a.emptySub}>
-                  Valide des envies dans "Vos Envies" pour les retrouver ici
+                  Valide des envies dans « Vos Envies » pour les retrouver ici
                 </Text>
               </View>
             ) : (
@@ -812,6 +849,9 @@ const a = StyleSheet.create({
     borderColor: Colors.border,
     alignItems: 'center',
     gap: 3,
+  },
+  dayChipDisabled: {
+    opacity: 0.3,
   },
   dayChipOn: {
     backgroundColor: Colors.primary,
