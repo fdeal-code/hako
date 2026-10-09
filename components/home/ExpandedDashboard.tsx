@@ -29,7 +29,6 @@ import { router } from 'expo-router';
 import { Colors, Fonts, Radii, Spacing } from '@/constants/theme';
 import { NavButton } from '@/components/ui/NavButton';
 import { MemberAvatar } from '@/components/ui/MemberAvatar';
-import { InviteSheet } from '@/components/invitations/InviteSheet';
 import { Trip } from '@/constants/types';
 import { useHomeExpand } from '@/contexts/HomeExpandContext';
 import { supabase } from '@/services/supabase';
@@ -130,7 +129,6 @@ export function ExpandedDashboard({ trip, cardLayout, progress }: Props) {
      feuille et la barre du bas, sans scroll */
   const [sheetHeight, setSheetHeight] = useState(0);
   const navReserve = Math.max(insets.bottom, 10) + Spacing.md + NAV_BUTTON_SIZE + Spacing.md;
-  const [showInviteSheet, setShowInviteSheet] = useState(false);
   const [members,      setMembers]      = useState<any[]>([]);
 
   /* ── Région de la carte : coordonnées stockées (Trip Match), sinon
@@ -433,12 +431,6 @@ export function ExpandedDashboard({ trip, cardLayout, progress }: Props) {
       </View>
 
 
-      {/* Invite sheet */}
-      <InviteSheet
-        visible={showInviteSheet}
-        onClose={() => setShowInviteSheet(false)}
-        tripId={trip.id}
-      />
 
     </View>
   );

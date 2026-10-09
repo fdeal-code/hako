@@ -1,6 +1,6 @@
 // HAKO — Création · étape 4 « Qui embarque ? » (maquette « V2 · 3 Qui embarque »)
 // Tuiles SOLO / ENTRE AMIS, liste d'amis cochables, invitation par e-mail.
-// Le lien WhatsApp se partage depuis le voyage une fois créé (InviteSheet).
+// Le lien WhatsApp se partage depuis le voyage une fois créé (page « Inviter des amis »).
 
 import { useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';

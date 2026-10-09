@@ -14,7 +14,6 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { Colors, Fonts, Spacing, Radii, Shadows, Typography } from '@/constants/theme';
 import { NavButton } from '@/components/ui/NavButton';
-import { InviteSheet } from '@/components/invitations/InviteSheet';
 import { FutureBento } from '@/components/dashboard/FutureBento';
 import { PastBento } from '@/components/past/PastBento';
 import { NOW_CARD_HEIGHT, NowCard } from '@/components/ongoing/NowCard';
@@ -106,7 +105,6 @@ export default function DashboardScreen() {
   const [isOwner, setIsOwner] = useState(false);
 
   /* Sheets */
-  const [showInviteSheet,   setShowInviteSheet]   = useState(false);
 
   /* Future dashboard data */
   /* Région de la carte : coordonnées stockées (Trip Match), sinon géocodage
@@ -267,7 +265,7 @@ export default function DashboardScreen() {
                 </View>
               ))}
               {isOwner && (
-                <TouchableOpacity style={styles.addMemberBtn} activeOpacity={0.8} onPress={() => setShowInviteSheet(true)}>
+                <TouchableOpacity style={styles.addMemberBtn} activeOpacity={0.8} onPress={() => router.push({ pathname: '/trip/[id]/invite', params: { id: id ?? '' } })}>
                   <Ionicons name="add" size={22} color={Colors.primary} />
                 </TouchableOpacity>
               )}
@@ -368,7 +366,6 @@ export default function DashboardScreen() {
       </View>
 
 
-      <InviteSheet visible={showInviteSheet} onClose={() => setShowInviteSheet(false)} tripId={id ?? ''} />
 
 
     </View>

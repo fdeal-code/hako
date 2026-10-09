@@ -4,7 +4,6 @@
 // Chaque tuile ouvre directement le formulaire concerné (paramètres add=1,
 // mode=…, tab=…). Un lien copié (TikTok, Reel…) est proposé en premier.
 
-import { useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -12,7 +11,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Spacing, Typography } from '@/constants/theme';
 import { CreateTripHeader } from '@/components/createTrip/CreateTripChrome';
 import { ClipboardBanner, OptionRow, SectionTitle } from '@/components/envies/NewWishParts';
-import { InviteSheet } from '@/components/invitations/InviteSheet';
 import { HeroShortcut, ShortcutTile, TileGrid } from '@/components/trip/AddShortcuts';
 import { useClipboardLink } from '@/hooks/useClipboardLink';
 import { useTripOverview } from '@/hooks/useTripOverview';
@@ -24,7 +22,6 @@ export default function AddToTripScreen() {
   const insets = useSafeAreaInsets();
   const { overview } = useTripOverview(tripId);
   const { clipboard, readLink } = useClipboardLink();
-  const [showInvite, setShowInvite] = useState(false);
 
   // Remplace la page « Ajouter » : fermer le formulaire ramène au dashboard
   const go = (pathname: Parameters<typeof router.replace>[0]) => router.replace(pathname);
@@ -127,7 +124,7 @@ export default function AddToTripScreen() {
             icon="person-add-outline"
             title="Des amis"
             subtitle={overview ? `${overview.member_count} voyageur${overview.member_count > 1 ? 's' : ''} pour l’instant` : 'Invite-les au voyage'}
-            onPress={() => setShowInvite(true)}
+            onPress={() => go({ pathname: '/trip/[id]/invite', params: { id: tripId } })}
           />
           <OptionRow
             icon="git-commit-outline"
@@ -146,7 +143,6 @@ export default function AddToTripScreen() {
         </View>
       </ScrollView>
 
-      <InviteSheet visible={showInvite} onClose={() => setShowInvite(false)} tripId={tripId} />
     </View>
   );
 }

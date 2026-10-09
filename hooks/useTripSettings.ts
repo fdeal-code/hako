@@ -4,6 +4,7 @@
 // pause) puis signalée aux dashboards via tripEvents.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
 
 import { useAuth } from '@/contexts/AuthContext';
 import { getOrCreateInviteToken } from '@/services/inviteLinkService';
@@ -37,9 +38,10 @@ export function useTripSettings(tripId: string | undefined) {
     if (tripId) apply(await getTripSettings(tripId));
   }, [tripId, apply]);
 
-  useEffect(() => {
+  // Rechargé à chaque retour sur la page (ex. après « Inviter des amis »)
+  useFocusEffect(useCallback(() => {
     if (tripId) void getTripSettings(tripId).then(apply);
-  }, [tripId, apply]);
+  }, [tripId, apply]));
 
   // Suggestions de couverture pour la destination (Unsplash)
   const destination = settings?.destination ?? '';

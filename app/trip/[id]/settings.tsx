@@ -14,7 +14,6 @@ import * as ImagePicker from 'expo-image-picker';
 import { Colors, Spacing, Typography } from '@/constants/theme';
 import { CreateTripHeader } from '@/components/createTrip/CreateTripChrome';
 import { StyleBudgetStep } from '@/components/createTrip/StyleBudgetStep';
-import { InviteSheet } from '@/components/invitations/InviteSheet';
 import {
   CoverEditor, Divider, MemberRow, NameRow, SettingsGroup, SettingsRow, ShiftStepper,
 } from '@/components/settings/TripSettingsParts';
@@ -34,7 +33,6 @@ export default function TripSettingsScreen() {
   const s = useTripSettings(tripId);
   const { stops } = useTripStops(tripId);
   const [nameDraft, setNameDraft] = useState<string | null>(null); // null = nom enregistré
-  const [showInvite, setShowInvite] = useState(false);
 
   const report = (error: string | null) => { if (error) Alert.alert('Oups', error); };
 
@@ -179,7 +177,7 @@ export default function TripSettingsScreen() {
             <Divider />
             <SettingsRow icon="link-outline" title="Partager le lien d’invitation" value="WhatsApp, Messages…" onPress={() => { void shareInvite(); }} />
             <Divider />
-            <SettingsRow icon="person-add-outline" title="Inviter des amis" value="Depuis tes amis Hako ou par e-mail" onPress={() => setShowInvite(true)} />
+            <SettingsRow icon="person-add-outline" title="Inviter des amis" value="Depuis tes amis Hako ou par e-mail" onPress={() => router.push({ pathname: '/trip/[id]/invite', params: { id: tripId } })} />
           </SettingsGroup>
 
           <SettingsGroup title="PRÉFÉRENCES">
@@ -201,7 +199,6 @@ export default function TripSettingsScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      <InviteSheet visible={showInvite} onClose={() => { setShowInvite(false); void s.refresh(); }} tripId={tripId} />
     </View>
   );
 }
