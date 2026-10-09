@@ -1,5 +1,6 @@
 // HAKO — Hook Préparatifs (app/trip/[id]/preparation.tsx)
-// Essentiels (checklist partagée) + tâches d'orga du groupe, en temps réel.
+// Essentiels (checklist partagée) + tâches d'orga, en temps réel : celles du
+// groupe et ma liste perso (tâches privées, visibles seulement par moi).
 // Les modifications sont optimistes : la liste réagit tout de suite.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -55,9 +56,9 @@ export function usePreparation(tripId: string) {
     else tripEvents.emit(); // dashboard et accueil se rafraîchissent
   }, [refresh]);
 
-  const addTask = useCallback(async (title: string, assignedTo: string | null): Promise<boolean> => {
+  const addTask = useCallback(async (title: string, isPrivate: boolean): Promise<boolean> => {
     if (!title.trim() || !me) return false;
-    const { data, error: err } = await addPrepTask(tripId, me, title, assignedTo);
+    const { data, error: err } = await addPrepTask(tripId, me, title, isPrivate);
     if (err !== null) { setError(err); return false; }
     setTasks(prev => [...(prev ?? []), data]);
     tripEvents.emit();
@@ -74,19 +75,29 @@ export function usePreparation(tripId: string) {
     void run(updatePrepTask(t.id, { assigned_to: userId }));
   }, [run]);
 
+  /** Groupe ↔ perso (seulement pour l'auteur, vérifié aussi côté base). */
+  const setPrivacy = useCallback((t: PrepTask, isPrivate: boolean) => {
+    if (t.addedBy !== me) return;
+    const assignedTo = isPrivate ? me : t.assignedTo;
+    patchLocal(t.id, { isPrivate, assignedTo });
+    void run(updatePrepTask(t.id, { is_private: isPrivate, assigned_to: assignedTo }));
+  }, [me, run]);
+
   const removeTask = useCallback((t: PrepTask) => {
     setTasks(prev => (prev ?? []).filter(x => x.id !== t.id));
     void run(deletePrepTask(t.id));
   }, [run]);
 
-  const sorted = useMemo(() => sortTasks(tasks ?? [], me), [tasks, me]);
+  const group = useMemo(() => sortTasks((tasks ?? []).filter(t => !t.isPrivate), me), [tasks, me]);
+  const mine = useMemo(() => sortTasks((tasks ?? []).filter(t => t.isPrivate), me), [tasks, me]);
+  const done = useMemo(() => [...group.done, ...mine.done], [group.done, mine.done]);
   const essentialsDone = CHECKLIST_ITEMS.filter(i => checklist.done.has(i.key)).length;
   const progress = prepProgress(essentialsDone, CHECKLIST_ITEMS.length, tasks ?? []);
 
   return {
     me, members, loading: tasks === null, error,
-    open: sorted.open, done: sorted.done,
+    groupOpen: group.open, mineOpen: mine.open, done,
     essentialsDone: checklist.done, toggleEssential: checklist.toggle,
-    progress, addTask, toggleTask, assignTask, removeTask,
+    progress, addTask, toggleTask, assignTask, setPrivacy, removeTask,
   };
 }

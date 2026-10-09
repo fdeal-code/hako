@@ -38,6 +38,7 @@ import { tripEvents } from '@/utils/events';
 import { buildWishVoteReminderUrl } from '@/utils/shareLinks';
 import { useTripStops } from '@/hooks/useTripStops';
 import { useWishFilters } from '@/hooks/useWishFilters';
+import { PrepPill } from '@/components/preparation/PrepParts';
 import { activeFilterCount, compareWishes, matchesWishFilters } from '@/utils/wishFilters';
 
 
@@ -1208,8 +1209,13 @@ export default function EnviesScreen() {
 
       {/* ── Header ── */}
       <View style={sc.header}>
-        <Text style={sc.title}>Vos envies</Text>
-        {tripId ? <HelpShortcut tripId={tripId} tab="activities" /> : null}
+        <Text style={sc.title} numberOfLines={1} adjustsFontSizeToFit>Vos envies</Text>
+        {tripId ? (
+          <View style={sc.headerActions}>
+            <PrepPill tripId={tripId} compact />
+            <HelpShortcut tripId={tripId} tab="activities" />
+          </View>
+        ) : null}
       </View>
 
       {/* ── Status chips ── */}
@@ -1386,7 +1392,8 @@ const sc = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: Spacing.md2, paddingTop: Spacing.md, paddingBottom: Spacing.md,
   },
-  title:   { ...Typography.displayTitle, color: Colors.textPrimary },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+  title:   { flexShrink: 1, ...Typography.displayTitle, color: Colors.textPrimary },
 
   filterRow:     { maxHeight: 64, flexGrow: 0 },
   filterContent: { paddingHorizontal: Spacing.md2, paddingVertical: Spacing.sm2, gap: Spacing.sm, alignItems: 'center' },

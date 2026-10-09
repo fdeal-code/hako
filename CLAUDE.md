@@ -171,6 +171,7 @@ Tables principales :
 - ✅ RLS activé sur toutes les tables depuis la migration `20261009160000_rls_core_tables` (avant, 11 tables étaient ouvertes) : on ne voit et ne modifie que les voyages dont on est membre. Exceptions : création d'un voyage, invitation reçue (aperçu + s'ajouter soi-même), l'organisateur ajoute des membres (Trip Match), profils lisibles par les connectés.
 - Helpers SQL (SECURITY DEFINER) : `is_trip_member`, `is_trip_owner`, `has_trip_invitation`, `is_wish_member`, `is_expense_member`.
 - Test : `npx supabase db query --linked -f supabase/tests/rls_core_test.sql` (21 scénarios, tout est annulé à la fin).
+- Préparatifs : les tâches d'orga sont des `wishes` de type `orga` ; `is_private = true` → visibles/modifiables seulement par leur auteur (RLS `wishes_*`, migration `20261009180000`). Test : `supabase/tests/private_tasks_test.sql` (11 scénarios).
 - La clé publique (anon) ne lit plus rien sans connexion : les scripts de démo passent par `npx supabase db query --linked`.
 - `.env` non tracké par git → recréer avec :
   - `EXPO_PUBLIC_SUPABASE_URL` + `EXPO_PUBLIC_SUPABASE_ANON_KEY`

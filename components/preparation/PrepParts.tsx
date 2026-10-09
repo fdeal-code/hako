@@ -23,6 +23,7 @@ const AVATAR = 28;
 const PICK_AVATAR = 36;
 const STRIP_ICON = 36;
 export const PREP_STRIP_HEIGHT = 60;
+const PILL_BADGE = 18;
 
 // ─── Case à cocher ronde ─────────────────────────────────────────────────────
 function Check({ done, onPress, label }: { done: boolean; onPress: () => void; label: string }) {
@@ -89,6 +90,12 @@ export function TaskRow({ task, members, me, border, onToggle, onAssign, onLongP
           <Text style={[styles.rowTitle, task.done && styles.rowTitleDone]}>{task.title}</Text>
           {task.note ? <Text style={styles.rowSub} numberOfLines={1}>{task.note}</Text> : null}
         </View>
+        {task.isPrivate ? (
+          <View style={styles.privateTag} accessibilityLabel="Visible seulement par toi">
+            <Ionicons name="lock-closed" size={12} color={Colors.textMuted} />
+            <Text style={styles.whoTextEmpty}>Perso</Text>
+          </View>
+        ) : (
         <AnimatedPressable
           onPress={() => setPicking(v => !v)}
           style={[styles.who, !who && styles.whoEmpty]}
@@ -108,9 +115,10 @@ export function TaskRow({ task, members, me, border, onToggle, onAssign, onLongP
             </>
           )}
         </AnimatedPressable>
+        )}
       </TouchableOpacity>
 
-      {picking && (
+      {picking && !task.isPrivate && (
         <Animated.View entering={FadeIn.duration(Motion.enter)} style={styles.picker}>
           <Text style={styles.pickerLabel}>Qui s’en occupe ?</Text>
           <View style={styles.pickerRow}>
@@ -136,6 +144,57 @@ export function TaskRow({ task, members, me, border, onToggle, onAssign, onLongP
         </Animated.View>
       )}
     </Animated.View>
+  );
+}
+
+// ─── Visibilité d'une nouvelle tâche : groupe ou rien que moi ────────────────
+export function VisibilityToggle({ isPrivate, onChange }: { isPrivate: boolean; onChange: (isPrivate: boolean) => void }) {
+  const options = [
+    { value: false, label: 'Pour le groupe', icon: 'people-outline' as const },
+    { value: true, label: 'Rien que pour moi', icon: 'lock-closed-outline' as const },
+  ];
+  return (
+    <View style={styles.visibility} accessibilityRole="radiogroup">
+      {options.map(o => {
+        const on = o.value === isPrivate;
+        return (
+          <AnimatedPressable
+            key={o.label}
+            onPress={() => onChange(o.value)}
+            style={[styles.visOption, on && styles.visOptionOn]}
+            scaleTo={Motion.pressScaleSmall}
+            haptic="selection"
+            accessibilityRole="radio"
+            accessibilityState={{ selected: on }}
+          >
+            <Ionicons name={o.icon} size={14} color={on ? Colors.white : Colors.textPrimary} />
+            <Text style={[styles.visText, on && styles.visTextOn]}>{o.label}</Text>
+          </AnimatedPressable>
+        );
+      })}
+    </View>
+  );
+}
+
+// ─── Pastille compacte (en-tête des envies) ─────────────────────────────────
+// Les tâches d'orga ont quitté les envies : on garde un accès direct.
+// compact = icône + compteur seulement (en-tête chargé).
+export function PrepPill({ tripId, compact = false }: { tripId: string; compact?: boolean }) {
+  const s = usePrepSummary(tripId);
+  return (
+    <AnimatedPressable
+      style={styles.pill}
+      onPress={() => router.push({ pathname: '/trip/[id]/preparation', params: { id: tripId } })}
+      scaleTo={Motion.pressScaleSmall}
+      accessibilityRole="button"
+      accessibilityLabel={s && s.openTasks > 0 ? `Préparatifs, ${s.openTasks} à faire` : 'Préparatifs'}
+    >
+      <Ionicons name="checkbox-outline" size={14} color={Colors.textPrimary} />
+      {!compact && <Text style={styles.pillText}>Préparatifs</Text>}
+      {s && s.openTasks > 0 && (
+        <View style={styles.pillBadge}><Text style={styles.pillBadgeText}>{s.openTasks}</Text></View>
+      )}
+    </AnimatedPressable>
   );
 }
 
@@ -187,6 +246,10 @@ const styles = StyleSheet.create({
     paddingLeft: Spacing.xs, paddingRight: Spacing.sm2, paddingVertical: Spacing.xs,
     borderRadius: Radii.full, backgroundColor: Colors.surfaceAlt,
   },
+  privateTag: {
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.xs,
+    paddingHorizontal: Spacing.sm2, paddingVertical: Spacing.xs + 2, borderRadius: Radii.full, backgroundColor: Colors.surfaceAlt,
+  },
   whoEmpty: { paddingLeft: Spacing.sm2, backgroundColor: Colors.surface, borderWidth: 1, borderStyle: 'dashed', borderColor: Colors.borderDark },
   whoText: { flexShrink: 1, ...Typography.chip, color: Colors.textInk },
   whoTextEmpty: { ...Typography.chip, color: Colors.textMuted },
@@ -202,6 +265,24 @@ const styles = StyleSheet.create({
   pickOn: { backgroundColor: Colors.primary, borderColor: Colors.primary },
   pickName: { ...Typography.chip, color: Colors.textInk },
   pickNameOn: { color: Colors.white },
+
+  visibility: { flexDirection: 'row', gap: Spacing.sm },
+  visOption: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.xs + 2,
+    paddingVertical: Spacing.sm, borderRadius: Radii.full, borderWidth: 1, borderColor: Colors.borderDark,
+  },
+  visOptionOn: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  visText: { ...Typography.chip, color: Colors.textPrimary },
+  visTextOn: { color: Colors.white },
+
+  pill: {
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.xs + 2,
+    paddingHorizontal: Spacing.sm2, paddingVertical: Spacing.sm, borderRadius: Radii.full,
+    borderWidth: 1, borderColor: Colors.primary, backgroundColor: Colors.background, ...Shadows.md,
+  },
+  pillText: { ...Typography.chip, color: Colors.textPrimary },
+  pillBadge: { minWidth: PILL_BADGE, height: PILL_BADGE, paddingHorizontal: Spacing.xs, borderRadius: Radii.full, backgroundColor: Colors.accent, alignItems: 'center', justifyContent: 'center' },
+  pillBadgeText: { ...Typography.bodySmall, fontWeight: '700', color: Colors.white },
 
   strip: {
     height: PREP_STRIP_HEIGHT, flexDirection: 'row', alignItems: 'center', gap: Spacing.sm2,

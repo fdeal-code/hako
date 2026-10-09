@@ -7,7 +7,9 @@ import { TripVibe } from '@/types/tripStyle';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
-export type WishKind = 'place' | 'inspiration' | 'orga';
+// Une envie se vote : un lieu ou une inspiration. Les tâches d'orga
+// (wishes.type = 'orga') passent par les Préparatifs (preparationService).
+export type WishKind = 'place' | 'inspiration';
 
 export type WishCategory =
   | 'restaurant' | 'monument' | 'cafe' | 'hotel' | 'activity' | 'photo_spot' | 'bar' | 'other';

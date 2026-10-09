@@ -1,5 +1,6 @@
 // HAKO — Préparatifs : tâches d'orga du groupe (« Louer la voiture »)
-// Stockées dans wishes (type = 'orga') : done + assigned_to (qui s'en occupe).
+// Stockées dans wishes (type = 'orga') : done + assigned_to (qui s'en occupe)
+// + is_private (visible seulement par son auteur, garanti par la RLS).
 
 export interface PrepTask {
   id: string;
@@ -9,6 +10,8 @@ export interface PrepTask {
   assignedTo: string | null;
   addedBy: string;
   createdAt: string;
+  /** Visible seulement par la personne qui l'a créée */
+  isPrivate: boolean;
 }
 
 export interface PrepMember {
@@ -22,5 +25,6 @@ export interface PrepSummary {
   essentialsDone: number;
   essentialsTotal: number;
   openTasks: number;
+  /** Tâches qui m'attendent : assignées à moi ou dans ma liste perso */
   myOpenTasks: number;
 }

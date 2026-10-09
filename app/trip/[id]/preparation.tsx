@@ -1,7 +1,8 @@
 // HAKO — Préparatifs (page plein écran)
 // Tout ce qu'il faut faire avant de partir, séparé des envies (qui, elles, se
 // votent) : les essentiels (papiers, billets, logements, eSIM, assurance) et
-// les tâches du groupe (« Louer la voiture ») avec qui s'en occupe.
+// les tâches (« Louer la voiture ») : pour le groupe, avec qui s'en occupe,
+// ou rien que pour moi (visibles seulement par leur auteur, garanti en base).
 // Paramètre add=1 : le champ « Ajouter une tâche » s'ouvre directement.
 
 import { useState } from 'react';
@@ -15,7 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Colors, Motion, Radii, Shadows, Spacing, Typography } from '@/constants/theme';
 import { CreateTripHeader, SectionLabel, StepTitle, createCardStyles } from '@/components/createTrip/CreateTripChrome';
-import { EssentialRow, TaskRow } from '@/components/preparation/PrepParts';
+import { EssentialRow, TaskRow, VisibilityToggle } from '@/components/preparation/PrepParts';
 import { AnimatedPressable } from '@/components/ui/AnimatedPressable';
 import { usePreparation } from '@/hooks/usePreparation';
 import { useTripOverview } from '@/hooks/useTripOverview';
@@ -27,7 +28,8 @@ const TRACK_HEIGHT = 8;
 const ADD_BTN = 44;
 const FIELD_HEIGHT = 56;
 const MAX_TITLE = 80;
-const IDEAS = ['Louer la voiture', 'Réserver le resto du premier soir', 'Acheter les adaptateurs', 'Faire le change'];
+const GROUP_IDEAS = ['Louer la voiture', 'Réserver le resto du premier soir', 'Acheter les adaptateurs'];
+const PRIVATE_IDEAS = ['Faire ma valise', 'Prévenir ma banque', 'Télécharger les cartes hors ligne'];
 
 export default function PreparationScreen() {
   const { id, add } = useLocalSearchParams<{ id: string; add?: string }>();
@@ -38,23 +40,30 @@ export default function PreparationScreen() {
   const [title, setTitle] = useState('');
   const [showDone, setShowDone] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [isPrivate, setIsPrivate] = useState(false);
 
   const today = localDayIso(new Date());
   const daysLeft = overview?.start_date && overview.start_date > today ? nightsBetween(today, overview.start_date) : null;
   const ratio = p.progress.total > 0 ? p.progress.done / p.progress.total : 0;
   const fill = useAnimatedStyle(() => ({ transform: [{ scaleX: withTiming(ratio, { duration: Motion.enter }) }] }));
 
-  const submit = async (text = title) => {
+  const submit = async (text = title, priv = isPrivate) => {
     if (!text.trim() || adding) return;
     setAdding(true);
-    if (await p.addTask(text, null)) setTitle('');
+    if (await p.addTask(text, priv) && text === title) setTitle('');
     setAdding(false);
   };
 
-  const confirmDelete = (t: PrepTask) => {
-    Alert.alert(t.title, undefined, [
-      { text: 'Annuler', style: 'cancel' },
-      { text: 'Supprimer la tâche', style: 'destructive', onPress: () => p.removeTask(t) },
+  // Appui long : l'auteur peut changer la visibilité ; tout le monde peut supprimer une tâche de groupe
+  const openMenu = (t: PrepTask) => {
+    const mine = t.addedBy === p.me;
+    Alert.alert(t.title, t.isPrivate ? 'Visible seulement par toi.' : 'Visible par tout le groupe.', [
+      ...(mine ? [{
+        text: t.isPrivate ? 'Partager avec le groupe' : 'Garder pour moi',
+        onPress: () => p.setPrivacy(t, !t.isPrivate),
+      }] : []),
+      { text: 'Supprimer la tâche', style: 'destructive' as const, onPress: () => p.removeTask(t) },
+      { text: 'Annuler', style: 'cancel' as const },
     ]);
   };
 
@@ -67,7 +76,7 @@ export default function PreparationScreen() {
       border={i > 0}
       onToggle={() => p.toggleTask(t)}
       onAssign={uid => p.assignTask(t, uid)}
-      onLongPress={() => confirmDelete(t)}
+      onLongPress={() => openMenu(t)}
     />
   ));
 
@@ -94,16 +103,14 @@ export default function PreparationScreen() {
           <View style={styles.track}><Animated.View style={[styles.fill, fill]} /></View>
         </View>
 
-        {/* Tâches du groupe */}
-        <View>
-          <SectionLabel right={p.open.length > 0 ? `${p.open.length} à faire` : undefined}>À faire par le groupe</SectionLabel>
-
+        {/* Nouvelle tâche : pour le groupe ou rien que pour moi */}
+        <View style={styles.addBlock}>
           <View style={[createCardStyles.whiteCard, styles.addField]}>
             <TextInput
               style={styles.input}
               value={title}
               onChangeText={setTitle}
-              placeholder="Ajouter une tâche…"
+              placeholder={isPrivate ? 'Ajouter à ma liste perso…' : 'Ajouter une tâche pour le groupe…'}
               placeholderTextColor={Colors.textSecondary}
               maxLength={MAX_TITLE}
               autoFocus={add === '1'}
@@ -122,40 +129,53 @@ export default function PreparationScreen() {
               {adding ? <ActivityIndicator color={Colors.white} /> : <Ionicons name="add" size={24} color={Colors.white} />}
             </AnimatedPressable>
           </View>
-
-          {p.loading ? (
-            <ActivityIndicator color={Colors.primary} style={styles.loader} />
-          ) : p.open.length === 0 && p.done.length === 0 ? (
-            /* Idées pour démarrer */
-            <Animated.View entering={FadeIn} style={styles.ideas}>
-              <Text style={styles.ideasLabel}>Des idées pour commencer :</Text>
-              <View style={styles.ideasRow}>
-                {IDEAS.map(idea => (
-                  <TouchableOpacity key={idea} style={styles.idea} onPress={() => { void submit(idea); }} activeOpacity={0.85}>
-                    <Ionicons name="add" size={14} color={Colors.textPrimary} />
-                    <Text style={styles.ideaText}>{idea}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </Animated.View>
-          ) : (
-            <>
-              {p.open.length > 0 && <View style={[createCardStyles.whiteCard, styles.list]}>{taskRows(p.open)}</View>}
-              {p.open.length === 0 && <Text style={styles.allDone}>Toutes les tâches sont faites.</Text>}
-              <Text style={styles.hint}>Touche « Qui ? » pour dire qui s’en charge. Appui long pour supprimer.</Text>
-            </>
-          )}
-
-          {p.done.length > 0 && (
-            <>
-              <TouchableOpacity style={styles.doneToggle} onPress={() => setShowDone(v => !v)} hitSlop={8}>
-                <Text style={styles.doneToggleText}>{showDone ? 'Masquer' : 'Voir'} les tâches faites ({p.done.length})</Text>
-                <Ionicons name={showDone ? 'chevron-up' : 'chevron-down'} size={16} color={Colors.textMuted} />
-              </TouchableOpacity>
-              {showDone && <View style={[createCardStyles.whiteCard, styles.list]}>{taskRows(p.done)}</View>}
-            </>
-          )}
+          <VisibilityToggle isPrivate={isPrivate} onChange={setIsPrivate} />
         </View>
+
+        {p.loading ? (
+          <ActivityIndicator color={Colors.primary} />
+        ) : (
+          <>
+            {/* Pour le groupe */}
+            <View>
+              <SectionLabel right={p.groupOpen.length > 0 ? `${p.groupOpen.length} à faire` : undefined}>Pour le groupe</SectionLabel>
+              {p.groupOpen.length > 0 ? (
+                <View style={[createCardStyles.whiteCard, styles.list]}>{taskRows(p.groupOpen)}</View>
+              ) : (
+                <Ideas label="Tout le groupe la voit et peut la cocher. Des idées :" ideas={GROUP_IDEAS} onPick={idea => { void submit(idea, false); }} />
+              )}
+            </View>
+
+            {/* Rien que pour moi */}
+            <View>
+              <View style={styles.privateHead}>
+                <Ionicons name="lock-closed" size={14} color={Colors.textPrimary} />
+                <View style={styles.flex}>
+                  <SectionLabel right={p.mineOpen.length > 0 ? `${p.mineOpen.length} à faire` : undefined}>Rien que pour moi</SectionLabel>
+                </View>
+              </View>
+              {p.mineOpen.length > 0 ? (
+                <View style={[createCardStyles.whiteCard, styles.list]}>{taskRows(p.mineOpen)}</View>
+              ) : (
+                <Ideas label="Visible seulement par toi. Des idées :" ideas={PRIVATE_IDEAS} onPick={idea => { void submit(idea, true); }} />
+              )}
+            </View>
+
+            {(p.groupOpen.length > 0 || p.mineOpen.length > 0) && (
+              <Text style={styles.hint}>Touche « Qui ? » pour dire qui s’en charge. Appui long pour plus d’options.</Text>
+            )}
+
+            {p.done.length > 0 && (
+              <View>
+                <TouchableOpacity style={styles.doneToggle} onPress={() => setShowDone(v => !v)} hitSlop={8}>
+                  <Text style={styles.doneToggleText}>{showDone ? 'Masquer' : 'Voir'} les tâches faites ({p.done.length})</Text>
+                  <Ionicons name={showDone ? 'chevron-up' : 'chevron-down'} size={16} color={Colors.textMuted} />
+                </TouchableOpacity>
+                {showDone && <View style={[createCardStyles.whiteCard, styles.list]}>{taskRows(p.done)}</View>}
+              </View>
+            )}
+          </>
+        )}
 
         {/* Essentiels */}
         <View>
@@ -182,6 +202,22 @@ export default function PreparationScreen() {
   );
 }
 
+function Ideas({ label, ideas, onPick }: { label: string; ideas: readonly string[]; onPick: (idea: string) => void }) {
+  return (
+    <Animated.View entering={FadeIn} style={styles.ideas}>
+      <Text style={styles.ideasLabel}>{label}</Text>
+      <View style={styles.ideasRow}>
+        {ideas.map(idea => (
+          <TouchableOpacity key={idea} style={styles.idea} onPress={() => onPick(idea)} activeOpacity={0.85}>
+            <Ionicons name="add" size={14} color={Colors.textPrimary} />
+            <Text style={styles.ideaText}>{idea}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </Animated.View>
+  );
+}
+
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.background },
   content: { paddingHorizontal: Spacing.md2, paddingTop: Spacing.xl, gap: Spacing.lg },
@@ -193,7 +229,10 @@ const styles = StyleSheet.create({
   track: { height: TRACK_HEIGHT, borderRadius: Radii.full, backgroundColor: Colors.textMuted, overflow: 'hidden' },
   fill: { height: '100%', borderRadius: Radii.full, backgroundColor: Colors.accent, transformOrigin: 'left' },
 
-  addField: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, minHeight: FIELD_HEIGHT, paddingLeft: Spacing.md, paddingRight: Spacing.sm, marginBottom: Spacing.sm2 },
+  flex: { flex: 1 },
+  addBlock: { gap: Spacing.sm2 },
+  privateHead: { flexDirection: 'row', alignItems: 'baseline', gap: Spacing.xs + 2 },
+  addField: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, minHeight: FIELD_HEIGHT, paddingLeft: Spacing.md, paddingRight: Spacing.sm },
   input: { flex: 1, ...Typography.cardTitle, color: Colors.textInk, paddingVertical: Spacing.md },
   addBtn: { width: ADD_BTN, height: ADD_BTN, borderRadius: Radii.full, backgroundColor: Colors.accent, alignItems: 'center', justifyContent: 'center' },
   addBtnOff: { opacity: 0.35 },
@@ -201,7 +240,6 @@ const styles = StyleSheet.create({
   list: { paddingHorizontal: Spacing.md },
   loader: { marginTop: Spacing.md },
   hint: { ...Typography.bodySmall, color: Colors.textMuted, marginTop: Spacing.sm, marginLeft: Spacing.xs },
-  allDone: { ...Typography.body, color: Colors.positive, marginLeft: Spacing.xs },
 
   ideas: { gap: Spacing.sm },
   ideasLabel: { ...Typography.bodySmall, color: Colors.textMuted, marginLeft: Spacing.xs },
