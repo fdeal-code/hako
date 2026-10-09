@@ -30,3 +30,43 @@ export async function getBudget(tripId: string): Promise<ServiceResult<{ members
     error: null,
   };
 }
+
+export interface NewExpense {
+  tripId: string;
+  paidBy: string;
+  title: string;
+  amount: number;
+  category: string;
+  date: string;
+  stopId: string | null;
+  splits: { user_id: string; amount: number }[];
+}
+
+/** Crée la dépense et ses parts ; annule la dépense si les parts échouent. */
+export async function addExpense(input: NewExpense): Promise<ServiceResult<string>> {
+  const { data, error } = await supabase
+    .from('expenses')
+    .insert({
+      trip_id: input.tripId,
+      paid_by: input.paidBy,
+      title: input.title.trim(),
+      amount: input.amount,
+      category: input.category,
+      date: input.date,
+      split_type: 'equal',
+      stop_id: input.stopId,
+    })
+    .select('id')
+    .single();
+  if (error) return serviceError(error.message);
+  const expenseId = (data as { id: string }).id;
+
+  const { error: splitError } = await supabase
+    .from('expense_splits')
+    .insert(input.splits.map(s => ({ ...s, expense_id: expenseId })));
+  if (splitError) {
+    await supabase.from('expenses').delete().eq('id', expenseId);
+    return serviceError(splitError.message);
+  }
+  return { data: expenseId, error: null };
+}

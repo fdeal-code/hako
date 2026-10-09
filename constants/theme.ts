@@ -117,6 +117,7 @@ export const Typography = {
   displayTitle: { fontFamily: Fonts.display, fontSize: 32 },      // « Où part-on ? »
   displayValue: { fontFamily: Fonts.display, fontSize: 24 },      // « 02 juin »
   displayLabel: { fontFamily: Fonts.displayBold, fontSize: 14 },  // « DÉPART », « TES AMIS »
+  displayAmount: { fontFamily: Fonts.displayBold, fontSize: 56 }, // montant saisi (« 42 € »)
   // SF Pro — maquettes V2
   headerSmall: { fontSize: 20, fontWeight: '600' as const },     // « Nouveau voyage »
   cardTitle:   { fontSize: 16, fontWeight: '600' as const },     // titres des cartes blanches

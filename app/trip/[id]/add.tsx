@@ -94,7 +94,7 @@ export default function AddToTripScreen() {
                 icon="wallet-outline"
                 title="Une dépense"
                 subtitle="Qui a payé quoi"
-                onPress={() => go({ pathname: '/trip/[id]/budget', params: { id: tripId, add: '1' } })}
+                onPress={() => go({ pathname: '/trip/[id]/expense/new', params: { id: tripId } })}
               />,
               <ShortcutTile
                 key="planning"

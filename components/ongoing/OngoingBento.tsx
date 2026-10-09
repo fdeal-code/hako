@@ -199,7 +199,7 @@ export function OngoingBento({ tripId, ongoing: o, region, onMapPress, available
             <Text style={styles.title}>DÉPENSES</Text>
             <TouchableOpacity
               style={styles.plusSmall}
-              onPress={() => router.push({ pathname: '/trip/[id]/budget', params: { id: tripId, add: '1' } })}
+              onPress={() => router.push({ pathname: '/trip/[id]/expense/new', params: { id: tripId } })}
               hitSlop={8}
               accessibilityLabel="Ajouter une dépense"
             >

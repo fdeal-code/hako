@@ -172,7 +172,7 @@ export function FutureBento({
                 <Text style={styles.title}>BUDGET</Text>
                 <TouchableOpacity
                   style={styles.addCircleSmall}
-                  onPress={() => router.push({ pathname: '/trip/[id]/budget', params: { id: tripId, add: '1' } })}
+                  onPress={() => router.push({ pathname: '/trip/[id]/expense/new', params: { id: tripId } })}
                   hitSlop={8}
                   accessibilityLabel="Ajouter une dépense"
                 >
