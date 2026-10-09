@@ -13,7 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Radii, Shadows, Spacing, Typography } from '@/constants/theme';
 import { CreateTripHeader, StepActions } from '@/components/createTrip/CreateTripChrome';
 import {
-  ClipboardBanner, LinkField, OptionRow, PlaceCard, PlacePhoto, PlaceSearch, SectionTitle, VibeChips, VideoPreview,
+  ClipboardBanner, LinkField, OptionRow, ShareTip, PlaceCard, PlacePhoto, PlaceSearch, SectionTitle, VibeChips, VideoPreview,
 } from '@/components/envies/NewWishParts';
 import { PriceDurationFields } from '@/components/envies/PriceDurationFields';
 import { useAuth } from '@/contexts/AuthContext';
@@ -114,6 +114,7 @@ export default function NewWishScreen() {
                   onPress={() => w.goTo('orga')}
                 />
               </View>
+              <ShareTip />
             </>
           )}
 

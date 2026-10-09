@@ -263,11 +263,27 @@ export function VibeChips({ selected, onToggle }: { selected: readonly WishVibe[
   );
 }
 
+// ─── Astuce : partager depuis TikTok / Instagram (maquette « Astuce partage ») ─
+export function ShareTip() {
+  return (
+    <View style={styles.tip}>
+      <Ionicons name="share-outline" size={16} color={Colors.accent} />
+      <Text style={styles.tipText}>Depuis TikTok ou Insta : Partager → Hako</Text>
+    </View>
+  );
+}
+
 export function SectionTitle({ children }: { children: string }) {
   return <Text style={styles.sectionLabel}>{children}</Text>;
 }
 
 const styles = StyleSheet.create({
+  tip: {
+    alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
+    paddingHorizontal: Spacing.sm2 + 2, paddingVertical: Spacing.sm + 2,
+    borderRadius: Radii.full, borderWidth: 1, borderStyle: 'dashed', borderColor: Colors.accent,
+  },
+  tipText: { ...Typography.chip, color: Colors.accent },
   banner: {
     flexDirection: 'row', alignItems: 'center', gap: Spacing.sm2,
     padding: Spacing.sm2 + 2, borderRadius: Radii.lg,

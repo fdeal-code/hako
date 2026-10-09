@@ -180,6 +180,13 @@ Tables principales :
     `EXPO_PUBLIC_BOOKING_AID`, `EXPO_PUBLIC_HOSTELWORLD_AFFILIATE`, `EXPO_PUBLIC_GETYOURGUIDE_PARTNER_ID`,
     `EXPO_PUBLIC_VIATOR_PID`, `EXPO_PUBLIC_AIRALO_REF`, `EXPO_PUBLIC_HEYMONDO_REF`
 
+### Partage depuis TikTok / Instagram (Share Sheet natif)
+
+- `expo-share-intent` (config dans `app.json`) : Hako apparaît dans le menu Partager. Le lien reçu ouvre `app/share.tsx` (choix du voyage) puis `trip/[id]/wish/new?link=…` (aperçu « Joli spot ! »).
+- `app/+native-intent.tsx` redirige le lien interne `hako://dataUrl=…` vers `/share` ; `ShareIntentProvider` dans `app/_layout.tsx` (désactivé dans Expo Go).
+- `plugins/withShareExtensionDisplayName.js` affiche « Hako » dans le menu Partager (doit rester AVANT `expo-share-intent` dans `app.json`).
+- ⚠️ Ne marche PAS dans Expo Go : il faut un build de développement (`eas build --profile development`, ou `npx expo run:ios` avec Xcode). Identifiants : `com.fdealcode.hako`, App Group `group.com.fdealcode.hako`.
+
 ## ⚠️ PIÈGES CRITIQUES
 
 ### 1. Carte — un seul écran

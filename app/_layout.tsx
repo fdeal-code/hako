@@ -12,6 +12,9 @@ import {
   BricolageGrotesque_700Bold,
 } from '@expo-google-fonts/bricolage-grotesque';
 
+import Constants, { ExecutionEnvironment } from 'expo-constants';
+import { ShareIntentProvider, useShareIntentContext } from 'expo-share-intent';
+
 import { Colors } from '@/constants/theme';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 
@@ -30,6 +33,7 @@ const hakoTheme = {
 /* ─── AuthGate — redirige selon l'état de connexion ─────────── */
 function AuthGate() {
   const { session, loading } = useAuth();
+  const { hasShareIntent } = useShareIntentContext();
   const segments = useSegments();
   const router   = useRouter();
 
@@ -44,12 +48,13 @@ function AuthGate() {
       // Pas connecté → login
       router.replace('/(auth)/login');
     } else if (session && inAuthGroup) {
-      // Connecté : retour à l'invitation en attente, sinon accueil
+      // Connecté : retour au partage ou à l'invitation en attente, sinon accueil
+      if (hasShareIntent) { router.replace('/share'); return; }
       void takePendingInvite().then(token => {
         router.replace(token ? `/join/${token}` : '/(tabs)');
       });
     }
-  }, [session, loading, segments]);
+  }, [session, loading, segments, hasShareIntent]);
 
   if (loading) {
     return (
@@ -90,6 +95,7 @@ function AuthGate() {
       <Stack.Screen name="join/[token]"              options={{ headerShown: false }} />
       <Stack.Screen name="settings/notifications"    options={{ headerShown: false }} />
       <Stack.Screen name="notifications"             options={{ headerShown: false }} />
+      <Stack.Screen name="share"                     options={{ headerShown: false, presentation: 'fullScreenModal' }} />
       <Stack.Screen
         name="match/create"
         options={{ presentation: 'modal', headerShown: false }}
@@ -124,6 +130,8 @@ export default function RootLayout() {
   }
 
   return (
+    // Partage depuis TikTok / Instagram : inactif dans Expo Go (module natif absent)
+    <ShareIntentProvider options={{ disabled: Constants.executionEnvironment === ExecutionEnvironment.StoreClient }}>
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AuthProvider>
         <ThemeProvider value={hakoTheme}>
@@ -132,5 +140,6 @@ export default function RootLayout() {
         </ThemeProvider>
       </AuthProvider>
     </GestureHandlerRootView>
+    </ShareIntentProvider>
   );
 }
