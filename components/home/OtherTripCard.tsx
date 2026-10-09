@@ -1,14 +1,19 @@
-// HAKO — Accueil : petite carte « Tes autres voyages » (maquette « Accueil · Actif »)
+// HAKO — Accueil : petite carte « Tes autres voyages » (slider horizontal)
+// Photo, pastille (J-x, En cours, Terminé), nom et mois. Tap → dashboard
+// animé (même ouverture que la grande carte).
 
 import { useRef } from 'react';
-import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, StyleSheet, Text, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 
-import { Colors, Fonts, Radii, Spacing } from '@/constants/theme';
+import { Colors, Radii, Spacing, Typography } from '@/constants/theme';
 import { Trip } from '@/constants/types';
-import { localDayIso } from '@/utils/tripStops';
+import { localDayIso, nightsBetween } from '@/utils/tripStops';
 import { CardLayout } from '@/components/home/ExpandedDashboard';
+import { AnimatedPressable } from '@/components/ui/AnimatedPressable';
 
-const CARD_HEIGHT = 100;
+const CARD_HEIGHT = 168;
+const SCRIM = [Colors.scrimClear, Colors.scrimStrong] as const;
 const MONTHS = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
 
 function monthYear(iso: string): string {
@@ -16,45 +21,50 @@ function monthYear(iso: string): string {
   return `${MONTHS[(m ?? 1) - 1] ?? ''} ${y ?? ''}`;
 }
 
-export function OtherTripCard({ trip, onExpand }: { trip: Trip; onExpand: (layout: CardLayout) => void }) {
+export function OtherTripCard({ trip, width, onExpand }: { trip: Trip; width: number; onExpand: (layout: CardLayout) => void }) {
   const ref = useRef<View>(null);
   const today = localDayIso(new Date());
-  const tag = trip.end_date < today ? 'Terminé' : trip.start_date <= today ? 'En cours' : null;
+  const past = trip.end_date < today;
+  const ongoing = !past && trip.start_date <= today;
+  const tag = past ? 'Terminé' : ongoing ? 'En cours' : `J-${nightsBetween(today, trip.start_date)}`;
 
   return (
-    <View ref={ref} collapsable={false} style={styles.wrap}>
-      <TouchableOpacity
+    <View ref={ref} collapsable={false} style={{ width }}>
+      <AnimatedPressable
         style={styles.card}
-        onPress={() => ref.current?.measureInWindow((x, y, width, height) => onExpand({ x, y, width, height }))}
-        activeOpacity={0.9}
+        onPress={() => ref.current?.measureInWindow((x, y, w, h) => onExpand({ x, y, width: w, height: h }))}
+        accessibilityRole="button"
+        accessibilityLabel={`${trip.name}, ${tag}`}
       >
         {trip.cover_url
           ? <Image source={{ uri: trip.cover_url }} style={StyleSheet.absoluteFill} resizeMode="cover" />
           : <View style={[StyleSheet.absoluteFill, styles.coverEmpty]} />}
-        <View style={styles.dim} />
+        <LinearGradient colors={SCRIM} style={StyleSheet.absoluteFill} />
         <View style={styles.top}>
-          {tag && <View style={styles.tag}><Text style={styles.tagText}>{tag}</Text></View>}
+          <View style={[styles.tag, past && styles.tagPast]}>
+            <Text style={[styles.tagText, past && styles.tagTextPast]}>{tag}</Text>
+          </View>
         </View>
         <View>
-          <Text style={styles.name} numberOfLines={1}>{trip.name}</Text>
-          <Text style={styles.sub}>{monthYear(trip.start_date)}</Text>
+          <Text style={styles.name} numberOfLines={2}>{trip.name}</Text>
+          <Text style={styles.sub} numberOfLines={1}>{monthYear(trip.start_date)} · {trip.destination}</Text>
         </View>
-      </TouchableOpacity>
+      </AnimatedPressable>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { flex: 1, flexBasis: 0 },
   card: {
     height: CARD_HEIGHT, borderRadius: Radii.lg, overflow: 'hidden',
     borderWidth: 1, borderColor: Colors.primary, padding: Spacing.sm2, justifyContent: 'space-between',
   },
   coverEmpty: { backgroundColor: Colors.primary },
-  dim: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.35)' },
   top: { flexDirection: 'row' },
   tag: { paddingHorizontal: Spacing.sm, paddingVertical: Spacing.xs, borderRadius: Radii.full, backgroundColor: Colors.accent },
-  tagText: { fontSize: 11, fontWeight: '600', color: Colors.white },
-  name: { fontFamily: Fonts.displayBold, fontSize: 20, color: Colors.white },
-  sub: { fontSize: 11, fontWeight: '500', color: Colors.white },
+  tagPast: { backgroundColor: Colors.glassLight },
+  tagText: { ...Typography.bodySmall, fontWeight: '600', color: Colors.white },
+  tagTextPast: { color: Colors.textPrimary },
+  name: { ...Typography.displayValue, color: Colors.white },
+  sub: { ...Typography.bodySmall, color: Colors.white },
 });

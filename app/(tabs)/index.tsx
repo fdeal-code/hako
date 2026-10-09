@@ -1,10 +1,11 @@
 // HAKO — Accueil (maquettes « Accueil · Actif » / « Premier lancement »)
 // Salutation + cloche, titre, invitation en attente, carte du prochain
-// voyage (J-x + prochaine action), « Tes autres voyages », Trip Match.
+// voyage (J-x + prochaine action), « Tes autres voyages » (à venir puis
+// terminés) en slider horizontal ou en liste de grandes cartes, Trip Match.
 // La cloche ouvre la page app/notifications.tsx.
 
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 import { useFocusEffect } from 'expo-router/react-navigation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -25,9 +26,10 @@ import { useHomeExpand } from '@/contexts/HomeExpandContext';
 import { useInbox } from '@/hooks/useInbox';
 import { supabase } from '@/services/supabase';
 import { tripEvents } from '@/utils/events';
+import { splitHomeTrips } from '@/utils/homeTrips';
 import { localDayIso } from '@/utils/tripStops';
 
-const OTHER_TRIPS_PREVIEW = 2;
+const SLIDER_VISIBLE_CARDS = 2.3; // la carte coupée à droite invite à faire glisser
 const BELL_SIZE = 56;
 const EXPAND_MS = 500;
 const COLLAPSE_MS = 400;
@@ -66,6 +68,7 @@ function dbRowToTrip(row: TripRowDb, today: string): Trip {
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
   const { session } = useAuth();
   const inbox = useInbox();
   const [profileNick, setProfileNick] = useState<string | null>(null);
@@ -75,7 +78,6 @@ export default function HomeScreen() {
   const [trips, setTrips] = useState<Trip[]>([]);
   const [loadingTrips, setLoadingTrips] = useState(true);
   const [showAllTrips, setShowAllTrips] = useState(false);
-  const [showAllPast, setShowAllPast] = useState(false);
   const [joiningId, setJoiningId] = useState<string | null>(null);
   const [expandedTrip, setExpandedTrip] = useState<Trip | null>(null);
   const [cardLayout, setCardLayout] = useState<CardLayout>({ x: 0, y: 0, width: 0, height: 0 });
@@ -110,20 +112,10 @@ export default function HomeScreen() {
   useFocusEffect(fetchTrips);
   useEffect(() => tripEvents.subscribe(fetchTrips), [fetchTrips]);
 
-  /* ── Prochain voyage = en cours ou départ le plus proche ; puis les autres
-     voyages à venir ; les voyages terminés ont leur propre section ── */
-  const today = localDayIso(new Date());
-  const upcoming = trips.filter(t => t.end_date >= today).sort((a, b) => (a.start_date > b.start_date ? 1 : -1));
-  const nextTrip = upcoming[0] ?? null;
-  const others = upcoming.slice(1);
-  const pastTrips = trips.filter(t => t.end_date < today).sort((a, b) => (a.start_date < b.start_date ? 1 : -1));
-  const toRows = (list: Trip[]): Trip[][] => {
-    const rows: Trip[][] = [];
-    for (let i = 0; i < list.length; i += 2) rows.push(list.slice(i, i + 2));
-    return rows;
-  };
-  const otherRows = toRows(showAllTrips ? others : others.slice(0, OTHER_TRIPS_PREVIEW));
-  const pastRows = toRows(showAllPast ? pastTrips : pastTrips.slice(0, OTHER_TRIPS_PREVIEW));
+  /* ── En vedette : en cours ou prochain départ ; tous les autres (à venir
+     puis terminés) dans une seule section, en slider ou en liste ── */
+  const { featured: nextTrip, others } = splitHomeTrips(trips, localDayIso(new Date()));
+  const sliderCardWidth = Math.round((width - Spacing.md2 * 2 - Spacing.sm2) / SLIDER_VISIBLE_CARDS);
 
   /* ── Ouverture animée du dashboard (overlay existant) ── */
   const handleExpand = (trip: Trip, layout: CardLayout) => {
@@ -198,41 +190,36 @@ export default function HomeScreen() {
             {others.length > 0 && (
               <Animated.View entering={FadeInDown.delay(Motion.stagger * 2).duration(Motion.enter).reduceMotion(ReduceMotion.System)} style={styles.section}>
                 <View style={styles.sectionRow}>
-                  <Text style={styles.sectionLabel}>TES AUTRES VOYAGES</Text>
-                  {others.length > OTHER_TRIPS_PREVIEW && (
-                    <TouchableOpacity onPress={() => setShowAllTrips(v => !v)}>
-                      <Text style={styles.sectionLink}>{showAllTrips ? 'Moins' : 'Tout voir'}</Text>
-                    </TouchableOpacity>
-                  )}
+                  <Text style={styles.sectionLabel}>{nextTrip ? 'TES AUTRES VOYAGES' : 'TES VOYAGES'}</Text>
+                  <TouchableOpacity onPress={() => setShowAllTrips(v => !v)} hitSlop={10}>
+                    <Text style={styles.sectionLink}>{showAllTrips ? 'Réduire' : `Tout voir (${others.length})`}</Text>
+                  </TouchableOpacity>
                 </View>
-                {otherRows.map(row => (
-                  <View key={row.map(t => t.id).join('-')} style={styles.otherRow}>
-                    {row.map(trip => (
-                      <OtherTripCard key={trip.id} trip={trip} onExpand={layout => handleExpand(trip, layout)} />
+
+                {showAllTrips ? (
+                  /* Tout voir : chaque voyage en grande carte, comme celui en cours */
+                  <View style={styles.allList}>
+                    {others.map((trip, i) => (
+                      <Animated.View key={trip.id} entering={FadeInDown.delay(Math.min(i, Motion.maxStaggerItems) * Motion.stagger).duration(Motion.enter).reduceMotion(ReduceMotion.System)}>
+                        <NextTripCard trip={trip} onExpand={layout => handleExpand(trip, layout)} />
+                      </Animated.View>
                     ))}
-                    {row.length === 1 && <View style={styles.otherSpacer} />}
                   </View>
-                ))}
-              </Animated.View>
-            )}
-            {pastTrips.length > 0 && (
-              <Animated.View entering={FadeInDown.delay(Motion.stagger * 4).duration(Motion.enter).reduceMotion(ReduceMotion.System)} style={styles.section}>
-                <View style={styles.sectionRow}>
-                  <Text style={styles.sectionLabel}>TES SOUVENIRS</Text>
-                  {pastTrips.length > OTHER_TRIPS_PREVIEW && (
-                    <TouchableOpacity onPress={() => setShowAllPast(v => !v)}>
-                      <Text style={styles.sectionLink}>{showAllPast ? 'Moins' : 'Tout voir'}</Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-                {pastRows.map(row => (
-                  <View key={row.map(t => t.id).join('-')} style={styles.otherRow}>
-                    {row.map(trip => (
-                      <OtherTripCard key={trip.id} trip={trip} onExpand={layout => handleExpand(trip, layout)} />
+                ) : (
+                  /* Slider horizontal : on fait glisser les cartes */
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={styles.slider}
+                    contentContainerStyle={styles.sliderContent}
+                    snapToInterval={sliderCardWidth + Spacing.sm2}
+                    decelerationRate="fast"
+                  >
+                    {others.map(trip => (
+                      <OtherTripCard key={trip.id} trip={trip} width={sliderCardWidth} onExpand={layout => handleExpand(trip, layout)} />
                     ))}
-                    {row.length === 1 && <View style={styles.otherSpacer} />}
-                  </View>
-                ))}
+                  </ScrollView>
+                )}
               </Animated.View>
             )}
           </>
@@ -273,7 +260,9 @@ const styles = StyleSheet.create({
   section: { gap: Spacing.sm2 - 2 },
   sectionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   sectionLabel: { ...Typography.displayLabel, color: Colors.textPrimary },
-  sectionLink: { fontSize: 12, fontWeight: '600', color: Colors.accent },
-  otherRow: { flexDirection: 'row', gap: Spacing.sm2 - 2 },
-  otherSpacer: { flex: 1 },
+  sectionLink: { ...Typography.chip, color: Colors.accent },
+  allList: { gap: Spacing.md },
+  // Le slider déborde jusqu'aux bords de l'écran
+  slider: { marginHorizontal: -Spacing.md2 },
+  sliderContent: { paddingHorizontal: Spacing.md2, gap: Spacing.sm2 },
 });

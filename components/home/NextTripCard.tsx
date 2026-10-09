@@ -1,4 +1,6 @@
-// HAKO — Accueil : carte du prochain voyage (maquette « Accueil · Actif »)
+// HAKO — Accueil : grande carte d'un voyage (maquette « Accueil · Actif »)
+// Sert au voyage en vedette et à la liste « Tout voir » (à venir, en cours,
+// terminé).
 // Photo, compte à rebours J-x, avatars, nom en Bricolage, itinéraire, et
 // LA prochaine action (« 3 envies attendent ton vote → »).
 
@@ -33,8 +35,10 @@ export function NextTripCard({ trip, onExpand }: NextTripCardProps) {
   const ref = useRef<View>(null);
   const { members, toVoteCount } = useTripCardMeta(trip.id, true);
   const today = localDayIso(new Date());
-  const ongoing = trip.start_date <= today;
-  const countdown = ongoing ? 'En cours' : `J-${nightsBetween(today, trip.start_date)}`;
+  const past = trip.end_date < today;
+  const ongoing = !past && trip.start_date <= today;
+  const countdown = past ? 'Terminé' : ongoing ? 'En cours' : `J-${nightsBetween(today, trip.start_date)}`;
+  const showVotes = !past && toVoteCount > 0;
 
   const expand = () => {
     ref.current?.measureInWindow((x, y, width, height) => onExpand({ x, y, width, height }));
@@ -49,8 +53,8 @@ export function NextTripCard({ trip, onExpand }: NextTripCardProps) {
         <LinearGradient colors={GRADIENT} style={StyleSheet.absoluteFill} />
 
         <View style={styles.top}>
-          <View style={styles.countdown}>
-            <Text style={styles.countdownText}>{countdown}</Text>
+          <View style={[styles.countdown, past && styles.countdownPast]}>
+            <Text style={[styles.countdownText, past && styles.countdownTextPast]}>{countdown}</Text>
           </View>
           <View style={styles.avatars}>
             {members.map((m, i) => (
@@ -70,18 +74,18 @@ export function NextTripCard({ trip, onExpand }: NextTripCardProps) {
           </Text>
           <TouchableOpacity
             style={styles.action}
-            onPress={() => router.push(toVoteCount > 0 ? `/trip/${trip.id}/envies` : `/trip/${trip.id}/dashboard`)}
+            onPress={() => router.push(showVotes ? `/trip/${trip.id}/envies` : `/trip/${trip.id}/dashboard`)}
             activeOpacity={0.85}
           >
-            {toVoteCount > 0 && (
+            {showVotes && (
               <View style={styles.actionIcon}>
                 <Ionicons name="thumbs-up" size={13} color={Colors.textInverted} />
               </View>
             )}
             <Text style={styles.actionText} numberOfLines={1}>
-              {toVoteCount > 0
+              {showVotes
                 ? `${toVoteCount} envie${toVoteCount > 1 ? 's' : ''} attend${toVoteCount > 1 ? 'ent' : ''} ton vote`
-                : 'Ouvrir le voyage'}
+                : past ? 'Revoir les souvenirs' : 'Ouvrir le voyage'}
             </Text>
             <Ionicons name="chevron-forward" size={18} color={Colors.textPrimary} />
           </TouchableOpacity>
@@ -100,7 +104,9 @@ const styles = StyleSheet.create({
   coverEmpty: { backgroundColor: Colors.primary },
   top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   countdown: { paddingHorizontal: Spacing.md - 2, paddingVertical: Spacing.sm, borderRadius: Radii.full, backgroundColor: Colors.accent },
-  countdownText: { fontSize: 14, fontWeight: '600', color: Colors.white },
+  countdownPast: { backgroundColor: Colors.glassLight },
+  countdownText: { ...Typography.body, fontWeight: '600', color: Colors.white },
+  countdownTextPast: { color: Colors.textPrimary },
   avatars: { flexDirection: 'row' },
   avatar: {
     width: AVATAR, height: AVATAR, borderRadius: Radii.full, overflow: 'hidden',
