@@ -1,12 +1,13 @@
 // HAKO — Question 6 : ambiances (deck swipable)
 
+import { Colors } from '@/constants/theme';
 import { SwipeDeck, SwipeCardContent } from '@/components/match/SwipeDeck';
 
 export const MOOD_CARDS: readonly SwipeCardContent[] = [
-  { id: 'chill',   title: 'Chill total',      emoji: '🧘', gradient: ['#6BBFA3', '#2E7D5F'] },
-  { id: 'fête',    title: 'Fête & soirées',   emoji: '🪩', gradient: ['#E86A8A', '#9C2E4E'] },
-  { id: 'culture', title: 'Culture & visites', emoji: '🏛️', gradient: ['#C4924F', '#7A5220'] },
-  { id: 'food',    title: 'Food & terrasses', emoji: '🍜', gradient: ['#E88A4A', '#A34E1F'] },
+  { id: 'chill',   title: 'Chill total',      emoji: '🧘', gradient: Colors.matchGradients.chill },
+  { id: 'fête',    title: 'Fête & soirées',   emoji: '🪩', gradient: Colors.matchGradients.party },
+  { id: 'culture', title: 'Culture & visites', emoji: '🏛️', gradient: Colors.matchGradients.culture },
+  { id: 'food',    title: 'Food & terrasses', emoji: '🍜', gradient: Colors.matchGradients.food },
 ];
 
 interface QuestionMoodsProps {

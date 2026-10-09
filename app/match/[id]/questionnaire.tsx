@@ -2,11 +2,10 @@
 // Container : progression 6 segments, transitions slide + fade
 // (ReduceMotion.System respecté), une question par écran sans scroll.
 
-import { useEffect, useRef } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 import Animated, {
   FadeInLeft,
   FadeInRight,
@@ -15,7 +14,8 @@ import Animated, {
   ReduceMotion,
 } from 'react-native-reanimated';
 
-import { Colors, Radii, Spacing } from '@/constants/theme';
+import { Colors, Spacing, Typography } from '@/constants/theme';
+import { CreateTripHeader, ProgressSegments, StepActions, StepTitle } from '@/components/createTrip/CreateTripChrome';
 import { useAuth } from '@/contexts/AuthContext';
 import { useMatchQuestionnaire } from '@/hooks/useMatchQuestionnaire';
 import { useTripMatch } from '@/hooks/useTripMatch';
@@ -40,7 +40,7 @@ const STEP_HEADERS: readonly StepHeader[] = [
   { title: 'Combien de temps ?', subtitle: 'Ta durée idéale' },
   { title: 'Ton budget ?',       subtitle: 'Transport + logement, on reste honnête' },
   { title: 'On va jusqu’où ?',   subtitle: 'Ton périmètre de jeu' },
-  { title: 'Ton décor idéal ?',  subtitle: 'Swipe : ❤️ si ça te tente, ✕ sinon' },
+  { title: 'Ton décor idéal ?',  subtitle: 'Swipe à droite si ça te tente, à gauche sinon' },
   { title: 'L’ambiance ?',       subtitle: 'Swipe tes vibes de vacances' },
 ];
 
@@ -48,7 +48,7 @@ export default function MatchQuestionnaireScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const q = useMatchQuestionnaire(id ?? '');
-  const directionRef = useRef<1 | -1>(1);
+  const [direction, setDirection] = useState<1 | -1>(1); // sens du slide (suivant / retour)
   const { session } = useAuth();
   const { responses } = useTripMatch(id);
 
@@ -60,10 +60,10 @@ export default function MatchQuestionnaireScreen() {
     }
   }, [responses, session?.user?.id, id, q.submitted]);
 
-  const goNext = () => { directionRef.current = 1; q.next(); };
+  const goNext = () => { setDirection(1); q.next(); };
   const goBack = () => {
     if (q.step === 1) { router.back(); return; }
-    directionRef.current = -1;
+    setDirection(-1);
     q.back();
   };
 
@@ -89,111 +89,43 @@ export default function MatchQuestionnaireScreen() {
   };
 
   const header = STEP_HEADERS[q.step - 1];
-  const entering = (directionRef.current === 1 ? FadeInRight : FadeInLeft)
+  const entering = (direction === 1 ? FadeInRight : FadeInLeft)
     .duration(ANIM_DURATION_MS)
     .reduceMotion(ReduceMotion.System);
-  const exiting = (directionRef.current === 1 ? FadeOutLeft : FadeOutRight)
+  const exiting = (direction === 1 ? FadeOutLeft : FadeOutRight)
     .duration(ANIM_DURATION_MS)
     .reduceMotion(ReduceMotion.System);
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top + Spacing.sm }]}>
-      {/* ── Barre du haut : retour + progression ── */}
-      <View style={styles.topBar}>
-        <TouchableOpacity
-          onPress={goBack}
-          style={styles.backBtn}
-          activeOpacity={0.7}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <Ionicons name="chevron-back" size={22} color={Colors.textPrimary} />
-        </TouchableOpacity>
-        <View style={styles.progress}>
-          {STEP_HEADERS.map((step, i) => (
-            <View
-              key={step.title}
-              style={[styles.segment, i < q.step && styles.segmentActive]}
-            />
-          ))}
-        </View>
-        <Text style={styles.stepLabel}>{q.step}/{q.totalSteps}</Text>
-      </View>
+    <View style={[styles.root, { paddingTop: insets.top }]}>
+      <CreateTripHeader title={`Trip Match · ${q.step}/${q.totalSteps}`} onClose={() => router.back()} />
+      <ProgressSegments total={q.totalSteps} current={q.step} />
 
       {/* ── Question courante (slide + fade) ── */}
       <Animated.View key={q.step} entering={entering} exiting={exiting} style={styles.content}>
-        <Text style={styles.title}>{header?.title}</Text>
-        <Text style={styles.subtitle}>{header?.subtitle}</Text>
+        <StepTitle title={header?.title ?? ''} subtitle={header?.subtitle} />
         <View style={styles.question}>{renderQuestion()}</View>
       </Animated.View>
 
       {q.error !== null && <Text style={styles.error}>{q.error}</Text>}
 
-      {/* ── CTA ── */}
-      <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.md }]}>
-        <TouchableOpacity
-          style={[styles.cta, ctaDisabled && styles.ctaDisabled]}
-          onPress={handleCta}
-          disabled={ctaDisabled}
-          activeOpacity={0.85}
-        >
-          <Text style={styles.ctaLabel}>
-            {isLast ? (q.submitting ? 'Envoi…' : CTA_SUBMIT) : CTA_NEXT}
-          </Text>
-        </TouchableOpacity>
-      </View>
+      <StepActions
+        onBack={goBack}
+        onNext={() => { void handleCta(); }}
+        label={isLast ? CTA_SUBMIT : CTA_NEXT}
+        icon={isLast ? 'sparkles' : 'arrow-forward'}
+        variant={isLast ? 'accent' : 'dark'}
+        disabled={ctaDisabled}
+        loading={q.submitting}
+        bottomInset={insets.bottom}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.background },
-  topBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.md2,
-    gap: Spacing.sm2,
-  },
-  backBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: Radii.full,
-    backgroundColor: Colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  progress: { flex: 1, flexDirection: 'row', gap: Spacing.xs },
-  segment: {
-    flex: 1,
-    height: 4,
-    borderRadius: Radii.full,
-    backgroundColor: Colors.border,
-  },
-  segmentActive: { backgroundColor: Colors.primary },
-  stepLabel: { fontSize: 12, fontWeight: '600', color: Colors.textSecondary },
-  content: { flex: 1, paddingHorizontal: Spacing.md2, paddingTop: Spacing.lg },
-  title: { fontSize: 28, fontWeight: '900', color: Colors.textPrimary },
-  subtitle: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: Colors.textSecondary,
-    marginTop: Spacing.xs,
-    marginBottom: Spacing.md,
-  },
+  content: { flex: 1, paddingHorizontal: Spacing.md2, paddingTop: Spacing.xl },
   question: { flex: 1 },
-  error: {
-    textAlign: 'center',
-    color: Colors.negative,
-    fontSize: 13,
-    fontWeight: '600',
-    paddingHorizontal: Spacing.md2,
-  },
-  footer: { paddingHorizontal: Spacing.md2, paddingTop: Spacing.sm },
-  cta: {
-    backgroundColor: Colors.primary,
-    borderRadius: Radii.pill,
-    paddingVertical: Spacing.md,
-    alignItems: 'center',
-  },
-  ctaDisabled: { opacity: 0.35 },
-  ctaLabel: { color: Colors.textInverted, fontSize: 16, fontWeight: '700' },
+  error: { ...Typography.body, color: Colors.negative, textAlign: 'center', paddingHorizontal: Spacing.md2 },
 });

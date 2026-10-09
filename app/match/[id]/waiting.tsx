@@ -4,20 +4,23 @@
 // bascule en 'voting' (Realtime sur trip_matches).
 
 import { useEffect } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Linking from 'expo-linking';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 
-import { Colors, Radii, Shadows, Spacing } from '@/constants/theme';
+import { Colors, Radii, Shadows, Spacing, Typography } from '@/constants/theme';
+import { CreateTripHeader, StepActions, StepTitle, createCardStyles } from '@/components/createTrip/CreateTripChrome';
 import { Avatar } from '@/components/ui/Avatar';
 import { useTripMatch } from '@/hooks/useTripMatch';
 import { buildMatchWhatsAppReminderUrl } from '@/utils/shareLinks';
 
-const TAG_ANSWERED = 'A répondu ✓';
+const TAG_ANSWERED = 'A répondu';
 const TAG_WAITING = 'En attente…';
 const AVATAR_SIZE = 42;
+const TRACK_HEIGHT = 6;
 
 export default function MatchWaitingScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -39,123 +42,88 @@ export default function MatchWaitingScreen() {
     void Linking.openURL(buildMatchWhatsAppReminderUrl(id));
   };
 
+  const total = Math.max(participants.length, 1);
+
   return (
-    <View style={[styles.root, { paddingTop: insets.top + Spacing.sm }]}>
-      <TouchableOpacity
-        onPress={() => router.back()}
-        style={styles.backBtn}
-        activeOpacity={0.7}
-        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-      >
-        <Ionicons name="chevron-back" size={22} color={Colors.textPrimary} />
-      </TouchableOpacity>
+    <View style={[styles.root, { paddingTop: insets.top }]}>
+      <CreateTripHeader title="Trip Match" onClose={() => router.back()} />
 
-      <Text style={styles.title}>
-        {isGenerating ? 'L’IA cherche vos destinations…' : 'Réponse envoyée !'}
-      </Text>
-      <Text style={styles.subtitle}>
-        {isGenerating
-          ? 'Quelques secondes, on croise les données du groupe ✨'
-          : `${responsesCount}/${participants.length} ont répondu — on relance les retardataires ?`}
-      </Text>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <StepTitle
+          title={isGenerating ? 'L’IA cherche vos destinations…' : 'Réponse envoyée !'}
+          subtitle={isGenerating
+            ? 'Quelques secondes, on croise les envies du groupe.'
+            : 'Dès que tout le monde a répondu, on vous dévoile le match.'}
+        />
 
-      {loading && participants.length === 0 ? (
-        <ActivityIndicator size="large" color={Colors.primary} style={styles.loader} />
-      ) : (
-        <ScrollView style={styles.list} showsVerticalScrollIndicator={false}>
-          {participants.map(participant => {
-            const answered = respondedIds.has(participant.user_id);
-            return (
-              <View key={participant.id} style={styles.row}>
-                <Avatar
-                  name={participant.user?.nickname}
-                  uri={participant.user?.avatar_url}
-                  size={AVATAR_SIZE}
-                />
-                <Text style={styles.name} numberOfLines={1}>
-                  {participant.user?.nickname ?? 'Voyageur'}
-                </Text>
-                <View style={[styles.tag, answered ? styles.tagDone : styles.tagWaiting]}>
-                  <Text style={[styles.tagText, answered ? styles.tagTextDone : styles.tagTextWaiting]}>
-                    {answered ? TAG_ANSWERED : TAG_WAITING}
-                  </Text>
-                </View>
-              </View>
-            );
-          })}
-        </ScrollView>
-      )}
+        {/* Avancement */}
+        <View style={styles.progressCard}>
+          <View style={styles.progressHead}>
+            <Text style={styles.progressCount}>{responsesCount}/{participants.length}</Text>
+            <Text style={styles.progressLabel}>{isGenerating ? 'réponses, c’est complet' : 'ont répondu'}</Text>
+            {isGenerating && <ActivityIndicator color={Colors.white} />}
+          </View>
+          <View style={styles.track}>
+            <View style={[styles.fill, { width: `${Math.round((responsesCount / total) * 100)}%` }]} />
+          </View>
+        </View>
 
-      {isGenerating && <ActivityIndicator size="small" color={Colors.primary} />}
-      {error !== null && <Text style={styles.errorText}>{error}</Text>}
+        {loading && participants.length === 0 ? (
+          <ActivityIndicator size="large" color={Colors.primary} style={styles.loader} />
+        ) : (
+          <View style={[createCardStyles.whiteCard, styles.list]}>
+            {participants.map((participant, i) => {
+              const answered = respondedIds.has(participant.user_id);
+              return (
+                <Animated.View key={participant.id} entering={FadeInDown.delay(i * 60)} style={[styles.row, i > 0 && styles.rowBorder]}>
+                  <Avatar name={participant.user?.nickname} uri={participant.user?.avatar_url} size={AVATAR_SIZE} />
+                  <Text style={styles.name} numberOfLines={1}>{participant.user?.nickname ?? 'Voyageur'}</Text>
+                  <View style={[styles.tag, answered && styles.tagDone]}>
+                    <Ionicons name={answered ? 'checkmark' : 'time-outline'} size={12} color={answered ? Colors.white : Colors.textMuted} />
+                    <Text style={[styles.tagText, answered && styles.tagTextDone]}>{answered ? TAG_ANSWERED : TAG_WAITING}</Text>
+                  </View>
+                </Animated.View>
+              );
+            })}
+          </View>
+        )}
 
-      <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.md }]}>
-        <TouchableOpacity style={styles.whatsappBtn} onPress={remindOnWhatsApp} activeOpacity={0.85}>
-          <Ionicons name="logo-whatsapp" size={20} color={Colors.textInverted} />
-          <Text style={styles.whatsappLabel}>Relancer sur WhatsApp</Text>
-        </TouchableOpacity>
-      </View>
+        {error !== null && <Text style={styles.errorText}>{error}</Text>}
+      </ScrollView>
+
+      <StepActions
+        onBack={() => router.back()}
+        onNext={remindOnWhatsApp}
+        label="Relancer sur WhatsApp"
+        icon="logo-whatsapp"
+        variant="accent"
+        disabled={isGenerating}
+        bottomInset={insets.bottom}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: Colors.background, paddingHorizontal: Spacing.md2 },
-  backBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: Radii.full,
-    backgroundColor: Colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '900',
-    color: Colors.textPrimary,
-    marginTop: Spacing.md,
-  },
-  subtitle: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: Colors.textSecondary,
-    marginTop: Spacing.xs,
-    marginBottom: Spacing.md,
-  },
+  root: { flex: 1, backgroundColor: Colors.background },
+  content: { paddingHorizontal: Spacing.md2, paddingTop: Spacing.xl, paddingBottom: Spacing.xl, gap: Spacing.md },
+  progressCard: { padding: Spacing.md2, borderRadius: Radii.lg, backgroundColor: Colors.primary, gap: Spacing.sm2, ...Shadows.md },
+  progressHead: { flexDirection: 'row', alignItems: 'baseline', gap: Spacing.sm },
+  progressCount: { ...Typography.displayValue, color: Colors.white },
+  progressLabel: { flex: 1, ...Typography.body, color: Colors.textOnDark },
+  track: { height: TRACK_HEIGHT, borderRadius: Radii.full, backgroundColor: Colors.textMuted, overflow: 'hidden' },
+  fill: { height: '100%', borderRadius: Radii.full, backgroundColor: Colors.accent },
   loader: { marginTop: Spacing.xxl },
-  list: { flex: 1 },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm2,
-    backgroundColor: Colors.surface,
-    borderRadius: Radii.sm,
-    padding: Spacing.sm2,
-    marginBottom: Spacing.sm,
-    ...Shadows.sm,
-  },
-  name: { flex: 1, fontSize: 15, fontWeight: '600', color: Colors.textPrimary },
+  list: { paddingHorizontal: Spacing.md },
+  row: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm2, paddingVertical: Spacing.sm2 },
+  rowBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: Colors.border },
+  name: { flex: 1, ...Typography.rowTitle, color: Colors.textInk },
   tag: {
-    borderRadius: Radii.pill,
-    paddingHorizontal: Spacing.sm2,
-    paddingVertical: Spacing.xs,
-    borderWidth: 1,
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.xs,
+    borderRadius: Radii.full, paddingHorizontal: Spacing.sm2, paddingVertical: Spacing.xs, backgroundColor: Colors.surfaceAlt,
   },
-  tagDone: { borderColor: Colors.positive, backgroundColor: Colors.surface },
-  tagWaiting: { borderColor: Colors.border, backgroundColor: Colors.background },
-  tagText: { fontSize: 12, fontWeight: '600' },
-  tagTextDone: { color: Colors.positive },
-  tagTextWaiting: { color: Colors.textSecondary },
-  errorText: { textAlign: 'center', color: Colors.negative, fontSize: 13, fontWeight: '600' },
-  footer: { paddingTop: Spacing.sm },
-  whatsappBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.sm,
-    backgroundColor: Colors.positive,
-    borderRadius: Radii.pill,
-    paddingVertical: Spacing.md,
-  },
-  whatsappLabel: { color: Colors.textInverted, fontSize: 16, fontWeight: '700' },
+  tagDone: { backgroundColor: Colors.positive },
+  tagText: { ...Typography.bodySmall, color: Colors.textMuted },
+  tagTextDone: { color: Colors.white },
+  errorText: { ...Typography.body, color: Colors.negative, textAlign: 'center' },
 });

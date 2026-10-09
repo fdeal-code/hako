@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn, ReduceMotion } from 'react-native-reanimated';
 
-import { Colors, Spacing } from '@/constants/theme';
+import { Colors, Spacing, Typography } from '@/constants/theme';
 
 const TICK_COUNT = 36;
 const TICK_WIDTH = 4;
@@ -96,6 +96,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
   },
   center: { alignItems: 'center', gap: Spacing.xs },
-  score: { fontSize: 48, fontWeight: '900', color: Colors.textPrimary },
-  caption: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary },
+  score: { ...Typography.displayAmount, color: Colors.textPrimary },
+  caption: { ...Typography.chip, color: Colors.textMuted },
 });

@@ -6,9 +6,9 @@ import { useMemo, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 
-import { Colors, Radii, Spacing } from '@/constants/theme';
+import { Colors, Radii, Spacing, Typography } from '@/constants/theme';
+import { CreateTripHeader, StepTitle } from '@/components/createTrip/CreateTripChrome';
 import { CelebrationOverlay } from '@/components/match/CelebrationOverlay';
 import { PROPOSAL_GRADIENTS, ProposalCard, pickWinner } from '@/components/match/ProposalCard';
 import { ProposalsFooter } from '@/components/match/ProposalsFooter';
@@ -77,31 +77,26 @@ export default function MatchProposalsScreen() {
   };
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top + Spacing.sm }]}>
-      <View style={styles.topBar}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={styles.backBtn}
-          activeOpacity={0.7}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <Ionicons name="chevron-back" size={22} color={Colors.textPrimary} />
-        </TouchableOpacity>
+    <View style={[styles.root, { paddingTop: insets.top }]}>
+      <CreateTripHeader title="Trip Match" onClose={() => router.back()} />
+
+      <View style={styles.head}>
+        <View style={styles.flex}>
+          <StepTitle
+            title="Les propositions"
+            subtitle={isCompleted
+              ? 'Ce match est terminé, le voyage est créé.'
+              : votingDone
+                ? 'Les votes sont clos, voici le verdict !'
+                : `Un seul vote chacun · ${votes.length}/${participants.length} ont voté`}
+          />
+        </View>
         {isCreator && !votingDone && proposals.length > 0 && (
-          <TouchableOpacity onPress={() => setClosedByCreator(true)} activeOpacity={0.7}>
+          <TouchableOpacity onPress={() => setClosedByCreator(true)} activeOpacity={0.7} style={styles.closeVotesBtn}>
             <Text style={styles.closeVotes}>Clore les votes</Text>
           </TouchableOpacity>
         )}
       </View>
-
-      <Text style={styles.title}>Les propositions</Text>
-      <Text style={styles.subtitle}>
-        {isCompleted
-          ? 'Ce match est terminé — le voyage est créé 🎉'
-          : votingDone
-            ? 'Les votes sont clos — voici le verdict !'
-            : `Un seul vote chacun · ${votes.length}/${participants.length} ont voté`}
-      </Text>
 
       {loading && proposals.length === 0 ? (
         <ActivityIndicator size="large" color={Colors.primary} style={styles.loader} />
@@ -109,7 +104,7 @@ export default function MatchProposalsScreen() {
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.list}>
           {proposals.length === 0 && (
             <Text style={styles.emptyText}>
-              Pas encore de propositions — repasse quand l’IA aura fini de plancher ✨
+              Pas encore de propositions : repasse quand l’IA aura fini de plancher.
             </Text>
           )}
           {proposals.map((proposal, i) => (
@@ -150,33 +145,16 @@ export default function MatchProposalsScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: Colors.background, paddingHorizontal: Spacing.md2 },
-  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  backBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: Radii.full,
-    backgroundColor: Colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
+  root: { flex: 1, backgroundColor: Colors.background },
+  flex: { flex: 1 },
+  head: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm, paddingHorizontal: Spacing.md2, paddingTop: Spacing.xl },
+  closeVotesBtn: {
+    marginTop: Spacing.sm, paddingHorizontal: Spacing.sm2, paddingVertical: Spacing.xs + 2,
+    borderRadius: Radii.full, borderWidth: 1, borderColor: Colors.primary,
   },
-  closeVotes: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary },
-  title: { fontSize: 28, fontWeight: '900', color: Colors.textPrimary, marginTop: Spacing.md },
-  subtitle: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: Colors.textSecondary,
-    marginTop: Spacing.xs,
-    marginBottom: Spacing.md,
-  },
+  closeVotes: { ...Typography.chip, color: Colors.textPrimary },
   loader: { marginTop: Spacing.xxl },
-  list: { paddingBottom: Spacing.md },
-  emptyText: {
-    textAlign: 'center',
-    marginTop: Spacing.xxl,
-    fontSize: 14,
-    fontWeight: '500',
-    color: Colors.textSecondary,
-  },
-  error: { textAlign: 'center', color: Colors.negative, fontSize: 13, fontWeight: '600' },
+  list: { paddingHorizontal: Spacing.md2, paddingBottom: Spacing.md },
+  emptyText: { ...Typography.body, color: Colors.textMuted, textAlign: 'center', marginTop: Spacing.xxl },
+  error: { ...Typography.body, color: Colors.negative, textAlign: 'center' },
 });

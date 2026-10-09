@@ -4,15 +4,18 @@
 // (le creator répond en premier).
 
 import { useState } from 'react';
-import { Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
-import { Colors, Radii, Spacing } from '@/constants/theme';
+import { Colors, Spacing, Typography } from '@/constants/theme';
+import { CreateTripHeader, SectionLabel, StepActions, StepTitle, createCardStyles } from '@/components/createTrip/CreateTripChrome';
 import { FriendPicker } from '@/components/match/FriendPicker';
 import { createMatch } from '@/services/tripMatchService';
 import { buildMatchInviteMessage } from '@/utils/shareLinks';
+
+const FIELD_HEIGHT = 60;
 
 const MATCH_TITLE_PLACEHOLDERS: readonly string[] = [
   'Les copains d’abord ✈️',
@@ -61,98 +64,60 @@ export default function MatchCreateScreen() {
   };
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top + Spacing.sm }]}>
-      <View style={styles.topBar}>
-        <Text style={styles.title}>Nouveau Trip Match</Text>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={styles.closeBtn}
-          activeOpacity={0.7}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <Ionicons name="close" size={22} color={Colors.textSecondary} />
-        </TouchableOpacity>
+    <KeyboardAvoidingView style={[styles.root, { paddingTop: insets.top }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <CreateTripHeader title="Trip Match" onClose={() => router.back()} />
+
+      <View style={styles.body}>
+        <StepTitle title="On part où ?" subtitle="6 questions chacun, et l’IA trouve la destination qui met tout le monde d’accord." />
+
+        <View style={[createCardStyles.whiteCard, styles.field]}>
+          <Ionicons name="sparkles-outline" size={20} color={Colors.textMuted} />
+          <TextInput
+            style={styles.input}
+            value={title}
+            onChangeText={setTitle}
+            placeholder={placeholder}
+            placeholderTextColor={Colors.textSecondary}
+            maxLength={60}
+            returnKeyType="done"
+          />
+        </View>
+
+        <View style={styles.pickerHead}>
+          <SectionLabel right={selectedIds.length > 0 ? `${selectedIds.length} sélectionné${selectedIds.length > 1 ? 's' : ''}` : undefined}>
+            Qui embarque ?
+          </SectionLabel>
+          {selectedIds.length === 0 && (
+            <Text style={styles.hint}>Sélectionne tes potes, ou pars en éclaireur et partage le lien.</Text>
+          )}
+        </View>
+        <View style={styles.pickerZone}>
+          <FriendPicker selectedIds={selectedIds} onToggle={toggleFriend} />
+        </View>
+
+        {error !== null && <Text style={styles.error}>{error}</Text>}
       </View>
 
-      <Text style={styles.label}>Nom du match</Text>
-      <TextInput
-        style={styles.input}
-        value={title}
-        onChangeText={setTitle}
-        placeholder={placeholder}
-        placeholderTextColor={Colors.textTertiary}
-        maxLength={60}
-        returnKeyType="done"
+      <StepActions
+        onBack={() => router.back()}
+        onNext={() => { void launch(); }}
+        label="Lancer le match"
+        icon="sparkles"
+        variant="accent"
+        loading={creating}
+        bottomInset={insets.bottom}
       />
-
-      <Text style={styles.label}>Qui embarque ?</Text>
-      <Text style={styles.hint}>
-        {selectedIds.length === 0
-          ? 'Sélectionne tes compagnons de voyage (tu peux aussi partir en éclaireur solo)'
-          : `${selectedIds.length} ami${selectedIds.length > 1 ? 's' : ''} dans l’aventure`}
-      </Text>
-      <View style={styles.pickerZone}>
-        <FriendPicker selectedIds={selectedIds} onToggle={toggleFriend} />
-      </View>
-
-      {error !== null && <Text style={styles.error}>{error}</Text>}
-
-      <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.md }]}>
-        <TouchableOpacity
-          style={[styles.cta, creating && styles.ctaDisabled]}
-          onPress={() => { void launch(); }}
-          disabled={creating}
-          activeOpacity={0.85}
-        >
-          <Ionicons name="sparkles" size={18} color={Colors.textInverted} />
-          <Text style={styles.ctaLabel}>{creating ? 'Création…' : 'Lancer le match'}</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: Colors.background, paddingHorizontal: Spacing.md2 },
-  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  title: { fontSize: 28, fontWeight: '900', color: Colors.textPrimary },
-  closeBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: Radii.full,
-    backgroundColor: Colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  label: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-    marginTop: Spacing.md,
-    marginBottom: Spacing.sm,
-  },
-  input: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radii.sm,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm2,
-    fontSize: 15,
-    fontWeight: '500',
-    color: Colors.textPrimary,
-  },
-  hint: { fontSize: 13, fontWeight: '500', color: Colors.textSecondary, marginBottom: Spacing.sm },
+  root: { flex: 1, backgroundColor: Colors.background },
+  body: { flex: 1, paddingHorizontal: Spacing.md2, paddingTop: Spacing.xl },
+  field: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm2, minHeight: FIELD_HEIGHT, paddingHorizontal: Spacing.md },
+  input: { flex: 1, ...Typography.cardTitle, color: Colors.textInk, paddingVertical: Spacing.md },
+  pickerHead: { marginTop: Spacing.lg },
+  hint: { ...Typography.bodySmall, color: Colors.textMuted, marginBottom: Spacing.sm },
   pickerZone: { flex: 1 },
-  error: { textAlign: 'center', color: Colors.negative, fontSize: 13, fontWeight: '600' },
-  footer: { paddingTop: Spacing.sm },
-  cta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.sm,
-    backgroundColor: Colors.primary,
-    borderRadius: Radii.pill,
-    paddingVertical: Spacing.md,
-  },
-  ctaDisabled: { opacity: 0.5 },
-  ctaLabel: { color: Colors.textInverted, fontSize: 16, fontWeight: '700' },
+  error: { ...Typography.body, color: Colors.negative, textAlign: 'center', marginTop: Spacing.sm },
 });

@@ -8,7 +8,7 @@ import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-nativ
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 
-import { Colors, Radii, Shadows, Spacing } from '@/constants/theme';
+import { Colors, Radii, Shadows, Spacing, Typography } from '@/constants/theme';
 
 export const BUDGET_MIN = 100;
 export const BUDGET_MAX = 1000;       // borne haute du slider
@@ -142,21 +142,19 @@ const styles = StyleSheet.create({
   root: { flex: 1, justifyContent: 'center', gap: Spacing.md },
   amountBox: { alignItems: 'center', gap: Spacing.xs },
   amountRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  amount: { fontSize: 56, fontWeight: '900', color: Colors.textPrimary },
+  amount: { ...Typography.displayAmount, color: Colors.textPrimary },
   amountInput: {
-    fontSize: 56,
-    fontWeight: '900',
+    ...Typography.displayAmount,
     color: Colors.textPrimary,
     minWidth: 120,
     textAlign: 'center',
     padding: 0,
   },
-  perPerson: { fontSize: 13, fontWeight: '500', color: Colors.textSecondary },
+  perPerson: { ...Typography.bodySmall, color: Colors.textMuted },
   caption: {
     textAlign: 'center',
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.textSecondary,
+    ...Typography.body,
+    color: Colors.textMuted,
     minHeight: 20,
   },
   trackHitBox: { justifyContent: 'center', height: THUMB_SIZE + Spacing.md },
@@ -178,5 +176,5 @@ const styles = StyleSheet.create({
     ...Shadows.sm,
   },
   bounds: { flexDirection: 'row', justifyContent: 'space-between' },
-  boundLabel: { fontSize: 12, fontWeight: '500', color: Colors.textTertiary },
+  boundLabel: { ...Typography.bodySmall, color: Colors.textSecondary },
 });

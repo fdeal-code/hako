@@ -5,7 +5,7 @@
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { Colors, Radii, Shadows, Spacing } from '@/constants/theme';
+import { Colors, Radii, Shadows, Spacing, Typography } from '@/constants/theme';
 import { Avatar } from '@/components/ui/Avatar';
 import { ProposalCover } from '@/components/match/ProposalCover';
 import { DestinationPhoto } from '@/services/unsplashService';
@@ -17,9 +17,9 @@ const WINNER_LABEL = 'Choix du groupe 🏆';
 
 /** Covers gradient des 3 propositions (cyclées par position). */
 export const PROPOSAL_GRADIENTS: readonly (readonly [string, string])[] = [
-  ['#4A9FD8', '#1F5E8C'],
-  ['#D8A855', '#8C6A1F'],
-  ['#8B7BB8', '#4A3E6B'],
+  Colors.matchGradients.ocean,
+  Colors.matchGradients.country,
+  Colors.matchGradients.city,
 ];
 
 /** Gagnante = plus de votes, égalité départagée par la position IA. */
@@ -118,11 +118,11 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.sm,
     alignItems: 'center',
   },
-  winnerText: { color: Colors.textInverted, fontSize: 13, fontWeight: '700' },
+  winnerText: { ...Typography.chip, color: Colors.textInverted },
   body: { padding: Spacing.md, gap: Spacing.sm },
-  argument: { fontSize: 14, fontWeight: '500', color: Colors.textPrimary, lineHeight: 20 },
+  argument: { ...Typography.body, color: Colors.textInk, lineHeight: 20 },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  metaText: { fontSize: 13, fontWeight: '500', color: Colors.textSecondary },
+  metaText: { ...Typography.bodySmall, color: Colors.textMuted },
   footer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -131,7 +131,7 @@ const styles = StyleSheet.create({
   },
   voters: { flexDirection: 'row', alignItems: 'center' },
   voterOverlap: { marginLeft: AVATAR_OVERLAP },
-  noVotes: { fontSize: 12, fontWeight: '500', color: Colors.textTertiary },
+  noVotes: { ...Typography.bodySmall, color: Colors.textSecondary },
   voteBtn: {
     width: 44,
     height: 44,

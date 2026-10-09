@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { Colors, Radii, Shadows, Spacing } from '@/constants/theme';
+import { Colors, Radii, Shadows, Spacing, Typography } from '@/constants/theme';
 import { Avatar } from '@/components/ui/Avatar';
 import { supabase } from '@/services/supabase';
 import { useAuth } from '@/contexts/AuthContext';
@@ -102,9 +102,8 @@ const styles = StyleSheet.create({
   empty: {
     marginTop: Spacing.lg,
     textAlign: 'center',
-    fontSize: 14,
-    fontWeight: '500',
-    color: Colors.textSecondary,
+    ...Typography.body,
+    color: Colors.textMuted,
   },
   row: {
     flexDirection: 'row',
@@ -116,6 +115,6 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.sm,
     ...Shadows.sm,
   },
-  name: { flex: 1, fontSize: 15, fontWeight: '600', color: Colors.textPrimary },
+  name: { flex: 1, ...Typography.rowTitle, color: Colors.textInk },
   bottomSpace: { height: Spacing.md },
 });

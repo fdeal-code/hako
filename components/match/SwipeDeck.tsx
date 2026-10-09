@@ -18,7 +18,7 @@ import Animated, {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 
-import { Colors, Radii, Shadows, Spacing } from '@/constants/theme';
+import { Colors, Radii, Shadows, Spacing, Typography } from '@/constants/theme';
 
 export interface SwipeCardContent {
   id: string;
@@ -168,8 +168,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: Spacing.md,
   },
-  emoji: { fontSize: 72 },
-  cardTitle: { fontSize: 24, fontWeight: '700', color: Colors.white },
+  emoji: { ...Typography.emoji },
+  cardTitle: { ...Typography.displayValue, color: Colors.white },
   stamp: {
     position: 'absolute',
     top: Spacing.md2,
@@ -181,8 +181,8 @@ const styles = StyleSheet.create({
   },
   stampYes: { left: Spacing.md2, borderColor: Colors.positive, transform: [{ rotate: '-12deg' }] },
   stampNo: { right: Spacing.md2, borderColor: Colors.negative, transform: [{ rotate: '12deg' }] },
-  stampText: { fontSize: 20, fontWeight: '900', letterSpacing: 1 },
-  counter: { marginTop: Spacing.sm2, fontSize: 12, fontWeight: '600', color: Colors.textSecondary },
+  stampText: { ...Typography.displayLabel, fontSize: Typography.section.fontSize, letterSpacing: 1 },
+  counter: { marginTop: Spacing.sm2, ...Typography.bodySmall, color: Colors.textMuted },
   actions: { flexDirection: 'row', gap: Spacing.lg, marginTop: Spacing.sm2 },
   actionBtn: {
     width: 56,
@@ -194,5 +194,5 @@ const styles = StyleSheet.create({
     ...Shadows.md,
   },
   doneBox: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.sm },
-  doneText: { fontSize: 16, fontWeight: '600', color: Colors.textPrimary },
+  doneText: { ...Typography.cardTitle, color: Colors.textPrimary },
 });

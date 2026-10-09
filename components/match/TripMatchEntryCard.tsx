@@ -7,11 +7,11 @@ import { Href, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
-import { Colors, Radii, Shadows, Spacing } from '@/constants/theme';
+import { Colors, Radii, Shadows, Spacing, Typography } from '@/constants/theme';
 import { useMyMatches } from '@/hooks/useMyMatches';
 import { MatchStatus, TripMatch } from '@/types/tripMatch';
 
-const CARD_GRADIENT: readonly [string, string] = ['#2E2C4A', '#1c1c1c'];
+const CARD_GRADIENT = Colors.matchGradients.entry;
 const PITCH = 'Pas d’inspi ? Répondez à 6 questions, l’IA trouve où partir.';
 
 const STATUS_LABELS: Record<MatchStatus, string> = {
@@ -81,6 +81,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   textBox: { flex: 1, gap: Spacing.xs },
-  title: { fontSize: 16, fontWeight: '800', color: Colors.textInverted },
-  subtitle: { fontSize: 13, fontWeight: '500', color: Colors.textTertiary },
+  title: { ...Typography.cardTitle, color: Colors.textInverted },
+  subtitle: { ...Typography.bodySmall, color: Colors.textOnDark },
 });

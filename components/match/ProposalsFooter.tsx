@@ -5,7 +5,7 @@
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { router } from 'expo-router';
 
-import { Colors, Radii, Spacing } from '@/constants/theme';
+import { Colors, Radii, Spacing, Typography } from '@/constants/theme';
 
 interface ProposalsFooterProps {
   isCompleted: boolean;
@@ -61,11 +61,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   ctaDisabled: { opacity: 0.5 },
-  ctaLabel: { color: Colors.textInverted, fontSize: 16, fontWeight: '700' },
+  ctaLabel: { ...Typography.button, color: Colors.textInverted },
   info: {
     textAlign: 'center',
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.textSecondary,
+    ...Typography.body,
+    color: Colors.textMuted,
   },
 });

@@ -6,11 +6,11 @@
 import { ImageBackground, Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
-import { Colors, Radii, Spacing } from '@/constants/theme';
+import { Colors, Radii, Spacing, Typography } from '@/constants/theme';
 import { DestinationPhoto, UNSPLASH_HOME_URL } from '@/services/unsplashService';
 import { MatchProposal } from '@/types/tripMatch';
 
-const OVERLAY_GRADIENT: readonly [string, string] = ['transparent', 'rgba(0,0,0,0.65)'];
+const OVERLAY_GRADIENT = [Colors.scrimClear, Colors.scrimStrong] as const;
 
 interface ProposalCoverProps {
   proposal: MatchProposal;
@@ -72,9 +72,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.sm2,
     paddingVertical: Spacing.xs,
   },
-  badgeText: { fontSize: 12, fontWeight: '700', color: Colors.textPrimary },
-  destination: { fontSize: 26, fontWeight: '900', color: Colors.textInverted },
-  country: { fontSize: 13, fontWeight: '600', color: Colors.borderLight },
+  badgeText: { ...Typography.bodySmall, fontWeight: '700', color: Colors.textPrimary },
+  destination: { ...Typography.displayHero, color: Colors.textInverted },
+  country: { ...Typography.chip, color: Colors.glassLight },
   attribution: {
     position: 'absolute',
     bottom: Spacing.xs,
@@ -82,5 +82,5 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  attributionText: { fontSize: 10, fontWeight: '500', color: Colors.textTertiary },
+  attributionText: { ...Typography.bodySmall, fontSize: Typography.bodySmall.fontSize - 2, color: Colors.textTertiary },
 });

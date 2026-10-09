@@ -7,7 +7,7 @@ import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-nati
 import { Calendar, DateData } from 'react-native-calendars';
 import { Ionicons } from '@expo/vector-icons';
 
-import { Colors, Radii, Spacing } from '@/constants/theme';
+import { Colors, Radii, Spacing, Typography } from '@/constants/theme';
 import { MatchDateRange } from '@/types/tripMatch';
 
 const DAY_MS = 86_400_000;
@@ -146,9 +146,8 @@ const styles = StyleSheet.create({
   },
   hint: {
     marginTop: Spacing.sm2,
-    fontSize: 13,
-    fontWeight: '500',
-    color: Colors.textSecondary,
+    ...Typography.bodySmall,
+    color: Colors.textMuted,
     textAlign: 'center',
   },
   rangeList: { marginTop: Spacing.sm2, flexGrow: 0 },
@@ -162,5 +161,5 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.sm,
     marginRight: Spacing.sm,
   },
-  rangeText: { color: Colors.textInverted, fontSize: 13, fontWeight: '600' },
+  rangeText: { ...Typography.chip, color: Colors.textInverted },
 });

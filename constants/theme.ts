@@ -56,6 +56,19 @@ export const Colors = {
   // Étapes d'un voyage multi-villes (1re ville, 2e, 3e…) — repris en boucle
   stopPalette: ['#1A1815', '#E4572E', '#8A8883', '#C9A227', '#3B7A57'] as const,
   // Repères de la carte, par type de lieu
+  // Dégradés Trip Match (cartes de swipe, propositions, carte d'entrée)
+  matchGradients: {
+    ocean:    ['#4A9FD8', '#1F5E8C'],
+    mountain: ['#7BA05B', '#3E5B2E'],
+    city:     ['#8B7BB8', '#4A3E6B'],
+    country:  ['#D8A855', '#8C6A1F'],
+    chill:    ['#6BBFA3', '#2E7D5F'],
+    party:    ['#E86A8A', '#9C2E4E'],
+    culture:  ['#C4924F', '#7A5220'],
+    food:     ['#E88A4A', '#A34E1F'],
+    entry:    ['#2E2C4A', '#1C1C1C'],
+  } as const,
+
   placeColors: {
     hotel:      '#1A1815',
     restaurant: '#E4572E',
@@ -118,6 +131,8 @@ export const Typography = {
   displayValue: { fontFamily: Fonts.display, fontSize: 24 },      // « 02 juin »
   displayLabel: { fontFamily: Fonts.displayBold, fontSize: 14 },  // « DÉPART », « TES AMIS »
   displayAmount: { fontFamily: Fonts.displayBold, fontSize: 56 }, // montant saisi (« 42 € »)
+  displayHero:  { fontFamily: Fonts.displayBold, fontSize: 26 },  // destination sur une photo
+  emoji:        { fontSize: 72 },                                // grand emoji (cartes de swipe, fête)
   // SF Pro — maquettes V2
   headerSmall: { fontSize: 20, fontWeight: '600' as const },     // « Nouveau voyage »
   cardTitle:   { fontSize: 16, fontWeight: '600' as const },     // titres des cartes blanches
