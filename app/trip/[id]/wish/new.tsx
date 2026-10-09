@@ -1,16 +1,17 @@
 // HAKO — Nouvelle envie (maquettes « Envie · Nouvelle envie » 711:2841
 // et « Envie · Aperçu TikTok » 711:2962). Page plein écran ouverte par le ➕
 // des Envies : coller un lien (TikTok, Reel, YouTube…) → aperçu + lieu trouvé
-// + ambiances ; ou un lieu Google, les idées Hako, une note d'orga.
+// + ambiances ; ou un lieu Google, les idées Hako. Une tâche d'orga renvoie
+// vers les Préparatifs.
 
 import { useEffect, useRef } from 'react';
 import {
-  Alert, BackHandler, KeyboardAvoidingView, Linking, Platform, ScrollView, StyleSheet, Text, TextInput, View,
+  Alert, BackHandler, KeyboardAvoidingView, Linking, Platform, ScrollView, StyleSheet, Text, View,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Colors, Radii, Shadows, Spacing, Typography } from '@/constants/theme';
+import { Colors, Spacing, Typography } from '@/constants/theme';
 import { CreateTripHeader, StepActions } from '@/components/createTrip/CreateTripChrome';
 import {
   ClipboardBanner, LinkField, OptionRow, ShareTip, PlaceCard, PlacePhoto, PlaceSearch, SectionTitle, VibeChips, VideoPreview,
@@ -21,7 +22,6 @@ import { useNewWish } from '@/hooks/useNewWish';
 import { formatStopRange } from '@/utils/wishLinks';
 
 const ACTIONS_SPACE = 120;
-const NOTE_MIN_HEIGHT = 96;
 
 function Title({ title, subtitle }: { title: string; subtitle: string }) {
   return (
@@ -38,7 +38,7 @@ export default function NewWishScreen() {
   const tripId = id ?? '';
   const insets = useSafeAreaInsets();
   const { session } = useAuth();
-  const w = useNewWish(tripId, session?.user?.id, mode === 'place' || mode === 'orga' ? mode : 'choose');
+  const w = useNewWish(tripId, session?.user?.id, mode === 'place' ? 'place' : 'choose');
 
   // Lien déjà collé sur la page « Ajouter » → aperçu direct
   const openLink = w.openLink;
@@ -69,7 +69,7 @@ export default function NewWishScreen() {
     else router.back();
   };
 
-  const ctaLabel = w.screen === 'orga' ? 'Ajouter la note' : 'Ajouter aux envies';
+  const ctaLabel = 'Ajouter aux envies';
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -108,10 +108,10 @@ export default function NewWishScreen() {
                   onPress={() => router.replace({ pathname: '/trip/[id]/help', params: { id: tripId, tab: 'activities' } })}
                 />
                 <OptionRow
-                  icon="document-text-outline"
-                  title="Une note d’orga"
-                  subtitle="« Louer la voiture », « Billets »…"
-                  onPress={() => w.goTo('orga')}
+                  icon="checkbox-outline"
+                  title="Une tâche d’orga"
+                  subtitle="« Louer la voiture »… dans les Préparatifs"
+                  onPress={() => router.replace({ pathname: '/trip/[id]/preparation', params: { id: tripId, add: '1' } })}
                 />
               </View>
               <ShareTip />
@@ -170,34 +170,6 @@ export default function NewWishScreen() {
             </>
           )}
 
-          {/* ── Note d'orga ── */}
-          {w.screen === 'orga' && (
-            <>
-              <Title title="C’est quoi la tâche ?" subtitle="Une note visible par tout le groupe." />
-              <View style={styles.card}>
-                <TextInput
-                  style={styles.orgaTitle}
-                  value={w.orgaTitle}
-                  onChangeText={w.setOrgaTitle}
-                  placeholder="Louer la voiture"
-                  placeholderTextColor={Colors.textMuted}
-                  autoFocus
-                  returnKeyType="next"
-                />
-              </View>
-              <View style={styles.card}>
-                <TextInput
-                  style={styles.note}
-                  value={w.note}
-                  onChangeText={w.setNote}
-                  placeholder="Détails (optionnel)"
-                  placeholderTextColor={Colors.textMuted}
-                  multiline
-                  textAlignVertical="top"
-                />
-              </View>
-            </>
-          )}
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -223,10 +195,4 @@ const styles = StyleSheet.create({
   title: { ...Typography.displayTitle, color: Colors.textPrimary },
   subtitle: { ...Typography.body, color: Colors.textMuted },
   options: { gap: Spacing.sm + 2 },
-  card: {
-    padding: Spacing.md2, borderRadius: Radii.lg,
-    backgroundColor: Colors.surface, ...Shadows.card,
-  },
-  orgaTitle: { padding: 0, ...Typography.displayValue, color: Colors.textInk },
-  note: { padding: 0, minHeight: NOTE_MIN_HEIGHT, ...Typography.body, color: Colors.textInk },
 });

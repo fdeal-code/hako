@@ -1,6 +1,7 @@
 // HAKO — Hook « Nouvelle envie »
 // Gère les 4 écrans du parcours : choix (coller un lien / autres façons),
-// aperçu du lien (TikTok, Reel…), recherche d'un lieu, note d'orga.
+// aperçu du lien (TikTok, Reel…), recherche d'un lieu. Les tâches d'orga
+// vivent dans les Préparatifs (app/trip/[id]/preparation.tsx).
 // Détecte un lien copié dans le presse-papier (au montage et au retour
 // dans l'app, ex. après avoir copié un lien dans TikTok).
 
@@ -15,7 +16,7 @@ import { nearestStop } from '@/utils/tripStops';
 import { categoryFromTypes, detectLinkSource, extractUrl, suggestVibes } from '@/utils/wishLinks';
 import { tripEvents } from '@/utils/events';
 
-export type NewWishScreen = 'choose' | 'link' | 'place' | 'orga';
+export type NewWishScreen = 'choose' | 'link' | 'place';
 
 const SEARCH_DEBOUNCE_MS = 400;
 const LINK_FALLBACK_TITLE = 'Inspiration';
@@ -41,12 +42,10 @@ export function useNewWish(tripId: string, userId: string | undefined, initialSc
   const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  /* ── Ambiances + orga ── */
+  /* ── Ambiances ── */
   const [vibes, setVibes] = useState<WishVibe[]>([]);
   const [price, setPrice] = useState<number | null>(null);
   const [duration, setDuration] = useState<number | null>(null);
-  const [orgaTitle, setOrgaTitle] = useState('');
-  const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
 
   const stop: TripStop | null = useMemo(
@@ -62,7 +61,7 @@ export function useNewWish(tripId: string, userId: string | undefined, initialSc
     setLinkInput(''); setPreview(null); setLoadingPreview(false);
     setPlace(null); setPlaceDetected(false); setFindingPlace(false); setEditingPlace(false);
     setPlaceQueryState(''); setSuggestions([]);
-    setVibes([]); setPrice(null); setDuration(null); setOrgaTitle(''); setNote('');
+    setVibes([]); setPrice(null); setDuration(null);
   }, []);
 
   const goTo = useCallback((next: NewWishScreen) => {
@@ -138,17 +137,15 @@ export function useNewWish(tripId: string, userId: string | undefined, initialSc
   const canSave =
     !saving && !!userId && (
       (screen === 'link' && !!preview) ||
-      (screen === 'place' && !!place) ||
-      (screen === 'orga' && orgaTitle.trim().length > 0)
+      (screen === 'place' && !!place)
     );
 
   /** Enregistre l'envie. Retourne un message d'erreur, ou null si c'est bon. */
   const save = useCallback(async (): Promise<string | null> => {
     if (!userId) return 'Connecte-toi pour ajouter une envie.';
-    const kind: WishKind = screen === 'orga' ? 'orga' : place ? 'place' : 'inspiration';
+    const kind: WishKind = place ? 'place' : 'inspiration';
     const title =
-      screen === 'orga' ? orgaTitle
-      : screen === 'place' ? place?.name ?? ''
+      screen === 'place' ? place?.name ?? ''
       : preview?.title || place?.name || LINK_FALLBACK_TITLE;
     setSaving(true);
     const { error } = await createWish({
@@ -156,21 +153,21 @@ export function useNewWish(tripId: string, userId: string | undefined, initialSc
       addedBy: userId,
       kind,
       title,
-      description: screen === 'orga' ? note : null,
+      description: null,
       linkUrl: screen === 'link' ? preview?.url ?? null : null,
       imageUrl: screen === 'link' ? preview?.thumbnail ?? null : null,
-      place: screen === 'orga' ? null : place,
+      place,
       category: place ? categoryFromTypes(place.types) : null,
       stopId: stop?.id ?? null,
-      vibes: screen === 'orga' ? [] : vibes,
-      pricePerPerson: screen === 'orga' ? null : price,
-      durationMinutes: screen === 'orga' ? null : duration,
+      vibes,
+      pricePerPerson: price,
+      durationMinutes: duration,
     });
     setSaving(false);
     if (error !== null) return error;
     tripEvents.emit();
     return null;
-  }, [userId, screen, place, orgaTitle, preview, tripId, note, stop, vibes, price, duration]);
+  }, [userId, screen, place, preview, tripId, stop, vibes, price, duration]);
 
   return {
     screen, goTo,
@@ -182,7 +179,6 @@ export function useNewWish(tripId: string, userId: string | undefined, initialSc
     placeQuery, setPlaceQuery, suggestions, choosePlace,
     vibes, toggleVibe,
     price, setPrice, duration, setDuration,
-    orgaTitle, setOrgaTitle, note, setNote,
     canSave, saving, save,
   };
 }

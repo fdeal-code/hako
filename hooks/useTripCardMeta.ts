@@ -32,7 +32,7 @@ export function useTripCardMeta(tripId: string, withVotes: boolean) {
     if (withVotes) {
       void supabase
         .from('wishes').select('id', { count: 'exact', head: true })
-        .eq('trip_id', tripId).in('status', ['pending', 'debate'])
+        .eq('trip_id', tripId).in('status', ['pending', 'debate']).or('type.is.null,type.neq.orga') // sans les tâches d'orga
         .then(({ count }) => { if (!cancelled) setToVoteCount(count ?? 0); });
     }
     return () => { cancelled = true; };

@@ -23,10 +23,11 @@ export async function getDashboardSummary(tripId: string, userId: string | null)
     supabase.from('documents').select('title').eq('trip_id', tripId)
       .order('created_at', { ascending: false }).limit(RECENT_DOCS),
     supabase.from('documents').select('id', { count: 'exact', head: true }).eq('trip_id', tripId),
+    // Envies = ce qui se vote : les tâches d'orga (Préparatifs) ne comptent pas
     supabase.from('wishes').select('id', { count: 'exact', head: true })
-      .eq('trip_id', tripId).neq('status', 'archived'),
+      .eq('trip_id', tripId).neq('status', 'archived').or('type.is.null,type.neq.orga'),
     supabase.from('wishes').select('id', { count: 'exact', head: true })
-      .eq('trip_id', tripId).in('status', OPEN_STATUSES),
+      .eq('trip_id', tripId).in('status', OPEN_STATUSES).or('type.is.null,type.neq.orga'),
     supabase.from('expenses').select('amount, paid_by, expense_splits(user_id, amount)').eq('trip_id', tripId),
     supabase.from('planning_items').select('id', { count: 'exact', head: true }).eq('trip_id', tripId),
   ]);

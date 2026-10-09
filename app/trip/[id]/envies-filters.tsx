@@ -24,7 +24,6 @@ const CHECK = 22;
 const TYPES: { key: WishKind; label: string; icon: IconName }[] = [
   { key: 'place', label: 'Lieux', icon: 'location' },
   { key: 'inspiration', label: 'Inspirations', icon: 'sparkles' },
-  { key: 'orga', label: 'Orga', icon: 'checkbox' },
 ];
 
 const CATEGORIES: { key: WishCategory; label: string; icon: IconName }[] = [

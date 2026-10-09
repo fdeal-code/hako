@@ -1,5 +1,6 @@
 // HAKO — Tuiles du dashboard « avant le départ » (maquette « V2 · Dashboard »)
-// DOCUMENT + PLANNING · Carte (moitié) + VOS ENVIES · ON T'AIDE + BUDGET.
+// [PRÉPARATIFS avant le départ] · DOCUMENT + PLANNING · Carte (moitié) +
+// VOS ENVIES · ON T'AIDE + BUDGET.
 // Source unique : utilisé par app/trip/[id]/dashboard.tsx ET par
 // components/home/ExpandedDashboard.tsx (ouverture depuis l'accueil).
 
@@ -12,6 +13,7 @@ import { router } from 'expo-router';
 import { Colors, Radii, Spacing, Typography } from '@/constants/theme';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { HelpTile } from '@/components/dashboard/HelpTile';
+import { PREP_STRIP_HEIGHT, PrepStrip } from '@/components/preparation/PrepParts';
 import { MapEmptyState } from '@/components/map/MapEmptyState';
 import { StopMarkers } from '@/components/map/StopMarkers';
 import { useFutureDashboard } from '@/hooks/useFutureDashboard';
@@ -49,15 +51,21 @@ function shortDayMonth(day: string): string {
 export function FutureBento({
   tripId, startDate, destination, stops, region, mapCardRef, onMapPress, availableHeight, today,
 }: FutureBentoProps) {
-  const tileHeight = availableHeight === undefined
+  // Avant le départ, la bande « Préparatifs » prend une ligne au-dessus des tuiles
+  const showPrep = !today;
+  const tilesHeight = availableHeight === undefined ? undefined
+    : availableHeight - (showPrep ? PREP_STRIP_HEIGHT + ROW_GAP : 0);
+  const tileHeight = tilesHeight === undefined
     ? TILE_HEIGHT
-    : Math.max(TILE_MIN_HEIGHT, Math.min(TILE_HEIGHT, Math.floor((availableHeight - ROW_GAP * (ROWS - 1)) / ROWS)));
+    : Math.max(TILE_MIN_HEIGHT, Math.min(TILE_HEIGHT, Math.floor((tilesHeight - ROW_GAP * (ROWS - 1)) / ROWS)));
   const { recentDocTitles, docCount, wishCount, toVoteCount, budget, plannedCount } = useFutureDashboard(tripId);
   const moreDocs = docCount - recentDocTitles.length;
   const hasLocatedStops = stops.some(s => s.lat !== null && s.lng !== null);
 
   return (
     <View style={styles.wrap}>
+      {showPrep && <PrepStrip tripId={tripId} />}
+
       {/* Documents + Planning */}
       <View style={styles.row}>
         <GlassCard flex={DOC_FLEX} height={tileHeight} onPress={() => router.push(`/trip/${tripId}/documents`)}>

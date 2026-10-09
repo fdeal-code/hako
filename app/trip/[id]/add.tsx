@@ -114,9 +114,9 @@ export default function AddToTripScreen() {
               <ShortcutTile
                 key="orga"
                 icon="checkbox-outline"
-                title="Une note d’orga"
+                title="Une tâche d’orga"
                 subtitle="« Louer la voiture »…"
-                onPress={() => go({ pathname: '/trip/[id]/wish/new', params: { id: tripId, mode: 'orga' } })}
+                onPress={() => go({ pathname: '/trip/[id]/preparation', params: { id: tripId, add: '1' } })}
               />,
             ]}
           </TileGrid>

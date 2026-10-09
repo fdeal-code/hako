@@ -20,8 +20,8 @@ import { Colors, Spacing, Radii, Shadows, Typography } from '@/constants/theme';
 import { NavButton } from '@/components/ui/NavButton';
 import { FilterButton } from '@/components/ui/FilterButton';
 import { supabase } from '@/services/supabase';
-import { DepartureChecklist } from '@/components/documents/DepartureChecklist';
-import { nightsBetween, stopForDay } from '@/utils/tripStops';
+import { PrepStrip } from '@/components/preparation/PrepParts';
+import { stopForDay } from '@/utils/tripStops';
 import { useTripStops } from '@/hooks/useTripStops';
 
 /* ─── Types ──────────────────────────────────────────────────── */
@@ -231,14 +231,9 @@ export default function DocumentsScreen() {
         })}
       </ScrollView>
 
-      {/* Checklist de départ — tant que le voyage n'est pas terminé */}
+      {/* Préparatifs (essentiels + tâches du groupe) — tant que le voyage n'est pas terminé */}
       {tripId && (!trip?.end_date || trip.end_date >= todayIso()) && (
-        <DepartureChecklist
-          tripId={tripId}
-          daysUntilStart={trip?.start_date && trip.start_date >= todayIso()
-            ? nightsBetween(todayIso(), trip.start_date)
-            : null}
-        />
+        <View style={s.prepStrip}><PrepStrip tripId={tripId} /></View>
       )}
 
       {/* List */}
@@ -308,6 +303,7 @@ export default function DocumentsScreen() {
 
 /* ─── Styles ─────────────────────────────────────────────────── */
 const s = StyleSheet.create({
+  prepStrip: { paddingHorizontal: Spacing.md2, marginBottom: Spacing.sm2 },
   root: {
     flex: 1,
     backgroundColor: Colors.background,

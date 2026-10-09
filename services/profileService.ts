@@ -10,7 +10,7 @@ export interface ProfileStats { trips: number; wishes: number; pendingRequests: 
 export async function getProfileStats(userId: string): Promise<ServiceResult<ProfileStats>> {
   const [trips, wishes, requests] = await Promise.all([
     supabase.from('trip_members').select('*', { count: 'exact', head: true }).eq('user_id', userId),
-    supabase.from('wishes').select('*', { count: 'exact', head: true }).eq('added_by', userId),
+    supabase.from('wishes').select('*', { count: 'exact', head: true }).eq('added_by', userId).or('type.is.null,type.neq.orga'),
     supabase.from('friendships').select('*', { count: 'exact', head: true }).eq('addressee_id', userId).eq('status', 'pending'),
   ]);
   const failed = trips.error ?? wishes.error ?? requests.error;

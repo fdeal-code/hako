@@ -13,6 +13,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Linking,
+  useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
@@ -122,6 +123,7 @@ const CATEGORY_LABEL: Record<Category, string> = {
   restaurant: 'Resto', monument: 'Monument', cafe: 'Café', hotel: 'Logement', activity: 'Activité',
   photo: 'Spot photo', photo_spot: 'Spot photo', bar: 'Bar', other: 'Lieu',
 };
+const INSPIRATION_WIDTH_RATIO = 0.72; // la carte suivante dépasse : on comprend qu'on peut glisser
 const DETAIL_ACTIONS_SPACE = 120; // barre d'actions fixe de la fiche détail
 const WEEKDAY_SHORT = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
 
@@ -986,6 +988,7 @@ export default function EnviesScreen() {
   const insets         = useSafeAreaInsets();
   const { session }    = useAuth();
   const currentUserId  = session?.user?.id ?? '';
+  const { width }      = useWindowDimensions();
 
   const [wishes,         setWishes]         = useState<Wish[]>([]);
   const [loading,        setLoading]        = useState(false);
@@ -1019,7 +1022,9 @@ export default function EnviesScreen() {
     try {
       const { data, error } = await supabase
         .from('wishes').select('*, wish_votes(*)')
-        .eq('trip_id', tripId).order('created_at', { ascending: false });
+        .eq('trip_id', tripId)
+        .or('type.is.null,type.neq.orga') // les tâches d'orga vivent dans les Préparatifs
+        .order('created_at', { ascending: false });
       if (!error && data) setWishes(data as Wish[]);
       const { data: memberRows } = await supabase
         .from('trip_members').select('user_id, profile:profiles(nickname, avatar_url)')
@@ -1130,16 +1135,6 @@ export default function EnviesScreen() {
     });
   }, []);
 
-  /* ── Toggle done (orga) ── */
-  const handleToggleDone = useCallback((wishId: string) => {
-    setWishes(prev => prev.map(w => {
-      if (w.id !== wishId) return w;
-      const newDone = !w.done;
-      supabase.from('wishes').update({ done: newDone }).eq('id', wishId).then(() => {});
-      return { ...w, done: newDone };
-    }));
-  }, []);
-
   /* ── Archive / Delete ── */
   const handleArchive = useCallback((wishId: string) => {
     handleUpdate(wishId, { status: 'archived' });
@@ -1185,6 +1180,28 @@ export default function EnviesScreen() {
     setDetailId(w.id);
   }, [planWish]);
 
+
+  /* ── À voter / Toutes : inspirations (vidéos, liens) et lieux ── */
+  const inspirations = useMemo(() => filtered.filter(w => w.type !== 'place'), [filtered]);
+  const places = useMemo(() => filtered.filter(w => w.type === 'place'), [filtered]);
+  const inspirationWidth = Math.round(width * INSPIRATION_WIDTH_RATIO);
+
+  const renderVoteCard = (w: Wish, style?: { width: number }) => (
+    <VoteCard
+      key={w.id}
+      style={style}
+      title={w.title}
+      imageUri={w.image_url ?? w.cover_url ?? null}
+      tag={wishTag(w, stops.find(st => st.id === w.stop_id)?.place_name ?? null)}
+      isVideo={isVideoLink(w.link_url)}
+      priceLabel={priceLabel(w.price_per_person, w.budget)}
+      votes={w.wish_votes}
+      members={members}
+      currentUserId={currentUserId}
+      onVote={vote => handleVote(w.id, vote)}
+      onPress={() => setDetailId(w.id)}
+    />
+  );
 
   return (
     <View style={[sc.container, { paddingTop: insets.top }]}>
@@ -1288,34 +1305,37 @@ export default function EnviesScreen() {
               </View>
             ))
           ) : (
-            /* À voter / Toutes : cartes de vote (les tâches d'orga en lignes) */
-            filtered.map(w => (
-              w.type === 'orga' ? (
-                <ValidatedRow
-                  key={w.id}
-                  title={w.title}
-                  subtitle="Orga"
-                  imageUri={null}
-                  status={w.done ? { kind: 'booked', label: 'Fait' } : { kind: 'plan', label: 'À faire' }}
-                  onPress={() => setDetailId(w.id)}
-                  onStatusPress={() => handleToggleDone(w.id)}
-                />
-              ) : (
-                <VoteCard
-                  key={w.id}
-                  title={w.title}
-                  imageUri={w.image_url ?? w.cover_url ?? null}
-                  tag={wishTag(w, stops.find(st => st.id === w.stop_id)?.place_name ?? null)}
-                  isVideo={isVideoLink(w.link_url)}
-                  priceLabel={priceLabel(w.price_per_person, w.budget)}
-                  votes={w.wish_votes}
-                  members={members}
-                  currentUserId={currentUserId}
-                  onVote={vote => handleVote(w.id, vote)}
-                  onPress={() => setDetailId(w.id)}
-                />
-              )
-            ))
+            /* À voter / Toutes : deux sections — les inspirations (vidéos) en
+               slider horizontal, puis les lieux en cartes de vote */
+            <>
+              {inspirations.length > 0 && (
+                <View style={sc.group}>
+                  <View style={sc.groupHeader}>
+                    <Text style={sc.groupTitle}>INSPIRATIONS</Text>
+                    <Text style={sc.groupCount}>{inspirations.length}</Text>
+                  </View>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={sc.slider}
+                    contentContainerStyle={sc.sliderContent}
+                    snapToInterval={inspirationWidth + Spacing.sm2}
+                    decelerationRate="fast"
+                  >
+                    {inspirations.map(w => renderVoteCard(w, { width: inspirationWidth }))}
+                  </ScrollView>
+                </View>
+              )}
+              {places.length > 0 && (
+                <View style={sc.group}>
+                  <View style={sc.groupHeader}>
+                    <Text style={sc.groupTitle}>LIEUX</Text>
+                    <Text style={sc.groupCount}>{places.length}</Text>
+                  </View>
+                  {places.map(w => renderVoteCard(w))}
+                </View>
+              )}
+            </>
           )}
         </ScrollView>
       )}
@@ -1374,6 +1394,9 @@ const sc = StyleSheet.create({
   contextText:   { ...Typography.bodySmall, color: Colors.accent },
   listContent:   { paddingHorizontal: Spacing.md2, paddingTop: Spacing.sm2, gap: Spacing.sm2 },
   group:         { gap: Spacing.sm2 - 2, marginBottom: Spacing.sm },
+  // Slider des inspirations : déborde jusqu'aux bords de l'écran
+  slider:        { marginHorizontal: -Spacing.md2 },
+  sliderContent: { paddingHorizontal: Spacing.md2, gap: Spacing.sm2 },
   groupHeader:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   groupTitle:    { ...Typography.displayLabel, color: Colors.textPrimary },
   groupCount:    { ...Typography.bodySmall, color: Colors.textMuted },

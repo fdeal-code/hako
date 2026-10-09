@@ -2,7 +2,7 @@
 // Photo + type/ville + prix, avatars avec leur vote, barre de progression,
 // et les deux boutons Bof / Partant ! directement sur la carte.
 
-import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, StyleProp, StyleSheet, Text, TouchableOpacity, View, ViewStyle } from 'react-native';
 import Animated, { ZoomIn } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -28,6 +28,8 @@ interface VoteCardProps {
   currentUserId: string;
   onVote: (vote: VoteValue) => void;
   onPress: () => void;
+  /** Largeur fixe (slider horizontal des inspirations) */
+  style?: StyleProp<ViewStyle>;
 }
 
 const PHOTO_HEIGHT = 118;
@@ -36,7 +38,7 @@ const DOT = 14;
 const SEGMENT_HEIGHT = 5;
 
 export function VoteCard({
-  title, imageUri, tag, isVideo = false, priceLabel, votes, members, currentUserId, onVote, onPress,
+  title, imageUri, tag, isVideo = false, priceLabel, votes, members, currentUserId, onVote, onPress, style,
 }: VoteCardProps) {
   const voteOf = (userId: string) => votes.find(v => v.user_id === userId)?.vote ?? null;
   const yes = votes.filter(v => v.vote === 'up').length;
@@ -49,7 +51,7 @@ export function VoteCard({
   });
 
   return (
-    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.92}>
+    <TouchableOpacity style={[styles.card, style]} onPress={onPress} activeOpacity={0.92}>
       <View style={styles.photo}>
         {imageUri
           ? <Image source={{ uri: imageUri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
