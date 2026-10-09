@@ -1,701 +1,222 @@
-import { useState, useEffect, useCallback } from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  StyleSheet,
-  TouchableOpacity,
-  Alert,
-  ActivityIndicator,
-  Modal,
-  TextInput,
-  Pressable,
-  KeyboardAvoidingView,
-  Platform,
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
-import { BlurView } from 'expo-blur';
-import { useFocusEffect } from 'expo-router/react-navigation';
+// HAKO — Onglet Profil (maquettes V2)
+// Carte d'identité noire (photo, pseudo, e-mail, « Modifier »), trois
+// compteurs, la liste des amis (+ ajouter, demandes reçues) et les réglages.
+// Modifier le profil et ajouter un ami ouvrent des pages plein écran.
+
+import { ComponentProps } from 'react';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { router } from 'expo-router';
+import Animated, { FadeInDown } from 'react-native-reanimated';
+import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Colors, Spacing, Radii, Shadows } from '@/constants/theme';
-import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/services/supabase';
-import { fileExtension, uploadLocalFile } from '@/services/storageService';
+import { Colors, Radii, Shadows, Spacing, Typography } from '@/constants/theme';
+import { SectionLabel, createCardStyles } from '@/components/createTrip/CreateTripChrome';
 import { MemberAvatar } from '@/components/ui/MemberAvatar';
-import { AddFriendSheet } from '@/components/friends/AddFriendSheet';
+import { useProfile } from '@/hooks/useProfile';
+import { Friend } from '@/services/friendService';
 
-/* ─── Types ─────────────────────────────────────────────────── */
-interface Friend {
-  id: string;
-  nickname: string | null;
-  avatar_url: string | null;
-  email: string | null;
-}
+type IconName = ComponentProps<typeof Ionicons>['name'];
 
-/* ─── Screen ─────────────────────────────────────────────────── */
+const AVATAR = 88;
+const FRIEND_AVATAR = 44;
+const ROW_ICON = 36;
+const TAB_BAR_SPACE = 120;
+const APP_VERSION = '1.0.0';
+
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
-  const { session, signOut } = useAuth();
-  const userId = session?.user?.id;
+  const p = useProfile();
 
-  const [avatarUrl, setAvatarUrl] = useState<string | undefined>(
-    session?.user?.user_metadata?.avatar_url,
-  );
-  const [nickname, setNickname] = useState(
-    session?.user?.user_metadata?.nickname || 'Voyageur',
-  );
-  const email = session?.user?.email || '';
-
-  /* ── Stats ── */
-  const [tripsCount,  setTripsCount]  = useState(0);
-  const [wishesCount, setWishesCount] = useState(0);
-  const [friendsCount, setFriendsCount] = useState(0);
-
-  /* ── Friends ── */
-  const [friends,        setFriends]        = useState<Friend[]>([]);
-  const [loadingFriends, setLoadingFriends] = useState(false);
-
-  /* ── Sheets ── */
-  const [showEdit,      setShowEdit]      = useState(false);
-  const [showAddFriend, setShowAddFriend] = useState(false);
-
-  /* ── Load data ── */
-  const loadData = useCallback(() => {
-    if (!userId) return;
-
-    (async () => {
-      /* Trips count */
-      const { count: tc } = await supabase
-        .from('trip_members')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', userId);
-      setTripsCount(tc ?? 0);
-
-      /* Wishes count */
-      const { count: wc } = await supabase
-        .from('wishes')
-        .select('*', { count: 'exact', head: true })
-        .eq('added_by', userId);
-      setWishesCount(wc ?? 0);
-
-      /* Friends (two-step) */
-      setLoadingFriends(true);
-      const { data: sentData } = await supabase
-        .from('friendships')
-        .select('addressee_id')
-        .eq('requester_id', userId)
-        .eq('status', 'accepted');
-
-      const { data: receivedData } = await supabase
-        .from('friendships')
-        .select('requester_id')
-        .eq('addressee_id', userId)
-        .eq('status', 'accepted');
-
-      const friendIds = [
-        ...(sentData ?? []).map(f => f.addressee_id),
-        ...(receivedData ?? []).map(f => f.requester_id),
-      ];
-      setFriendsCount(friendIds.length);
-
-      const profiles: Friend[] = [];
-      for (const id of friendIds) {
-        const { data } = await supabase
-          .from('profiles')
-          .select('id, nickname, avatar_url, email')
-          .eq('id', id)
-          .single();
-        if (data) profiles.push(data);
-      }
-      setFriends(profiles);
-      setLoadingFriends(false);
-    })();
-  }, [userId]);
-
-  useFocusEffect(loadData);
-
-  /* ── Sign out ── */
-  const handleSignOut = () => {
+  const confirmSignOut = () => {
     Alert.alert('Se déconnecter', 'Tu vas être déconnecté(e). À bientôt !', [
       { text: 'Annuler', style: 'cancel' },
-      { text: 'Se déconnecter', style: 'destructive', onPress: signOut },
+      { text: 'Se déconnecter', style: 'destructive', onPress: () => { void p.signOut(); } },
     ]);
   };
 
+  const confirmUnfriend = (friend: Friend) => {
+    const name = friend.nickname ?? 'cet ami';
+    Alert.alert(name, friend.email ?? undefined, [
+      { text: 'Annuler', style: 'cancel' },
+      {
+        text: 'Retirer de mes amis', style: 'destructive',
+        onPress: () => { void p.unfriend(friend.id).then(err => { if (err) Alert.alert('Oups', err); }); },
+      },
+    ]);
+  };
+
+  const pending = p.stats?.pendingRequests ?? 0;
+
   return (
-    <View style={[s.container, { paddingTop: insets.top }]}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
+    <View style={[styles.root, { paddingTop: insets.top }]}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + TAB_BAR_SPACE }]} showsVerticalScrollIndicator={false}>
+        <Text style={styles.pageTitle}>Profil</Text>
 
-        {/* ── Header ── */}
-        <View style={s.pageHeader}>
-          <Text style={s.pageTitle}>Profil</Text>
-        </View>
-
-        {/* ── Avatar + infos ── */}
-        <View style={s.profileCard}>
-          <View style={s.avatarWrap}>
-            <MemberAvatar
-              member={{ avatar_url: avatarUrl, nickname, email }}
-              size={100}
-              index={0}
-            />
+        {/* Carte d'identité */}
+        <Animated.View entering={FadeInDown.duration(400)} style={styles.idCard}>
+          <MemberAvatar member={{ avatar_url: p.avatarUrl, nickname: p.nickname, email: p.email }} size={AVATAR} />
+          <View style={styles.flex}>
+            <Text style={styles.name} numberOfLines={1}>{p.nickname}</Text>
+            <Text style={styles.email} numberOfLines={1}>{p.email}</Text>
+            <TouchableOpacity style={styles.editBtn} onPress={() => router.push('/account/edit')} activeOpacity={0.85}>
+              <Ionicons name="pencil" size={14} color={Colors.textPrimary} />
+              <Text style={styles.editText}>Modifier</Text>
+            </TouchableOpacity>
           </View>
-          <Text style={s.name}>{nickname}</Text>
-          <Text style={s.emailText}>{email}</Text>
-          <TouchableOpacity
-            style={s.editBtn}
-            onPress={() => setShowEdit(true)}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="pencil-outline" size={13} color={Colors.textSecondary} />
-            <Text style={s.editBtnText}>Modifier le profil</Text>
-          </TouchableOpacity>
-        </View>
+        </Animated.View>
 
-        {/* ── Stats ── */}
-        <View style={s.statsRow}>
-          <StatCard value={tripsCount}  label="Voyages" icon="airplane-outline" />
-          <StatCard value={wishesCount} label="Envies"  icon="heart-outline" />
-          <StatCard value={friendsCount} label="Amis"  icon="people-outline" />
-        </View>
+        {/* Compteurs */}
+        <Animated.View entering={FadeInDown.delay(80).duration(400)} style={styles.stats}>
+          <Stat value={p.stats?.trips} label="Voyages" icon="airplane" />
+          <Stat value={p.stats?.wishes} label="Envies" icon="heart" />
+          <Stat value={p.friends?.length} label="Amis" icon="people" />
+        </Animated.View>
 
-        {/* ── Mes amis ── */}
-        <View style={s.section}>
-          <View style={s.sectionHeader}>
-            <Text style={s.sectionTitle}>Mes amis ({friendsCount})</Text>
-            <TouchableOpacity
-              onPress={() => setShowAddFriend(true)}
-              activeOpacity={0.7}
-              style={s.addFriendBtn}
-            >
-              <Ionicons name="person-add-outline" size={15} color={Colors.primary} />
-              <Text style={s.addFriendBtnText}>Ajouter</Text>
+        {p.error ? <Text style={styles.errorText}>{p.error}</Text> : null}
+
+        {/* Amis */}
+        <Animated.View entering={FadeInDown.delay(160).duration(400)} style={styles.section}>
+          <View style={styles.sectionHead}>
+            <View style={styles.flex}><SectionLabel>Tes amis</SectionLabel></View>
+            <TouchableOpacity style={styles.addPill} onPress={() => router.push('/account/add-friend')} activeOpacity={0.85}>
+              <Ionicons name="person-add" size={14} color={Colors.white} />
+              <Text style={styles.addPillText}>Ajouter</Text>
             </TouchableOpacity>
           </View>
 
-          {loadingFriends ? (
-            <ActivityIndicator color={Colors.primary} style={{ marginTop: Spacing.md }} />
-          ) : friends.length === 0 ? (
-            <View style={s.emptyFriends}>
-              <Text style={s.emptyFriendsText}>Pas encore d’amis ici...</Text>
-            </View>
-          ) : (
-            <View style={s.friendsList}>
-              {friends.map(f => (
-                <View key={f.id} style={s.friendRow}>
-                  <MemberAvatar member={f} size={44} index={0} />
-                  <View style={s.friendInfo}>
-                    <Text style={s.friendName}>{f.nickname ?? 'Utilisateur'}</Text>
-                    {f.email ? <Text style={s.friendEmail}>{f.email}</Text> : null}
-                  </View>
-                </View>
-              ))}
-            </View>
+          {pending > 0 && (
+            <TouchableOpacity style={styles.requests} onPress={() => router.push('/notifications')} activeOpacity={0.85}>
+              <View style={styles.requestsBadge}><Text style={styles.requestsCount}>{pending}</Text></View>
+              <Text style={styles.requestsText}>
+                {pending > 1 ? `${pending} demandes d’ami en attente` : '1 demande d’ami en attente'}
+              </Text>
+              <Ionicons name="chevron-forward" size={18} color={Colors.white} />
+            </TouchableOpacity>
           )}
-        </View>
 
-        {/* ── Réglages ── */}
-        <TouchableOpacity
-          style={s.settingsRow}
-          activeOpacity={0.85}
-          onPress={() => router.push('/settings/notifications')}
-        >
-          <Ionicons name="notifications-outline" size={18} color={Colors.textPrimary} />
-          <Text style={s.settingsText}>Notifications</Text>
-          <Ionicons name="chevron-forward" size={16} color={Colors.textTertiary} />
-        </TouchableOpacity>
+          <View style={[createCardStyles.whiteCard, styles.list]}>
+            {p.friends === null ? (
+              <ActivityIndicator color={Colors.primary} style={styles.loader} />
+            ) : p.friends.length === 0 ? (
+              <TouchableOpacity style={styles.empty} onPress={() => router.push('/account/add-friend')} activeOpacity={0.85}>
+                <Ionicons name="people-outline" size={28} color={Colors.textMuted} />
+                <Text style={styles.emptyTitle}>Pas encore d’amis ici</Text>
+                <Text style={styles.emptyText}>Ajoute tes potes pour les inviter en un tap à tes prochains voyages.</Text>
+              </TouchableOpacity>
+            ) : p.friends.map((f, i) => (
+              <TouchableOpacity
+                key={f.id}
+                style={[styles.friend, i > 0 && styles.rowBorder]}
+                onPress={() => confirmUnfriend(f)}
+                activeOpacity={0.85}
+              >
+                <MemberAvatar member={f} size={FRIEND_AVATAR} />
+                <View style={styles.flex}>
+                  <Text style={styles.rowTitle} numberOfLines={1}>{f.nickname ?? 'Voyageur'}</Text>
+                  {f.email ? <Text style={styles.rowSub} numberOfLines={1}>{f.email}</Text> : null}
+                </View>
+                <Ionicons name="ellipsis-horizontal" size={18} color={Colors.textMuted} />
+              </TouchableOpacity>
+            ))}
+          </View>
+        </Animated.View>
 
-        {/* ── Déconnexion ── */}
-        <TouchableOpacity style={s.logoutBtn} activeOpacity={0.85} onPress={handleSignOut}>
-          <Ionicons name="log-out-outline" size={18} color={Colors.vote.love} />
-          <Text style={s.logoutText}>Se déconnecter</Text>
-        </TouchableOpacity>
+        {/* Réglages */}
+        <Animated.View entering={FadeInDown.delay(240).duration(400)} style={styles.section}>
+          <SectionLabel>Réglages</SectionLabel>
+          <View style={[createCardStyles.whiteCard, styles.list]}>
+            <SettingRow icon="notifications-outline" label="Notifications" onPress={() => router.push('/settings/notifications')} />
+            <SettingRow icon="mail-outline" label="Boîte de réception" onPress={() => router.push('/notifications')} border />
+            <SettingRow icon="log-out-outline" label="Se déconnecter" onPress={confirmSignOut} border danger />
+          </View>
+        </Animated.View>
 
-        <Text style={s.version}>Hako v1.0.0</Text>
+        <Text style={styles.version}>Hako v{APP_VERSION}</Text>
       </ScrollView>
-
-      {/* ── Edit profile sheet ── */}
-      <EditProfileSheet
-        visible={showEdit}
-        onClose={() => setShowEdit(false)}
-        initialNickname={nickname}
-        initialAvatarUrl={avatarUrl}
-        userId={userId!}
-        email={email}
-        onSaved={(newNickname, newAvatar) => {
-          setNickname(newNickname);
-          setAvatarUrl(newAvatar);
-        }}
-      />
-
-      {/* ── Add friend sheet ── */}
-      <AddFriendSheet
-        visible={showAddFriend}
-        onClose={() => {
-          setShowAddFriend(false);
-          loadData();
-        }}
-      />
     </View>
   );
 }
 
-/* ─── StatCard ───────────────────────────────────────────────── */
-function StatCard({
-  value,
-  label,
-  icon,
-}: {
-  value: number;
-  label: string;
-  icon: keyof typeof Ionicons.glyphMap;
-}) {
+function Stat({ value, label, icon }: { value: number | undefined; label: string; icon: IconName }) {
   return (
-    <View style={s.statCard}>
-      <Ionicons name={icon} size={22} color="#888" />
-      <Text style={s.statValue}>{value}</Text>
-      <Text style={s.statLabel}>{label}</Text>
+    <View style={styles.stat}>
+      <Ionicons name={icon} size={18} color={Colors.accent} />
+      <Text style={styles.statValue}>{value ?? '–'}</Text>
+      <Text style={styles.statLabel}>{label}</Text>
     </View>
   );
 }
 
-/* ─── EditProfileSheet ───────────────────────────────────────── */
-interface EditSheetProps {
-  visible: boolean;
-  onClose: () => void;
-  initialNickname: string;
-  initialAvatarUrl?: string;
-  userId: string;
-  email: string;
-  onSaved: (nickname: string, avatarUrl: string | undefined) => void;
-}
-
-function EditProfileSheet({
-  visible,
-  onClose,
-  initialNickname,
-  initialAvatarUrl,
-  userId,
-  email,
-  onSaved,
-}: EditSheetProps) {
-  const insets = useSafeAreaInsets();
-
-  const [editNickname, setEditNickname] = useState(initialNickname);
-  const [localUri,     setLocalUri]     = useState<string | undefined>();
-  const [saving,       setSaving]       = useState(false);
-
-  /* Reset state when sheet opens */
-  useEffect(() => {
-    if (visible) {
-      setEditNickname(initialNickname);
-      setLocalUri(undefined);
-    }
-  }, [visible, initialNickname]);
-
-  const displayAvatarUrl = localUri ?? initialAvatarUrl;
-
-  const handlePickPhoto = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission refusée', "Autorise l'accès à ta galerie.");
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-    });
-    if (!result.canceled) {
-      setLocalUri(result.assets[0].uri);
-    }
-  };
-
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      let finalAvatarUrl = initialAvatarUrl;
-
-      if (localUri) {
-        const { data: publicUrl, error: uploadError } = await uploadLocalFile(
-          'avatars', `${userId}/profile.${fileExtension(localUri)}`, localUri,
-        );
-        if (uploadError !== null) throw new Error(uploadError);
-        finalAvatarUrl = `${publicUrl}?t=${Date.now()}`;
-      }
-
-      await supabase.auth.updateUser({ data: { nickname: editNickname, avatar_url: finalAvatarUrl } });
-      await supabase.from('profiles').upsert(
-        { id: userId, nickname: editNickname, avatar_url: finalAvatarUrl, email },
-        { onConflict: 'id' },
-      );
-
-      onSaved(editNickname, finalAvatarUrl);
-      onClose();
-    } catch (e: unknown) {
-      Alert.alert('Erreur', e instanceof Error ? e.message : 'Une erreur est survenue.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
+function SettingRow({ icon, label, onPress, border, danger }: { icon: IconName; label: string; onPress: () => void; border?: boolean; danger?: boolean }) {
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <KeyboardAvoidingView
-        style={es.kav}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={10}
-      >
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-
-        <View style={[es.container, { paddingBottom: insets.bottom + Spacing.md }]}>
-          <BlurView intensity={80} tint="light" style={StyleSheet.absoluteFill} />
-
-          <View style={es.handleBar} />
-
-          {/* Header */}
-          <View style={es.header}>
-            <Text style={es.title}>Modifier le profil</Text>
-            <TouchableOpacity onPress={onClose} style={es.closeBtn} activeOpacity={0.7}>
-              <Ionicons name="close" size={22} color={Colors.textSecondary} />
-            </TouchableOpacity>
-          </View>
-
-          <View style={es.body}>
-            {/* Avatar picker */}
-            <TouchableOpacity
-              onPress={handlePickPhoto}
-              activeOpacity={0.8}
-              style={es.avatarPickerWrap}
-            >
-              <MemberAvatar
-                member={{ avatar_url: displayAvatarUrl, nickname: editNickname }}
-                size={80}
-                index={0}
-              />
-              <View style={es.cameraBtn}>
-                <Ionicons name="camera" size={14} color="#fff" />
-              </View>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={handlePickPhoto} activeOpacity={0.7}>
-              <Text style={es.changePhotoText}>Changer la photo</Text>
-            </TouchableOpacity>
-
-            {/* Nickname */}
-            <Text style={es.label}>Surnom</Text>
-            <TextInput
-              style={es.input}
-              value={editNickname}
-              onChangeText={setEditNickname}
-              placeholder="Ton surnom"
-              placeholderTextColor={Colors.textTertiary}
-              autoCapitalize="words"
-            />
-          </View>
-
-          {/* Save */}
-          <TouchableOpacity
-            style={[es.saveBtn, (saving || !editNickname.trim()) && { opacity: 0.6 }]}
-            onPress={handleSave}
-            disabled={saving || !editNickname.trim()}
-            activeOpacity={0.85}
-          >
-            {saving
-              ? <ActivityIndicator color="#fff" size="small" />
-              : <Text style={es.saveBtnText}>Sauvegarder</Text>
-            }
-          </TouchableOpacity>
-        </View>
-      </KeyboardAvoidingView>
-    </Modal>
+    <TouchableOpacity style={[styles.setting, border && styles.rowBorder]} onPress={onPress} activeOpacity={0.85}>
+      <View style={[styles.settingIcon, danger && styles.settingIconDanger]}>
+        <Ionicons name={icon} size={18} color={danger ? Colors.negative : Colors.textPrimary} />
+      </View>
+      <Text style={[styles.rowTitle, styles.flex, danger && styles.danger]}>{label}</Text>
+      {!danger && <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />}
+    </TouchableOpacity>
   );
 }
 
-/* ─── Styles (screen) ────────────────────────────────────────── */
-const s = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  scroll: {
-    paddingHorizontal: Spacing.md,
-    paddingBottom: Spacing.xxl,
-  },
-  pageHeader: {
-    marginTop: Spacing.md,
-    marginBottom: Spacing.xl,
-  },
-  pageTitle: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: Colors.textPrimary,
-  },
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: Colors.background },
+  flex: { flex: 1 },
+  content: { paddingHorizontal: Spacing.md2, paddingTop: Spacing.md, gap: Spacing.lg },
+  pageTitle: { ...Typography.displayTitle, color: Colors.textPrimary },
 
-  /* Profile card */
-  profileCard: {
-    alignItems: 'center',
-    marginBottom: Spacing.xl,
+  idCard: {
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.md, padding: Spacing.md2,
+    borderRadius: Radii.pill, backgroundColor: Colors.primary, ...Shadows.md,
   },
-  avatarWrap: {
-    marginBottom: Spacing.md,
-  },
-  name: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: Colors.textPrimary,
-    letterSpacing: -0.3,
-  },
-  emailText: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    marginTop: 4,
-    marginBottom: Spacing.md,
-  },
+  name: { ...Typography.displayValue, color: Colors.white },
+  email: { ...Typography.bodySmall, color: Colors.textOnDark, marginTop: Spacing.xs / 2 },
   editBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.xs,
-    backgroundColor: Colors.surface,
-    borderRadius: Radii.full,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.xs + 2, alignSelf: 'flex-start', marginTop: Spacing.sm2,
+    paddingHorizontal: Spacing.sm2, paddingVertical: Spacing.xs + 2, borderRadius: Radii.full, backgroundColor: Colors.background,
   },
-  editBtnText: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    fontWeight: '600',
-  },
+  editText: { ...Typography.chip, color: Colors.textPrimary },
 
-  /* Stats */
-  statsRow: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-    marginBottom: Spacing.xl,
+  stats: { flexDirection: 'row', gap: Spacing.sm2 },
+  stat: {
+    flex: 1, alignItems: 'center', gap: Spacing.xs, paddingVertical: Spacing.md,
+    ...createCardStyles.creamTile,
   },
-  statCard: {
-    flex: 1,
-    backgroundColor: Colors.white,
-    borderRadius: Radii.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    paddingVertical: Spacing.md,
-    alignItems: 'center',
-    gap: 4,
-    ...Shadows.sm,
-  },
-  statValue: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: Colors.textPrimary,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    fontWeight: '500',
-  },
+  statValue: { ...Typography.displayValue, color: Colors.textPrimary },
+  statLabel: { ...Typography.bodySmall, color: Colors.textMuted },
 
-  /* Friends section */
-  section: {
-    backgroundColor: Colors.white,
-    borderRadius: Radii.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    padding: Spacing.md,
-    marginBottom: Spacing.xl,
-    ...Shadows.sm,
+  section: { gap: Spacing.sm },
+  sectionHead: { flexDirection: 'row', alignItems: 'center' },
+  addPill: {
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.xs + 2, marginBottom: Spacing.sm,
+    paddingHorizontal: Spacing.sm2, paddingVertical: Spacing.xs + 2, borderRadius: Radii.full, backgroundColor: Colors.accent,
   },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: Spacing.md,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-  },
-  addFriendBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 5,
-    backgroundColor: Colors.surface,
-    borderRadius: Radii.full,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  addFriendBtnText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.primary,
-  },
-  emptyFriends: {
-    paddingVertical: Spacing.md,
-    alignItems: 'center',
-  },
-  emptyFriendsText: {
-    fontSize: 14,
-    color: Colors.textTertiary,
-  },
-  friendsList: { gap: Spacing.sm },
-  friendRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    paddingVertical: 4,
-  },
-  friendInfo: { flex: 1 },
-  friendName: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: Colors.textPrimary,
-  },
-  friendEmail: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    marginTop: 1,
-  },
+  addPillText: { ...Typography.chip, color: Colors.white },
 
-  /* Logout */
-  settingsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm2,
-    padding: Spacing.md,
-    marginBottom: Spacing.md,
-    borderRadius: Radii.lg,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.borderDark,
+  requests: {
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.sm2, padding: Spacing.sm2,
+    borderRadius: Radii.lg, backgroundColor: Colors.accent, ...Shadows.md,
   },
-  settingsText: {
-    flex: 1,
-    fontSize: 15,
-    fontWeight: '600',
-    color: Colors.textPrimary,
-  },
-  logoutBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.sm,
-    paddingVertical: Spacing.md,
-    marginBottom: Spacing.sm,
-  },
-  logoutText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: Colors.vote.love,
-  },
-  version: {
-    textAlign: 'center',
-    fontSize: 12,
-    color: Colors.textTertiary,
-    marginBottom: Spacing.md,
-  },
-});
+  requestsBadge: { minWidth: ROW_ICON, height: ROW_ICON, borderRadius: Radii.full, backgroundColor: Colors.white, alignItems: 'center', justifyContent: 'center' },
+  requestsCount: { ...Typography.rowTitle, color: Colors.accent },
+  requestsText: { flex: 1, ...Typography.rowTitle, color: Colors.white },
 
-/* ─── Styles (edit sheet) ────────────────────────────────────── */
-const es = StyleSheet.create({
-  kav: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.45)',
-  },
-  container: {
-    borderTopLeftRadius: Radii.xl,
-    borderTopRightRadius: Radii.xl,
-    overflow: 'hidden',
-  },
-  handleBar: {
-    width: 36,
-    height: 4,
-    backgroundColor: Colors.border,
-    borderRadius: 2,
-    alignSelf: 'center',
-    marginTop: Spacing.sm,
-    marginBottom: Spacing.sm,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Spacing.md,
-    marginBottom: Spacing.md,
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: Colors.textPrimary,
-  },
-  closeBtn: { padding: Spacing.xs },
-  body: {
-    paddingHorizontal: Spacing.md,
-    alignItems: 'center',
-    gap: Spacing.sm,
-  },
-  avatarPickerWrap: {
-    position: 'relative',
-    marginBottom: 4,
-  },
-  cameraBtn: {
-    position: 'absolute',
-    bottom: 2,
-    right: 2,
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: Colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: Colors.white,
-  },
-  changePhotoText: {
-    fontSize: 14,
-    color: Colors.primary,
-    fontWeight: '600',
-    marginBottom: Spacing.md,
-  },
-  label: {
-    alignSelf: 'stretch',
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.textSecondary,
-    marginBottom: 4,
-  },
-  input: {
-    alignSelf: 'stretch',
-    backgroundColor: Colors.surface,
-    borderRadius: Radii.md,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 12,
-    fontSize: 16,
-    color: Colors.textPrimary,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    marginBottom: Spacing.sm,
-  },
-  saveBtn: {
-    marginHorizontal: Spacing.md,
-    marginTop: Spacing.md,
-    backgroundColor: Colors.primary,
-    borderRadius: Radii.full,
-    paddingVertical: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  saveBtnText: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 16,
-  },
+  list: { paddingHorizontal: Spacing.md },
+  loader: { paddingVertical: Spacing.lg },
+  rowBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: Colors.border },
+  friend: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm2, paddingVertical: Spacing.sm2 },
+  rowTitle: { ...Typography.rowTitle, color: Colors.textInk },
+  rowSub: { ...Typography.bodySmall, color: Colors.textMuted },
+  empty: { alignItems: 'center', gap: Spacing.xs, paddingVertical: Spacing.lg },
+  emptyTitle: { ...Typography.cardTitle, color: Colors.textInk },
+  emptyText: { ...Typography.bodySmall, color: Colors.textMuted, textAlign: 'center' },
+
+  setting: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm2, paddingVertical: Spacing.sm2 },
+  settingIcon: { width: ROW_ICON, height: ROW_ICON, borderRadius: Radii.full, backgroundColor: Colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
+  settingIconDanger: { backgroundColor: Colors.background },
+  danger: { color: Colors.negative },
+
+  errorText: { ...Typography.bodySmall, color: Colors.negative },
+  version: { ...Typography.bodySmall, color: Colors.textSecondary, textAlign: 'center' },
 });

@@ -35,3 +35,43 @@ export async function getAcceptedFriends(userId: string): Promise<ServiceResult<
   if (error) return serviceError(error.message);
   return { data: (data ?? []) as Friend[], error: null };
 }
+
+export type FriendLink = 'none' | 'pending' | 'accepted';
+export interface FoundProfile extends Friend { link: FriendLink }
+
+/** Cherche un utilisateur par e-mail, avec l'état de la relation. null = introuvable. */
+export async function findProfileByEmail(userId: string, email: string): Promise<ServiceResult<FoundProfile | null>> {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, nickname, avatar_url, email')
+    .eq('email', email.trim().toLowerCase())
+    .maybeSingle();
+  if (error) return serviceError(error.message);
+  if (!data) return { data: null, error: null };
+  const profile = data as Friend;
+
+  const { data: links, error: linkError } = await supabase
+    .from('friendships')
+    .select('status')
+    .or(`and(requester_id.eq.${userId},addressee_id.eq.${profile.id}),and(requester_id.eq.${profile.id},addressee_id.eq.${userId})`);
+  if (linkError) return serviceError(linkError.message);
+  const statuses = ((links ?? []) as { status: string }[]).map(l => l.status);
+  const link: FriendLink = statuses.includes(STATUS_ACCEPTED) ? 'accepted' : statuses.length > 0 ? 'pending' : 'none';
+  return { data: { ...profile, link }, error: null };
+}
+
+export async function sendFriendRequest(userId: string, friendId: string): Promise<ServiceResult<true>> {
+  const { error } = await supabase.from('friendships').insert({ requester_id: userId, addressee_id: friendId, status: 'pending' });
+  if (error) return serviceError(error.message);
+  return { data: true, error: null };
+}
+
+/** Retire un ami (supprime la relation, quel que soit le sens). */
+export async function removeFriend(userId: string, friendId: string): Promise<ServiceResult<true>> {
+  const { error } = await supabase
+    .from('friendships')
+    .delete()
+    .or(`and(requester_id.eq.${userId},addressee_id.eq.${friendId}),and(requester_id.eq.${friendId},addressee_id.eq.${userId})`);
+  if (error) return serviceError(error.message);
+  return { data: true, error: null };
+}

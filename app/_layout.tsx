@@ -94,6 +94,8 @@ function AuthGate() {
       <Stack.Screen name="trip/[id]/document/[docId]" options={{ headerShown: false }} />
       <Stack.Screen name="join/[token]"              options={{ headerShown: false }} />
       <Stack.Screen name="settings/notifications"    options={{ headerShown: false }} />
+      <Stack.Screen name="account/edit"              options={{ headerShown: false }} />
+      <Stack.Screen name="account/add-friend"        options={{ headerShown: false }} />
       <Stack.Screen name="notifications"             options={{ headerShown: false }} />
       <Stack.Screen name="share"                     options={{ headerShown: false, presentation: 'fullScreenModal' }} />
       <Stack.Screen
