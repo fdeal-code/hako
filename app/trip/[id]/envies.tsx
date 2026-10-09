@@ -33,6 +33,7 @@ import { markWishBooked, unmarkWishBooked } from '@/services/bookingService';
 import { localDayIso } from '@/utils/tripStops';
 import { durationMinutes, formatMinutes, priceLabel } from '@/utils/wishPriceDuration';
 import { PriceDurationFields } from '@/components/envies/PriceDurationFields';
+import { useWishComments } from '@/hooks/useWishComments';
 import { tripEvents } from '@/utils/events';
 import { buildWishVoteReminderUrl } from '@/utils/shareLinks';
 import { useTripStops } from '@/hooks/useTripStops';
@@ -92,15 +93,6 @@ interface WishLink {
   title?:     string;
 }
 
-interface WishComment {
-  id:          string;
-  wish_id:     string;
-  user_id:     string;
-  user_name:   string;
-  user_photo?: string;
-  content:     string;
-  created_at:  string;
-}
 
 interface LinkPreviewData { title: string; thumbnail: string | null; author: string | null; }
 interface PlaceSuggestion  { place_id: string; description: string; }
@@ -237,9 +229,8 @@ function DetailSheet({
   const [addrSugs,      setAddrSugs]      = useState<PlaceSuggestion[]>([]);
   const [editingDesc,   setEditingDesc]   = useState(false);
   const [descInput,     setDescInput]     = useState('');
-  const [comments,      setComments]      = useState<WishComment[]>([]);
   const [commentText,   setCommentText]   = useState('');
-  const [isSending,     setIsSending]     = useState(false);
+  const { comments, sending: isSending, send: sendCommentText, remove: removeComment } = useWishComments(wish?.id ?? null, currentUserId || null);
 
   /* ── Associate a place (for inspirations) ── */
   const [showAssociate,  setShowAssociate]  = useState(false);
@@ -264,7 +255,7 @@ function DetailSheet({
     if (wish) {
       setEditingAddr(false); setAddrInput(wish.address ?? ''); setAddrSugs([]);
       setEditingDesc(false); setDescInput(wish.description ?? '');
-      setComments([]); setCommentText('');
+      setCommentText('');
       setShowAssociate(false); setAssociateQuery(''); setAssociateSugs([]);
       setAddingVideo(false); setVideoInput('');
       setBookingOpen(false); setAmountInput('');
@@ -350,21 +341,16 @@ function DetailSheet({
     setEditingDesc(false);
   };
   const sendComment = async () => {
-    if (!commentText.trim()) return;
-    setIsSending(true);
-    const newComment: WishComment = {
-      id: Date.now().toString(), wish_id: wish.id,
-      user_id: currentUserId, user_name: 'Moi',
-      content: commentText.trim(), created_at: new Date().toISOString(),
-    };
-    supabase.from('wish_comments').insert({
-      wish_id: wish.id, user_id: currentUserId || null,
-      user_name: 'Moi', content: commentText.trim(),
-    }).then(() => {});
-    setComments(prev => [...prev, newComment]);
+    const text = commentText.trim();
+    if (!text) return;
     setCommentText('');
-    setIsSending(false);
+    const error = await sendCommentText(text);
+    if (error) { setCommentText(text); Alert.alert('Oups', error); }
   };
+  const confirmDeleteComment = (commentId: string) => Alert.alert('Supprimer ce commentaire ?', undefined, [
+    { text: 'Annuler', style: 'cancel' },
+    { text: 'Supprimer', style: 'destructive', onPress: () => { void removeComment(commentId).then(err => { if (err) Alert.alert('Oups', err); }); } },
+  ]);
 
   const confirmArchive = () => Alert.alert(
     'Archiver', 'Archiver cette envie ?',
@@ -842,24 +828,33 @@ function DetailSheet({
               <Text style={dv.sectionLabel}>COMMENTAIRES</Text>
               {comments.length === 0 && <Text style={dv.infoEmpty}>Aucun commentaire. Lance la discussion !</Text>}
               {comments.map(c => {
-                const member = tripMembers.find(m => m.user_id === c.user_id);
+                const name = c.user_id === currentUserId ? 'Toi' : c.author?.nickname ?? 'Membre';
+                const date = new Date(c.created_at);
+                const sameDay = date.toDateString() === new Date().toDateString();
                 return (
-                  <View key={c.id} style={ds.commentRow}>
+                  <TouchableOpacity
+                    key={c.id}
+                    style={ds.commentRow}
+                    activeOpacity={c.user_id === currentUserId ? 0.7 : 1}
+                    onLongPress={c.user_id === currentUserId ? () => confirmDeleteComment(c.id) : undefined}
+                  >
                     <View style={[ds.commentAvatar, dv.commentAvatarBg]}>
-                      {member?.avatar_url
-                        ? <Image source={{ uri: member.avatar_url }} style={ds.commentAvatarImg} />
-                        : <Text style={dv.avatarInitial}>{(c.user_name ?? 'M')[0]?.toUpperCase()}</Text>}
+                      {c.author?.avatar_url
+                        ? <Image source={{ uri: c.author.avatar_url }} style={ds.commentAvatarImg} />
+                        : <Text style={dv.avatarInitial}>{name[0]?.toUpperCase() ?? '?'}</Text>}
                     </View>
                     <View style={ds.commentBody}>
                       <View style={ds.commentMeta}>
-                        <Text style={ds.commentName}>{c.user_name}</Text>
+                        <Text style={ds.commentName}>{name}</Text>
                         <Text style={ds.commentDate}>
-                          {new Date(c.created_at).toLocaleTimeString('fr', { hour: '2-digit', minute: '2-digit' })}
+                          {sameDay
+                            ? date.toLocaleTimeString('fr', { hour: '2-digit', minute: '2-digit' })
+                            : date.toLocaleDateString('fr', { day: 'numeric', month: 'short' })}
                         </Text>
                       </View>
                       <Text style={ds.commentText}>{c.content}</Text>
                     </View>
-                  </View>
+                  </TouchableOpacity>
                 );
               })}
               <View style={ds.commentInputRow}>
