@@ -75,7 +75,7 @@ export function LinkField({ value, onChange, onSubmit }: {
   );
 }
 
-// ─── Ligne d'option (« Un lieu », « Les idées Hako », « Une note d'orga ») ────
+// ─── Ligne d'option (« Un lieu », « Les idées Hako ») ───────────────────────
 export function OptionRow({ icon, title, subtitle, onPress }: {
   icon: IoniconName; title: string; subtitle: string; onPress: () => void;
 }) {

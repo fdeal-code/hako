@@ -1,8 +1,8 @@
 // HAKO — Nouvelle envie (maquettes « Envie · Nouvelle envie » 711:2841
 // et « Envie · Aperçu TikTok » 711:2962). Page plein écran ouverte par le ➕
 // des Envies : coller un lien (TikTok, Reel, YouTube…) → aperçu + lieu trouvé
-// + ambiances ; ou un lieu Google, les idées Hako. Une tâche d'orga renvoie
-// vers les Préparatifs.
+// + ambiances ; ou un lieu Google, les idées Hako. Pas de tâche d'orga ici :
+// elles s'ajoutent uniquement depuis les Préparatifs.
 
 import { useEffect, useRef } from 'react';
 import {
@@ -106,12 +106,6 @@ export default function NewWishScreen() {
                   title="Les idées Hako"
                   subtitle="Logements & activités à vos dates"
                   onPress={() => router.replace({ pathname: '/trip/[id]/help', params: { id: tripId, tab: 'activities' } })}
-                />
-                <OptionRow
-                  icon="checkbox-outline"
-                  title="Une tâche d’orga"
-                  subtitle="« Louer la voiture »… dans les Préparatifs"
-                  onPress={() => router.replace({ pathname: '/trip/[id]/preparation', params: { id: tripId, add: '1' } })}
                 />
               </View>
               <ShareTip />

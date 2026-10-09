@@ -137,7 +137,7 @@ function isVideoLink(url?: string): boolean {
 function wishTag(w: { type?: WishType; category?: Category; link_url?: string }, city: string | null): string {
   const kind = isVideoLink(w.link_url)
     ? (w.link_url?.includes('tiktok.com') ? 'TikTok' : 'Reel')
-    : w.type === 'orga' ? 'Orga' : CATEGORY_LABEL[w.category ?? 'other'];
+    : CATEGORY_LABEL[w.category ?? 'other'];
   return city ? `${kind} · ${city}` : kind;
 }
 
@@ -901,16 +901,7 @@ function DetailSheet({
           <TouchableOpacity style={dv.roundBtn} onPress={onClose} activeOpacity={0.85} accessibilityLabel="Retour">
             <Ionicons name="caret-back" size={22} color={Colors.textPrimary} />
           </TouchableOpacity>
-          {isOrga ? (
-            <TouchableOpacity
-              style={[dv.cta, wish.done ? dv.ctaDark : dv.ctaAccent]}
-              onPress={() => onUpdate(wish.id, { done: !wish.done })}
-              activeOpacity={0.85}
-            >
-              <Ionicons name={wish.done ? 'checkmark-circle' : 'ellipse-outline'} size={22} color={Colors.textInverted} />
-              <Text style={dv.ctaText}>{wish.done ? 'C’est fait' : 'Marquer comme fait'}</Text>
-            </TouchableOpacity>
-          ) : canBook && !isBooked && bookingOpen ? (
+          {canBook && !isBooked && bookingOpen ? (
             <View style={dv.amountRow}>
               <TextInput
                 style={dv.amountInput}
@@ -1467,14 +1458,6 @@ const ds = StyleSheet.create({
   catBadge:    { backgroundColor: '#F5F5F5', borderRadius: Radii.full, paddingHorizontal: 10, paddingVertical: 4 },
   catBadgeText: { fontSize: 12, fontWeight: '600', color: '#555' },
 
-  /* Orga done button */
-  doneBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    marginTop: 8, paddingVertical: 12, paddingHorizontal: 14,
-    borderRadius: 12, backgroundColor: '#F5F5F5',
-  },
-  doneBtnActive: { backgroundColor: '#F0FDF4' },
-  doneBtnText: { fontSize: 14, fontWeight: '600', color: '#888' },
 
   /* Associate place button */
   associateBtn: {
