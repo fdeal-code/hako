@@ -184,3 +184,16 @@ export async function createWish(input: NewWishInput): Promise<ServiceResult<{ i
   if (error) return serviceError(error.message);
   return { data: { id: (data as { id: string }).id }, error: null };
 }
+
+/** Envies actives réduites à ce qui sert aux filtres (compteurs de la page « Filtres »). */
+export interface WishFacet { type: string | null; category: string | null; vibes: string[] | null; created_at: string }
+
+export async function getWishFacets(tripId: string): Promise<ServiceResult<WishFacet[]>> {
+  const { data, error } = await supabase
+    .from('wishes')
+    .select('type, category, vibes, created_at')
+    .eq('trip_id', tripId)
+    .neq('status', 'archived');
+  if (error) return serviceError(error.message);
+  return { data: (data ?? []) as WishFacet[], error: null };
+}

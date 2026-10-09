@@ -18,7 +18,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
-import { BlurView } from 'expo-blur';
 
 import { Colors, Fonts, Spacing, Radii, Shadows, Typography } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
@@ -37,6 +36,8 @@ import { useWishComments } from '@/hooks/useWishComments';
 import { tripEvents } from '@/utils/events';
 import { buildWishVoteReminderUrl } from '@/utils/shareLinks';
 import { useTripStops } from '@/hooks/useTripStops';
+import { useWishFilters } from '@/hooks/useWishFilters';
+import { activeFilterCount, compareWishes, matchesWishFilters } from '@/utils/wishFilters';
 
 
 /* ─── Types ──────────────────────────────────────────────────── */
@@ -45,7 +46,6 @@ type Category     = 'restaurant' | 'monument' | 'cafe' | 'hotel' | 'activity' | 
 type WishStatus   = 'pending' | 'validated' | 'debate' | 'archived';
 type VoteType     = 'up' | 'down';
 type StatusFilter = 'all' | 'pending' | 'validated' | 'archived';
-type SortBy       = 'recent' | 'oldest' | 'most_voted';
 type BudgetLevel  = 'free' | '€' | '€€' | '€€€';
 type DurationKey  = '30min' | '1h' | '2h' | 'half-day' | 'day';
 
@@ -85,6 +85,7 @@ interface Wish {
   booked_at?:     string | null;   // « J'ai réservé » (migration wish_booking)
   booked_by?:     string | null;
   booked_amount?: number | null;
+  vibes?:         string[] | null; // tags d'ambiance (chill, foodie…)
 }
 
 interface WishLink {
@@ -978,153 +979,6 @@ function DetailSheet({
   );
 }
 
-/* ─── Filter Menu styles ─────────────────────────────────────── */
-const fm = StyleSheet.create({
-  overlay:  { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)' },
-  sheet: {
-    overflow: 'hidden',
-    backgroundColor: 'rgba(255,255,255,0.88)',
-    borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    paddingHorizontal: 20, paddingTop: 8,
-  },
-  handle:   { width: 40, height: 4, borderRadius: 2, backgroundColor: 'rgba(0,0,0,0.18)', alignSelf: 'center', marginBottom: 16 },
-  titleRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
-  title:    { flex: 1, fontSize: 17, fontWeight: '800', color: '#111' },
-  closeBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(0,0,0,0.08)', alignItems: 'center', justifyContent: 'center' },
-  sectionLabel: { fontSize: 12, fontWeight: '700', color: '#888', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 12 },
-  catWrap:          { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 4 },
-  catChip:          { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 99, backgroundColor: '#F0F0F0' },
-  catChipActive:    { backgroundColor: '#111' },
-  catChipEmoji:     { fontSize: 15 },
-  catChipLabel:     { fontSize: 13, fontWeight: '600', color: '#111' },
-  catChipLabelActive: { color: '#fff' },
-  typeWrap:         { flexDirection: 'row', gap: 8, marginBottom: 4 },
-  typeChip:         { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 10, borderRadius: 99, backgroundColor: '#F0F0F0' },
-  typeChipActive:   { backgroundColor: '#111' },
-  typeChipEmoji:    { fontSize: 14 },
-  typeChipLabel:    { fontSize: 12, fontWeight: '600', color: '#111' },
-  typeChipLabelActive: { color: '#fff' },
-  sortWrap:         { flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginBottom: 24 },
-  sortChip:         { paddingHorizontal: 18, paddingVertical: 10, borderRadius: 99, backgroundColor: '#F0F0F0' },
-  sortChipActive:   { backgroundColor: '#111' },
-  sortLabel:        { fontSize: 13, fontWeight: '600', color: '#111' },
-  sortLabelActive:  { color: '#fff' },
-  resetBtn:  { alignItems: 'center', paddingVertical: 14, borderRadius: 14, borderWidth: 1, borderColor: '#E0E0E0' },
-  resetText: { fontSize: 14, fontWeight: '700', color: '#888' },
-});
-
-/* ─── FilterMenu ─────────────────────────────────────────────── */
-const FM_CATS: { key: Category; emoji: string; label: string }[] = [
-  { key: 'restaurant', emoji: '🍽️', label: 'Restaurant' },
-  { key: 'monument',   emoji: '🏛️', label: 'Monument'   },
-  { key: 'cafe',       emoji: '☕',  label: 'Café'        },
-  { key: 'hotel',      emoji: '🏨', label: 'Hôtel'       },
-  { key: 'activity',   emoji: '🎭', label: 'Activités'   },
-  { key: 'photo_spot', emoji: '📸', label: 'Photo spot'  },
-  { key: 'bar',        emoji: '🍺', label: 'Bar'         },
-  { key: 'other',      emoji: '📦', label: 'Autre'       },
-];
-
-const FM_TYPES: { key: WishType; emoji: string; label: string }[] = [
-  { key: 'place',       emoji: '📍', label: 'Lieux'        },
-  { key: 'inspiration', emoji: '✨', label: 'Inspirations' },
-  { key: 'orga',        emoji: '📋', label: 'Orga'         },
-];
-
-const FM_SORTS: { key: SortBy; label: string }[] = [
-  { key: 'recent',     label: 'Plus récent' },
-  { key: 'oldest',     label: 'Plus ancien' },
-  { key: 'most_voted', label: 'Plus voté'   },
-];
-
-function FilterMenu({
-  visible, catFilters, typeFilters, sortBy,
-  onToggleCat, onToggleType, onSetSort, onReset, onClose,
-}: {
-  visible:      boolean;
-  catFilters:   Set<Category>;
-  typeFilters:  Set<WishType>;
-  sortBy:       SortBy;
-  onToggleCat:  (cat: Category) => void;
-  onToggleType: (type: WishType) => void;
-  onSetSort:    (sort: SortBy) => void;
-  onReset:      () => void;
-  onClose:      () => void;
-}) {
-  const insets = useSafeAreaInsets();
-  return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={fm.overlay}>
-        <TouchableOpacity style={StyleSheet.absoluteFill} onPress={onClose} activeOpacity={1} />
-        <View style={[fm.sheet, { paddingBottom: Math.max(insets.bottom, 20) }]}>
-          <BlurView intensity={80} tint="light" style={StyleSheet.absoluteFill} />
-          <View style={fm.handle} />
-          <View style={fm.titleRow}>
-            <Text style={fm.title}>Filtres</Text>
-            <TouchableOpacity onPress={onClose} style={fm.closeBtn} activeOpacity={0.7}>
-              <Ionicons name="close" size={20} color={Colors.textPrimary} />
-            </TouchableOpacity>
-          </View>
-
-          <Text style={fm.sectionLabel}>Type</Text>
-          <View style={[fm.typeWrap, { marginBottom: 20 }]}>
-            {FM_TYPES.map(t => {
-              const active = typeFilters.has(t.key);
-              return (
-                <TouchableOpacity
-                  key={t.key}
-                  style={[fm.typeChip, active && fm.typeChipActive]}
-                  onPress={() => onToggleType(t.key)}
-                  activeOpacity={0.8}
-                >
-                  <Text style={fm.typeChipEmoji}>{t.emoji}</Text>
-                  <Text style={[fm.typeChipLabel, active && fm.typeChipLabelActive]}>{t.label}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          <Text style={fm.sectionLabel}>Catégories</Text>
-          <View style={[fm.catWrap, { marginBottom: 20 }]}>
-            {FM_CATS.map(cat => {
-              const active = catFilters.has(cat.key);
-              return (
-                <TouchableOpacity
-                  key={cat.key}
-                  style={[fm.catChip, active && fm.catChipActive]}
-                  onPress={() => onToggleCat(cat.key)}
-                  activeOpacity={0.8}
-                >
-                  <Text style={fm.catChipEmoji}>{cat.emoji}</Text>
-                  <Text style={[fm.catChipLabel, active && fm.catChipLabelActive]}>{cat.label}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          <Text style={[fm.sectionLabel, { marginTop: 0 }]}>Trier par</Text>
-          <View style={fm.sortWrap}>
-            {FM_SORTS.map(s => (
-              <TouchableOpacity
-                key={s.key}
-                style={[fm.sortChip, sortBy === s.key && fm.sortChipActive]}
-                onPress={() => onSetSort(s.key)}
-                activeOpacity={0.8}
-              >
-                <Text style={[fm.sortLabel, sortBy === s.key && fm.sortLabelActive]}>{s.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <TouchableOpacity style={fm.resetBtn} onPress={onReset} activeOpacity={0.8}>
-            <Text style={fm.resetText}>Réinitialiser</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
 /* ─── Écran principal ────────────────────────────────────────── */
 export default function EnviesScreen() {
   // wish : ouvre directement la fiche d'une envie (ex. depuis le dashboard « en cours »)
@@ -1137,10 +991,8 @@ export default function EnviesScreen() {
   const [loading,        setLoading]        = useState(false);
   const [statusFilter,   setStatusFilter]   = useState<StatusFilter>('all');
   const userChangedFilter = useRef(false);
-  const [catFilters,     setCatFilters]     = useState<Set<Category>>(new Set());
-  const [typeFilters,    setTypeFilters]    = useState<Set<WishType>>(new Set());
-  const [sortBy,         setSortBy]         = useState<SortBy>('recent');
-  const [showFilterMenu, setShowFilterMenu] = useState(false);
+  const { filters, reset: resetFilters } = useWishFilters(tripId ?? '');
+  const filterCount = activeFilterCount(filters);
   const [detailId,       setDetailId]       = useState<string | null>(wishParam ?? null);
   /* Planifier une envie → page « Au planning » (choix du jour et de l'heure) */
   const planWish = useCallback((wishId: string) => {
@@ -1213,22 +1065,6 @@ export default function EnviesScreen() {
     return chips;
   }, [pendingCount, validatedCount, archivedCount, allActiveCount]);
 
-  const toggleCat = useCallback((cat: Category) => {
-    setCatFilters(prev => {
-      const next = new Set(prev);
-      if (next.has(cat)) next.delete(cat); else next.add(cat);
-      return next;
-    });
-  }, []);
-
-  const toggleType = useCallback((type: WishType) => {
-    setTypeFilters(prev => {
-      const next = new Set(prev);
-      if (next.has(type)) next.delete(type); else next.add(type);
-      return next;
-    });
-  }, []);
-
   /* ── Filtered + sorted ── */
   const filtered = useMemo(() => {
     let result = statusFilter === 'all'
@@ -1238,19 +1074,13 @@ export default function EnviesScreen() {
         : wishes.filter(w => w.status === statusFilter);
     if (stopFilter !== null)
       result = result.filter(w => w.stop_id === stopFilter);
-    if (typeFilters.size > 0)
-      result = result.filter(w => typeFilters.has(w.type ?? 'inspiration'));
-    if (catFilters.size > 0)
-      result = result.filter(w => w.category && catFilters.has(w.category));
-    result = [...result].sort((a, b) => {
-      if (sortBy === 'oldest')
-        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-      if (sortBy === 'most_voted')
-        return b.wish_votes.length - a.wish_votes.length;
-      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-    });
-    return result;
-  }, [wishes, statusFilter, stopFilter, catFilters, typeFilters, sortBy]);
+    // Type, catégorie, ambiance et tri : page « Filtres » (envies-filters.tsx)
+    const facet = (w: Wish) => ({ ...w, upVotes: w.wish_votes.filter(v => v.vote === 'up').length });
+    return result
+      .map(facet)
+      .filter(w => matchesWishFilters(w, filters))
+      .sort((a, b) => compareWishes(a, b, filters.sort));
+  }, [wishes, statusFilter, stopFilter, filters]);
 
 
   /* ── Unvoted count (excluding orga) ── */
@@ -1403,7 +1233,7 @@ export default function EnviesScreen() {
       {unvotedCount > 0 && statusFilter !== 'validated' && (
         <TouchableOpacity
           style={sc.contextRow}
-          onPress={() => { userChangedFilter.current = true; setStatusFilter('pending'); setCatFilters(new Set()); setTypeFilters(new Set()); }}
+          onPress={() => { userChangedFilter.current = true; setStatusFilter('pending'); resetFilters(); }}
           activeOpacity={0.8}
         >
           <Text style={sc.contextText}>
@@ -1420,7 +1250,12 @@ export default function EnviesScreen() {
       ) : filtered.length === 0 ? (
         <View style={sc.empty}>
           <Text style={sc.emptyIcon}>✨</Text>
-          <Text style={sc.emptyText}>Aucune envie dans cette catégorie</Text>
+          <Text style={sc.emptyText}>{filterCount > 0 ? 'Aucune envie avec ces filtres' : 'Aucune envie dans cette catégorie'}</Text>
+          {filterCount > 0 && (
+            <TouchableOpacity onPress={resetFilters} hitSlop={10}>
+              <Text style={sc.emptyLink}>Effacer les filtres</Text>
+            </TouchableOpacity>
+          )}
         </View>
       ) : (
         <ScrollView
@@ -1492,21 +1327,15 @@ export default function EnviesScreen() {
       >
         <NavButton icon="arrow-back-outline" onPress={() => router.back()} />
         <NavButton icon="add" iconSize={28} variant="accent" onPress={() => router.push({ pathname: '/trip/[id]/wish/new', params: { id: tripId ?? '' } })} />
-        <NavButton icon="options-outline" onPress={() => setShowFilterMenu(true)} />
+        <NavButton
+          icon="options-outline"
+          label={filterCount > 0 ? String(filterCount) : undefined}
+          variant={filterCount > 0 ? 'dark' : 'light'}
+          onPress={() => router.push({ pathname: '/trip/[id]/envies-filters', params: { id: tripId ?? '' } })}
+        />
       </View>
 
       {/* ── Modals ── */}
-      <FilterMenu
-        visible={showFilterMenu}
-        catFilters={catFilters}
-        typeFilters={typeFilters}
-        sortBy={sortBy}
-        onToggleCat={toggleCat}
-        onToggleType={toggleType}
-        onSetSort={setSortBy}
-        onReset={() => { setCatFilters(new Set()); setTypeFilters(new Set()); setSortBy('recent'); }}
-        onClose={() => setShowFilterMenu(false)}
-      />
       <DetailSheet
         wish={detailWish} currentUserId={currentUserId}
         isAuthor={detailWish?.added_by === currentUserId}
@@ -1558,6 +1387,7 @@ const sc = StyleSheet.create({
   empty:     { flex: 1, alignItems: 'center', paddingTop: 80, gap: Spacing.sm },
   emptyIcon: { fontSize: 48 },
   emptyText: { fontSize: 15, color: Colors.textSecondary, fontWeight: '500' },
+  emptyLink: { ...Typography.chip, color: Colors.accent, marginTop: Spacing.sm },
 
   bottomNav: { position: 'absolute', left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', gap: 14 },
 });
