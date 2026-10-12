@@ -72,23 +72,23 @@ export function NextTripCard({ trip, onExpand }: NextTripCardProps) {
           <Text style={styles.route} numberOfLines={1}>
             {shortDay(trip.start_date)} → {shortDay(trip.end_date)} · {trip.destination}
           </Text>
-          <TouchableOpacity
-            style={styles.action}
-            onPress={() => router.push(showVotes ? `/trip/${trip.id}/envies` : `/trip/${trip.id}/dashboard`)}
-            activeOpacity={0.85}
-          >
-            {showVotes && (
+          {/* Rappel de vote seulement quand il reste des envies où je n'ai pas voté ;
+              pour ouvrir le voyage, on touche la carte */}
+          {showVotes && (
+            <TouchableOpacity
+              style={styles.action}
+              onPress={() => router.push(`/trip/${trip.id}/envies`)}
+              activeOpacity={0.85}
+            >
               <View style={styles.actionIcon}>
                 <Ionicons name="thumbs-up" size={13} color={Colors.textInverted} />
               </View>
-            )}
-            <Text style={styles.actionText} numberOfLines={1}>
-              {showVotes
-                ? `${toVoteCount} envie${toVoteCount > 1 ? 's' : ''} attend${toVoteCount > 1 ? 'ent' : ''} ton vote`
-                : past ? 'Revoir les souvenirs' : 'Ouvrir le voyage'}
-            </Text>
-            <Ionicons name="chevron-forward" size={18} color={Colors.textPrimary} />
-          </TouchableOpacity>
+              <Text style={styles.actionText} numberOfLines={1}>
+                {`${toVoteCount} envie${toVoteCount > 1 ? 's' : ''} attend${toVoteCount > 1 ? 'ent' : ''} ton vote`}
+              </Text>
+              <Ionicons name="chevron-forward" size={18} color={Colors.textPrimary} />
+            </TouchableOpacity>
+          )}
         </View>
       </TouchableOpacity>
     </View>

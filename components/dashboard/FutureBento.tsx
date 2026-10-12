@@ -1,5 +1,5 @@
 // HAKO — Tuiles du dashboard « avant le départ » (maquette « V2 · Dashboard »)
-// [PRÉPARATIFS avant le départ] · DOCUMENT + PLANNING · Carte (moitié) +
+// [PRÉPARATIFS avant le départ] · DOCUMENTS (nombre) + PLANNING · Carte (moitié) +
 // VOS ENVIES · ON T'AIDE + BUDGET.
 // Source unique : utilisé par app/trip/[id]/dashboard.tsx ET par
 // components/home/ExpandedDashboard.tsx (ouverture depuis l'accueil).
@@ -59,9 +59,8 @@ export function FutureBento({
   const tileHeight = tilesHeight === undefined
     ? TILE_HEIGHT
     : Math.max(TILE_MIN_HEIGHT, Math.min(TILE_HEIGHT, Math.floor((tilesHeight - ROW_GAP * (ROWS - 1)) / ROWS)));
-  const { recentDocTitles, docCount, wishCount, toVoteCount, budget, plannedCount } = useFutureDashboard(tripId);
+  const { docCount, wishCount, toVoteCount, budget, plannedCount } = useFutureDashboard(tripId);
   const lodgingGap = useLodgingGaps(tripId).gaps[0] ?? null; // logement à proposer au bon moment
-  const moreDocs = docCount - recentDocTitles.length;
   const hasLocatedStops = stops.some(s => s.lat !== null && s.lng !== null);
 
   return (
@@ -70,14 +69,19 @@ export function FutureBento({
 
       {/* Documents + Planning */}
       <View style={styles.row}>
-        <GlassCard flex={DOC_FLEX} height={tileHeight} onPress={() => router.push(`/trip/${tripId}/documents`)}>
-          <Text style={styles.title}>DOCUMENT</Text>
-          {recentDocTitles.length === 0 ? (
-            <Text style={styles.docLine}>Aucun document</Text>
+        <GlassCard
+          flex={DOC_FLEX}
+          height={tileHeight}
+          variant={docCount === 0 ? 'accentDashed' : 'light'}
+          onPress={() => router.push(`/trip/${tripId}/documents`)}
+        >
+          <Text style={styles.title}>DOCUMENTS</Text>
+          {docCount === 0 ? (
+            <Text style={styles.enviesEmpty}>Aucun document</Text>
           ) : (
-            <View style={styles.docList}>
-              {recentDocTitles.map((t, i) => <Text key={`${t}-${i}`} style={styles.docLine} numberOfLines={1}>{t}</Text>)}
-              {moreDocs > 0 && <Text style={styles.docMore}>+ {plural(moreDocs, 'autre')}</Text>}
+            <View>
+              <Text style={styles.enviesCount}>{docCount}</Text>
+              <Text style={styles.enviesSub}>{docCount > 1 ? 'documents' : 'document'}</Text>
             </View>
           )}
         </GlassCard>
@@ -172,27 +176,20 @@ export function FutureBento({
             params: tab === 'lodging' && lodgingGap ? { id: tripId, tab, stop: lodgingGap.id } : { id: tripId, tab },
           })}
         />
-        <GlassCard flex={1} height={tileHeight} onPress={() => router.push(`/trip/${tripId}/budget`)}>
+        <GlassCard
+          flex={1}
+          height={tileHeight}
+          variant={budget.expenseCount === 0 ? 'accentDashed' : 'light'}
+          onPress={() => router.push(`/trip/${tripId}/budget`)}
+        >
           {budget.expenseCount === 0 ? (
-            <View style={styles.budgetInner}>
+            <>
               <Text style={styles.title}>BUDGET</Text>
-              <View style={styles.addCircle}>
-                <Ionicons name="add" size={20} color={Colors.accent} />
-              </View>
-            </View>
+              <Text style={styles.enviesEmpty}>Aucune dépense</Text>
+            </>
           ) : (
             <>
-              <View style={styles.titleRow}>
-                <Text style={styles.title}>BUDGET</Text>
-                <TouchableOpacity
-                  style={styles.addCircleSmall}
-                  onPress={() => router.push({ pathname: '/trip/[id]/expense/new', params: { id: tripId } })}
-                  hitSlop={8}
-                  accessibilityLabel="Ajouter une dépense"
-                >
-                  <Ionicons name="add" size={16} color={Colors.accent} />
-                </TouchableOpacity>
-              </View>
+              <Text style={styles.title}>BUDGET</Text>
               <View>
                 <Text style={styles.budgetTotal} numberOfLines={1} adjustsFontSizeToFit>{formatEuros(budget.total)}</Text>
                 <Text
@@ -217,9 +214,6 @@ const styles = StyleSheet.create({
   title: { ...Typography.displayLabel, color: Colors.textPrimary },
   titleOnDark: { color: Colors.surfaceAlt },
   titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  docList: { gap: Spacing.xs },
-  docLine: { ...Typography.body, color: Colors.textMuted },
-  docMore: { ...Typography.bodySmall, fontWeight: '600', color: Colors.accent },
   planningBottom: { gap: Spacing.xs },
   planningCount: { ...Typography.bodySmall, color: Colors.textOnDark },
   planningRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
@@ -241,17 +235,8 @@ const styles = StyleSheet.create({
   enviesCount: { ...Typography.displayValue, fontSize: 28, color: Colors.textPrimary },
   enviesToVote: { fontSize: 12, color: Colors.accent, fontWeight: '700' },
   enviesSub: { fontSize: 12, color: Colors.textMuted, fontWeight: '500' },
-  budgetInner: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.sm2 - 2 },
   budgetTotal: { ...Typography.displayValue, color: Colors.textPrimary },
   budgetBalance: { ...Typography.bodySmall, fontWeight: '600', color: Colors.textMuted },
   budgetOwe: { color: Colors.accent },
   budgetOwed: { color: Colors.positive },
-  addCircleSmall: {
-    width: 24, height: 24, borderRadius: Radii.full, borderWidth: 1, borderColor: Colors.accent,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  addCircle: {
-    width: 32, height: 32, borderRadius: Radii.full, borderWidth: 1, borderColor: Colors.accent,
-    alignItems: 'center', justifyContent: 'center',
-  },
 });
