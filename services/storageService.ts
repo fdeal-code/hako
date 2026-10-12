@@ -27,8 +27,8 @@ export function contentTypeFor(uri: string, fallback = 'image/jpeg'): string {
   return MIME_BY_EXT[fileExtension(uri, '')] ?? fallback;
 }
 
-/** Envoie un fichier local et renvoie son URL publique. */
-export async function uploadLocalFile(
+/** Envoie un fichier local et renvoie son chemin dans le bucket (buckets privés). */
+export async function uploadPrivateFile(
   bucket: string,
   path: string,
   localUri: string,
@@ -46,6 +46,18 @@ export async function uploadLocalFile(
     console.log('[STORAGE] upload', bucket, path, error.message);
     return serviceError(error.message);
   }
+  return { data: path, error: null };
+}
+
+/** Envoie un fichier local et renvoie son URL publique (buckets publics : avatars, couvertures, album). */
+export async function uploadLocalFile(
+  bucket: string,
+  path: string,
+  localUri: string,
+  contentType: string = contentTypeFor(localUri),
+): Promise<ServiceResult<string>> {
+  const { error } = await uploadPrivateFile(bucket, path, localUri, contentType);
+  if (error !== null) return serviceError(error);
   const { data } = supabase.storage.from(bucket).getPublicUrl(path);
   return { data: data.publicUrl, error: null };
 }

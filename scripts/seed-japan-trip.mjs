@@ -4,7 +4,9 @@
 //
 //   node scripts/seed-japan-trip.mjs
 //     → écrit supabase/seed/japan_trip.sql et les billets PDF dans supabase/seed/japan-docs/
-//   npx supabase storage cp -r supabase/seed/japan-docs ss:///documents/demo-japan --linked --experimental
+//   npx supabase storage cp -r supabase/seed/japan-docs ss:///documents/<trip_id> --linked --experimental
+//     (la commande exacte, avec l'id du voyage, est affichée à la fin : le bucket
+//      documents est privé et chaque fichier doit être rangé dans le dossier du voyage)
 //   npx supabase db query --linked -f supabase/seed/japan_trip.sql
 //
 // Relançable : l'ancien voyage de démo est supprimé d'abord.
@@ -17,7 +19,6 @@ const env = Object.fromEntries(
     .split('\n').filter(l => l.includes('=') && !l.startsWith('#'))
     .map(l => [l.slice(0, l.indexOf('=')).trim(), l.slice(l.indexOf('=') + 1).trim()]),
 );
-const SUPABASE_URL = env.EXPO_PUBLIC_SUPABASE_URL;
 const UNSPLASH = env.EXPO_PUBLIC_UNSPLASH_ACCESS_KEY;
 const TRIP_NAME = 'Japon entre potes';
 
@@ -256,7 +257,7 @@ async function build() {
     writeFileSync(new URL(doc.file, docsDir), pdf, 'latin1');
     return {
       trip_id: tripId, uploaded_by: doc.by, title: doc.title, category: doc.category,
-      file_url: `${SUPABASE_URL}/storage/v1/object/public/documents/demo-japan/${doc.file}`,
+      file_url: `${tripId}/${doc.file}`, // chemin dans le bucket privé documents
       file_type: 'application/pdf', file_size: Buffer.byteLength(pdf, 'latin1'),
       event_date: doc.d === null ? null : J(doc.d), is_shared: true, details: doc.details,
     };
@@ -291,6 +292,7 @@ ${insert('trips', [{
 `;
   writeFileSync(new URL('../supabase/seed/japan_trip.sql', import.meta.url), sql);
   console.log(`Écrit : supabase/seed/japan_trip.sql (${start} → ${end}) · ${wishes.length + pendingWishes.length} envies · ${planning.length} créneaux · ${expenses.length} dépenses · ${photos.length} photos · ${documents.length} documents`);
+  console.log(`Puis : npx supabase storage cp -r supabase/seed/japan-docs ss:///documents/${tripId} --linked --experimental`);
 }
 
 await build();

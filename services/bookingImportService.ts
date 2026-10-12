@@ -10,7 +10,7 @@ import { FunctionsHttpError } from '@supabase/supabase-js';
 import { File, Paths } from 'expo-file-system';
 
 import { addExpense } from '@/services/budgetService';
-import { uploadLocalFile } from '@/services/storageService';
+import { uploadPrivateFile } from '@/services/storageService';
 import { supabase } from '@/services/supabase';
 import { serviceError, ServiceResult } from '@/services/tripService';
 import { BookingDraft, ImportResult, ImportSource, ParsedBooking } from '@/types/bookingImport';
@@ -68,12 +68,12 @@ export async function getImportedReferences(tripId: string): Promise<ServiceResu
   };
 }
 
-/** Envoie la confirmation dans le bucket documents (une seule fois pour tout l'import). */
+/** Envoie la confirmation dans le bucket privé documents (une seule fois pour tout l'import) ; renvoie son chemin. */
 async function uploadConfirmation(tripId: string, source: ImportSource): Promise<ServiceResult<{ url: string; mime: string; size: number | null }>> {
   const stamp = Date.now();
   if (source.type === 'file') {
     const safeName = source.name.replace(/[^\w.-]+/g, '_').slice(-MAX_FILE_NAME);
-    const { data, error } = await uploadLocalFile(BUCKET, `${tripId}/${stamp}_${safeName}`, source.uri, source.mimeType);
+    const { data, error } = await uploadPrivateFile(BUCKET, `${tripId}/${stamp}_${safeName}`, source.uri, source.mimeType);
     if (error !== null) return serviceError(error);
     return { data: { url: data, mime: source.mimeType, size: new File(source.uri).size ?? null }, error: null };
   }
@@ -85,7 +85,7 @@ async function uploadConfirmation(tripId: string, source: ImportSource): Promise
   } catch {
     return serviceError('Impossible de préparer la confirmation.');
   }
-  const { data, error } = await uploadLocalFile(BUCKET, `${tripId}/${stamp}_confirmation.txt`, file.uri, TEXT_MIME);
+  const { data, error } = await uploadPrivateFile(BUCKET, `${tripId}/${stamp}_confirmation.txt`, file.uri, TEXT_MIME);
   if (error !== null) return serviceError(error);
   return { data: { url: data, mime: TEXT_MIME, size: file.size ?? null }, error: null };
 }

@@ -25,7 +25,9 @@ import { Colors, Fonts, Radii, Shadows, Spacing, Typography } from '@/constants/
 import { CreateTripHeader, StepActions } from '@/components/createTrip/CreateTripChrome';
 import { useAuth } from '@/contexts/AuthContext';
 import {
+  SHARE_LINK_TTL_SECONDS,
   deleteDocument,
+  fileLink,
   getDocument,
   makeAvailableOffline,
   offlineUri,
@@ -58,6 +60,7 @@ export default function DocumentDetailScreen() {
   const [doc, setDoc] = useState<TripDocumentRow | null>(null);
   const [localUri, setLocalUri] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
+  const [remoteUri, setRemoteUri] = useState<string | null>(null); // lien signé (bucket privé)
 
   const load = useCallback(async () => {
     if (!docId) return;
@@ -65,6 +68,8 @@ export default function DocumentDetailScreen() {
     if (error !== null) { Alert.alert('Oups', error); return; }
     setDoc(data);
     setLocalUri(offlineUri(data.id, data.file_url));
+    const link = await fileLink(data.file_url);
+    if (link.data) setRemoteUri(link.data);
   }, [docId]);
 
   useEffect(() => { void load(); }, [load]);
@@ -83,12 +88,21 @@ export default function DocumentDetailScreen() {
   const gridItems = GRID_FIELDS.filter(f => details[f.key]);
   const isImage = doc.file_type.startsWith('image/');
   const isText = doc.file_type.startsWith('text/'); // e-mail collé lors d'un import de réservation
-  const fileUri = localUri ?? doc.file_url;
+  const fileUri = localUri ?? remoteUri;
   const isOwner = doc.uploaded_by === session?.user?.id;
 
   const openFile = async () => {
     if (localUri) { void Linking.openURL(localUri); return; }
-    await WebBrowser.openBrowserAsync(doc.file_url);
+    const { data: link, error } = await fileLink(doc.file_url); // lien frais (1 h)
+    if (error !== null) { Alert.alert('Oups', error); return; }
+    await WebBrowser.openBrowserAsync(link);
+  };
+
+  // Lien temporaire : la personne qui le reçoit peut ouvrir le fichier pendant 24 h
+  const share = async () => {
+    const { data: link, error } = await fileLink(doc.file_url, SHARE_LINK_TTL_SECONDS);
+    if (error !== null) { Alert.alert('Oups', error); return; }
+    void Share.share({ message: `${doc.title}\n${link}\n(lien valable 24 h)` });
   };
 
   const toggleOffline = async () => {
@@ -168,7 +182,9 @@ export default function DocumentDetailScreen() {
         {/* Le fichier (contient le QR code du billet) */}
         <TouchableOpacity style={styles.fileCard} onPress={() => { void openFile(); }} activeOpacity={0.9}>
           {isImage ? (
-            <Image source={{ uri: fileUri }} style={styles.fileImage} resizeMode="contain" />
+            fileUri
+              ? <Image source={{ uri: fileUri }} style={styles.fileImage} resizeMode="contain" />
+              : <View style={[styles.fileImage, styles.center]}><ActivityIndicator color={Colors.primary} /></View>
           ) : (
             <View style={styles.pdfRow}>
               <View style={styles.pdfIcon}><Ionicons name="document-text" size={26} color={Colors.textInk} /></View>
@@ -193,7 +209,7 @@ export default function DocumentDetailScreen() {
         {doc.notes ? <Text style={styles.notes}>{doc.notes}</Text> : null}
 
         <View style={styles.links}>
-          <TouchableOpacity style={styles.link} onPress={() => { void Share.share({ message: `${doc.title}\n${doc.file_url}` }); }}>
+          <TouchableOpacity style={styles.link} onPress={() => { void share(); }}>
             <Ionicons name="share-outline" size={16} color={Colors.textMuted} />
             <Text style={styles.linkText}>Partager</Text>
           </TouchableOpacity>
