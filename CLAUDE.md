@@ -125,7 +125,8 @@ Développer **step by step**, feature par feature, jamais tout d'un coup.
 - **Dashboard** : carte coupée en deux + Vos envies (compteur « à voter »), tuile **On t'aide** + Budget
 - **On t'aide** : `app/trip/[id]/help.tsx`, liens partenaires pré-filtrés (`utils/affiliateLinks.ts`)
 - **Envies** : vote à la **majorité** (`utils/wishVotes.ts`), relance WhatsApp, rangement auto dans la ville la plus proche + filtre par ville
-- **Documents** : checklist « Prêt pour le départ ? » partagée (`trip_checklist`) avec eSIM / assurance partenaires
+- **Documents** : la checklist « Prêt pour le départ ? » (`trip_checklist`) vit dans les Préparatifs (`app/trip/[id]/preparation.tsx`), une bande y mène depuis Documents
+- **Import de réservations** : e-mail collé, PDF ou capture (aussi via le menu Partager) → Edge Function `parse-booking` (Claude, JSON strict, n'écrit rien) → vérification dans `app/trip/[id]/import.tsx` → document + planning + dépense créés avec les droits de l'utilisateur
 - **Notifications** : activité des voyages (triggers SQL) dans la sheet de la cloche (`components/notifications/TripActivityList.tsx`)
 - **Accueil** : « Prochain voyage · J-x » + « n envies à voter » sur la carte voyage
 - **Lien d'invitation** : `app/join/[token].tsx` (aperçu sans compte → connexion → rejoindre), bouton WhatsApp dans `InviteSheet`

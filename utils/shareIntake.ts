@@ -36,3 +36,28 @@ export function tripsForShare<T extends ShareTrip>(trips: readonly T[], today: s
     return ma === 'past' ? b.start_date.localeCompare(a.start_date) : a.start_date.localeCompare(b.start_date);
   });
 }
+
+// ─── Que faire de ce qui est partagé ? ───────────────────────────────────────
+// Un PDF ou une capture → import de réservation ; un long texte (e-mail de
+// confirmation copié) → import de réservation ; un lien court (TikTok,
+// Reel, site) → nouvelle envie.
+
+export const BOOKING_TEXT_MIN = 300;
+// Formats lus par parse-booking (les photos HEIC ne le sont pas ; les captures sont en PNG)
+export const BOOKING_FILE_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+
+export interface SharedFile { path: string; mimeType: string; fileName: string }
+
+export type ShareMode = 'booking-file' | 'booking-text' | 'wish' | 'none';
+
+export function shareMode(content: SharedContent, files: readonly SharedFile[] | null | undefined): ShareMode {
+  if ((files ?? []).some(f => BOOKING_FILE_TYPES.includes(f.mimeType.toLowerCase()))) return 'booking-file';
+  const text = content.text?.trim() ?? '';
+  if (text.length >= BOOKING_TEXT_MIN) return 'booking-text';
+  return sharedLink(content) ? 'wish' : 'none';
+}
+
+/** Chemin d'un fichier partagé utilisable par expo-file-system (file://…). */
+export function fileUri(path: string): string {
+  return /^(file|content):\/\//.test(path) ? path : `file://${path}`;
+}

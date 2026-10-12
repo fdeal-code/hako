@@ -56,6 +56,8 @@ function formatSize(bytes?: number | null): string {
   return bytes < 1024 * 1024 ? `${Math.round(bytes / 1024)} Ko` : `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
 }
 
+const IMPORT_ICON = 36;
+
 export default function AddDocumentScreen() {
   const { id: tripId } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
@@ -145,6 +147,19 @@ export default function AddDocumentScreen() {
 
         {!file ? (
           <>
+            {/* Une réservation ? Hako lit la confirmation et remplit tout */}
+            <TouchableOpacity
+              style={styles.importBanner}
+              onPress={() => router.replace({ pathname: '/trip/[id]/import', params: { id: tripId ?? '' } })}
+              activeOpacity={0.85}
+            >
+              <View style={styles.importIcon}><Ionicons name="sparkles" size={18} color={Colors.white} /></View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.importTitle}>Une réservation ?</Text>
+                <Text style={styles.importSub}>Importe l’e-mail : document, planning et dépense remplis pour toi</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={Colors.white} />
+            </TouchableOpacity>
             <View style={styles.tiles}>
               {[
                 { icon: 'camera' as const, title: 'Scanner', sub: 'Billet, passeport', onPress: scan },
@@ -288,6 +303,13 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.background },
   content: { paddingHorizontal: Spacing.md2, paddingTop: Spacing.lg, gap: Spacing.sm2 + 2 },
   tiles: { flexDirection: 'row', gap: Spacing.sm2 - 2 },
+  importBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.sm2, padding: Spacing.md,
+    borderRadius: Radii.lg, backgroundColor: Colors.primary,
+  },
+  importIcon: { width: IMPORT_ICON, height: IMPORT_ICON, borderRadius: Radii.full, backgroundColor: Colors.accent, alignItems: 'center', justifyContent: 'center' },
+  importTitle: { ...Typography.cardTitle, color: Colors.white },
+  importSub: { ...Typography.bodySmall, color: Colors.textOnDark },
   tile: { flex: 1, padding: Spacing.md, gap: Spacing.sm2 - 2 },
   tileIcon: {
     width: TILE_ICON, height: TILE_ICON, borderRadius: 14, backgroundColor: Colors.primary,

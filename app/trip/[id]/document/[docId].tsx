@@ -82,6 +82,7 @@ export default function DocumentDetailScreen() {
   const hasRoute = !!(details.from || details.to);
   const gridItems = GRID_FIELDS.filter(f => details[f.key]);
   const isImage = doc.file_type.startsWith('image/');
+  const isText = doc.file_type.startsWith('text/'); // e-mail collé lors d'un import de réservation
   const fileUri = localUri ?? doc.file_url;
   const isOwner = doc.uploaded_by === session?.user?.id;
 
@@ -172,8 +173,8 @@ export default function DocumentDetailScreen() {
             <View style={styles.pdfRow}>
               <View style={styles.pdfIcon}><Ionicons name="document-text" size={26} color={Colors.textInk} /></View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.pdfTitle}>Ouvrir le PDF</Text>
-                <Text style={styles.pdfSub}>Le billet complet, avec son QR code</Text>
+                <Text style={styles.pdfTitle}>{isText ? 'Lire la confirmation' : 'Ouvrir le PDF'}</Text>
+                <Text style={styles.pdfSub}>{isText ? 'Le texte de l’e-mail importé' : 'Le billet complet, avec son QR code'}</Text>
               </View>
               <Ionicons name="open-outline" size={18} color={Colors.textInk} />
             </View>

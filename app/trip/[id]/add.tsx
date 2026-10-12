@@ -1,5 +1,6 @@
 // HAKO — « Ajouter » : le ➕ du dashboard ouvre cette page de raccourcis.
 // Tout ce qu'on peut ajouter à un voyage, à un tap : envie, document,
+// réservation importée (e-mail, PDF, capture),
 // logement, activité, dépense, planning, amis, note d'orga, étape, photos.
 // Chaque tuile ouvre directement le formulaire concerné (paramètres add=1,
 // mode=…, tab=…). Un lien copié (TikTok, Reel…) est proposé en premier.
@@ -69,6 +70,16 @@ export default function AddToTripScreen() {
             subtitle="Billet, réservation, passeport"
             tone="dark"
             onPress={() => go({ pathname: '/trip/[id]/document/new', params: { id: tripId } })}
+          />
+        </Animated.View>
+
+        {/* Une confirmation reçue par e-mail → document + planning + dépense */}
+        <Animated.View entering={enter(1)}>
+          <OptionRow
+            icon="mail-unread-outline"
+            title="Importer une réservation"
+            subtitle="E-mail, PDF ou capture : Hako range tout"
+            onPress={() => go({ pathname: '/trip/[id]/import', params: { id: tripId } })}
           />
         </Animated.View>
 

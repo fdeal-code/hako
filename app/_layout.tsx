@@ -89,6 +89,7 @@ function AuthGate() {
       <Stack.Screen name="trip/[id]/invite"           options={{ headerShown: false }} />
       <Stack.Screen name="trip/[id]/envies-filters"   options={{ headerShown: false }} />
       <Stack.Screen name="trip/[id]/preparation"      options={{ headerShown: false }} />
+      <Stack.Screen name="trip/[id]/import"           options={{ headerShown: false }} />
       <Stack.Screen name="trip/[id]/past-photos"      options={{ headerShown: false }} />
       <Stack.Screen name="trip/[id]/past-avis"        options={{ headerShown: false }} />
       <Stack.Screen name="trip/[id]/print-album"      options={{ headerShown: false }} />
