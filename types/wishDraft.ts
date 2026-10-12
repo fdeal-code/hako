@@ -82,4 +82,6 @@ export interface NewWishInput {
   vibes: WishVibe[];
   pricePerPerson: number | null;   // € par personne
   durationMinutes: number | null;
+  /** Galerie (annonce de logement) ; la première devient la photo principale */
+  photos?: string[];
 }

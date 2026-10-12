@@ -1,11 +1,13 @@
 // HAKO — Proposer un logement (page plein écran)
 // 1. On cherche chez Booking ou Hostelworld (ville, dates, voyageurs déjà
 //    remplis, liens affiliés) ; 2. on colle le lien de l'annonce trouvée ;
-// 3. nom et prix. Le logement devient une envie que le groupe vote.
+// 3. nom et prix, pré-remplis en lisant l'annonce (photos comprises), ou
+// le prix lu sur une capture quand le site bloque la lecture (Booking).
+// Le logement devient une envie que le groupe vote.
 // Paramètre stop : l'étape concernée (ex. depuis « Pas encore de logement »).
 
 import { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -20,6 +22,8 @@ import { LODGING_SITE_LABEL } from '@/utils/lodgingLinks';
 
 const ICON = 40;
 const FIELD_HEIGHT = 56;
+const PHOTO_W = 150;
+const PHOTO_H = 104;
 const MONTHS = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
 
 function shortDay(day: string): string {
@@ -33,6 +37,12 @@ export default function LodgingProposalScreen() {
   const insets = useSafeAreaInsets();
   const l = useLodgingProposal(tripId, stopParam ?? null);
   const [error, setError] = useState<string | null>(null);
+
+  const addScreenshot = async () => {
+    setError(null);
+    const err = await l.addScreenshot();
+    if (err) setError(err);
+  };
 
   const save = async () => {
     setError(null);
@@ -109,6 +119,36 @@ export default function LodgingProposalScreen() {
             />
             {l.site && l.site !== 'other' && <Text style={styles.site}>{LODGING_SITE_LABEL[l.site]}</Text>}
           </View>
+
+          {l.reading && (
+            <View style={styles.reading}>
+              <ActivityIndicator color={Colors.accent} />
+              <Text style={styles.hint}>Hako lit l’annonce…</Text>
+            </View>
+          )}
+
+          {/* Photos trouvées sur l'annonce */}
+          {l.photos.length > 0 && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.photos} contentContainerStyle={styles.photosContent}>
+              {l.photos.map(uri => <Image key={uri} source={{ uri }} style={styles.photo} />)}
+            </ScrollView>
+          )}
+
+          {/* Plateforme qui bloque la lecture (ex. Booking) : on passe par une capture */}
+          {l.blocked && !l.reading && (
+            <View style={styles.notice}>
+              <Ionicons name="image-outline" size={20} color={Colors.accent} />
+              <View style={styles.flex}>
+                <Text style={styles.noticeText}>
+                  {l.site && l.site !== 'other' ? LODGING_SITE_LABEL[l.site] : 'Ce site'} ne laisse pas lire ses annonces automatiquement.
+                  Fais une capture d’écran de l’annonce avec le prix : Hako le lira.
+                </Text>
+                <TouchableOpacity onPress={() => { void addScreenshot(); }} style={styles.noticeBtn} hitSlop={8}>
+                  <Text style={styles.noticeBtnText}>Ajouter une capture</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
         </View>
 
         {/* 3. Détails */}
@@ -137,8 +177,16 @@ export default function LodgingProposalScreen() {
                   placeholderTextColor={Colors.textSecondary}
                   keyboardType="decimal-pad"
                 />
-                {l.perPerson !== null && <Text style={styles.site}>≈ {Math.round(l.perPerson)} €/pers.</Text>}
+                {l.perPerson !== null && <Text style={styles.site}>≈ {Math.round(l.perPerson)} {l.currency && l.currency !== 'EUR' ? l.currency : '€'}/pers.</Text>}
               </View>
+              {l.currency && l.currency !== 'EUR' && <Text style={styles.warn}>Prix lu en {l.currency} : convertis-le en euros pour les comptes du groupe.</Text>}
+              {l.priceFromScreenshot && <Text style={styles.hint}>Prix lu sur la capture, vérifie-le.</Text>}
+              {!l.totalText && !l.blocked && !l.reading && (
+                <TouchableOpacity onPress={() => { void addScreenshot(); }} hitSlop={8}>
+                  <Text style={styles.link}>Lire le prix sur une capture de l’annonce</Text>
+                </TouchableOpacity>
+              )}
+              {l.address && <Text style={styles.hint}>{l.address}</Text>}
             </View>
           </View>
         )}
@@ -178,4 +226,17 @@ const styles = StyleSheet.create({
   input: { flex: 1, ...Typography.body, color: Colors.textInk, paddingVertical: Spacing.md },
   site: { ...Typography.chip, color: Colors.textMuted },
   error: { ...Typography.body, color: Colors.negative },
+  reading: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginTop: Spacing.sm },
+  photos: { marginTop: Spacing.sm2, marginHorizontal: -Spacing.md2 },
+  photosContent: { gap: Spacing.sm, paddingHorizontal: Spacing.md2 },
+  photo: { width: PHOTO_W, height: PHOTO_H, borderRadius: Radii.sm, backgroundColor: Colors.line },
+  notice: {
+    flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.sm2, padding: Spacing.sm2,
+    borderRadius: Radii.lg, borderWidth: 1, borderStyle: 'dashed', borderColor: Colors.accent,
+  },
+  noticeText: { ...Typography.body, color: Colors.textInk },
+  noticeBtn: { alignSelf: 'flex-start', marginTop: Spacing.sm, paddingHorizontal: Spacing.sm2, paddingVertical: Spacing.xs + 2, borderRadius: Radii.full, backgroundColor: Colors.accent },
+  noticeBtnText: { ...Typography.chip, color: Colors.white },
+  warn: { ...Typography.bodySmall, color: Colors.accent, marginLeft: Spacing.xs },
+  link: { ...Typography.chip, color: Colors.accent, marginLeft: Spacing.xs },
 });

@@ -93,6 +93,7 @@ interface Wish {
   booked_by?:     string | null;
   booked_amount?: number | null;
   vibes?:         string[] | null; // tags d'ambiance (chill, foodie…)
+  photos?:        string[] | null; // galerie d'une annonce de logement
 }
 
 interface WishLink {
@@ -140,6 +141,8 @@ function openLodgingListing(url: string, tripId: string) {
 
 const NO_TICKET_CATEGORIES: readonly string[] = ['hotel', 'restaurant', 'cafe', 'bar']; // pas de billets à proposer
 const TICKET_ICON = 36;
+const GALLERY_W = 160;
+const GALLERY_H = 110;
 const INSPIRATION_WIDTH_RATIO = 0.72; // la carte suivante dépasse : on comprend qu'on peut glisser
 const WEEKDAY_SHORT = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
 
@@ -506,6 +509,13 @@ function DetailSheet({
                   .filter(Boolean).join(' · ') || tag}
               </Text>
             </View>
+
+            {/* Galerie de l'annonce (logement proposé depuis un lien) */}
+            {(wish.photos?.length ?? 0) > 1 && (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={dv.gallery} contentContainerStyle={dv.galleryContent}>
+                {(wish.photos ?? []).map(uri => <Image key={uri} source={{ uri }} style={dv.galleryPhoto} />)}
+              </ScrollView>
+            )}
 
             {/* Bandeau validée / écartée */}
             {isValidated && !isOrga && (
@@ -1700,6 +1710,9 @@ const dv = StyleSheet.create({
   linkTitle: { flex: 1, ...Typography.cardTitle, color: Colors.textInk },
   linkSource: { ...Typography.bodySmall, color: Colors.textMuted },
   section: { gap: Spacing.sm2 - 2 },
+  gallery: { marginHorizontal: -Spacing.md2 },
+  galleryContent: { gap: Spacing.sm, paddingHorizontal: Spacing.md2 },
+  galleryPhoto: { width: GALLERY_W, height: GALLERY_H, borderRadius: Radii.sm, backgroundColor: Colors.line },
   ticketRow: {
     flexDirection: 'row', alignItems: 'center', gap: Spacing.sm2, padding: Spacing.sm2,
     borderRadius: Radii.lg, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.borderDark,

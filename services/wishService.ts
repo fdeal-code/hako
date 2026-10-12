@@ -164,13 +164,14 @@ export async function createWish(input: NewWishInput): Promise<ServiceResult<{ i
     status: 'pending',
     type: input.kind,
     link_url: input.linkUrl,
-    image_url: input.imageUrl ?? input.place?.photoUrl ?? null,
+    image_url: input.imageUrl ?? input.photos?.[0] ?? input.place?.photoUrl ?? null,
     category: input.category,
     stop_id: input.stopId,
     vibes: input.vibes,
     price_per_person: input.pricePerPerson,
     duration_minutes: input.durationMinutes,
   };
+  if (input.photos && input.photos.length > 0) row.photos = input.photos.slice(0, 8);
   if (input.place) {
     row.address = input.place.address;
     row.latitude = input.place.lat;
