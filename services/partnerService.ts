@@ -6,7 +6,7 @@ import * as WebBrowser from 'expo-web-browser';
 
 import { track } from '@/services/telemetryService';
 
-export type PartnerPlacement = 'help_page' | 'dashboard_tile' | 'planning_day' | 'wish_tickets' | 'preparation' | 'esim_reminder';
+export type PartnerPlacement = 'help_page' | 'dashboard_tile' | 'planning_day' | 'wish_tickets' | 'wish_lodging' | 'preparation' | 'esim_reminder';
 
 export function openPartner(url: string, partner: string, placement: PartnerPlacement, tripId?: string | null): void {
   track('partner_opened', { partner, placement }, tripId ?? null);

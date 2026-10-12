@@ -39,6 +39,8 @@ import { buildWishVoteReminderUrl } from '@/utils/shareLinks';
 import { useTripStops } from '@/hooks/useTripStops';
 import { useWishFilters } from '@/hooks/useWishFilters';
 import { openPartner } from '@/services/partnerService';
+import { useLodgingGaps } from '@/hooks/useLodgingGaps';
+import { LODGING_SITE_LABEL, lodgingSite, withLodgingAffiliate } from '@/utils/lodgingLinks';
 import { ticketLinks } from '@/utils/affiliateLinks';
 import { track } from '@/services/telemetryService';
 import { PrepPill } from '@/components/preparation/PrepParts';
@@ -127,6 +129,15 @@ const CATEGORY_LABEL: Record<Category, string> = {
   restaurant: 'Resto', monument: 'Monument', cafe: 'Café', hotel: 'Logement', activity: 'Activité',
   photo: 'Spot photo', photo_spot: 'Spot photo', bar: 'Bar', other: 'Lieu',
 };
+/** Ouvre une annonce de logement avec l'identifiant affilié de Hako (Booking, Hostelworld). */
+function openLodgingListing(url: string, tripId: string) {
+  const withAid = withLodgingAffiliate(url, {
+    bookingAid: process.env.EXPO_PUBLIC_BOOKING_AID ?? null,
+    hostelworld: process.env.EXPO_PUBLIC_HOSTELWORLD_AFFILIATE ?? null,
+  });
+  openPartner(withAid, lodgingSite(url), 'wish_lodging', tripId);
+}
+
 const NO_TICKET_CATEGORIES: readonly string[] = ['hotel', 'restaurant', 'cafe', 'bar']; // pas de billets à proposer
 const TICKET_ICON = 36;
 const INSPIRATION_WIDTH_RATIO = 0.72; // la carte suivante dépasse : on comprend qu'on peut glisser
@@ -552,6 +563,16 @@ function DetailSheet({
                   <Ionicons name="wallet-outline" size={16} color={Colors.accent} />
                   <Text style={dv.afterText}>Dépense partagée entre {tripMembers.length} personne{tripMembers.length > 1 ? 's' : ''}</Text>
                 </View>
+                {isLodging && wish.link_url && (
+                  <TouchableOpacity style={dv.ticketRow} onPress={() => { if (wish.link_url) openLodgingListing(wish.link_url, wish.trip_id); }} activeOpacity={0.85} accessibilityRole="link">
+                    <View style={dv.ticketIcon}><Ionicons name="bed-outline" size={18} color={Colors.textInk} /></View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={dv.ticketName}>Voir l’annonce et réserver</Text>
+                      <Text style={dv.ticketTagline}>{LODGING_SITE_LABEL[lodgingSite(wish.link_url)]}</Text>
+                    </View>
+                    <Ionicons name="open-outline" size={16} color={Colors.textMuted} />
+                  </TouchableOpacity>
+                )}
               </View>
             )}
             {isRejected && (
@@ -1012,6 +1033,7 @@ export default function EnviesScreen() {
   const [statusFilter,   setStatusFilter]   = useState<StatusFilter>('all');
   const userChangedFilter = useRef(false);
   const { filters, reset: resetFilters } = useWishFilters(tripId ?? '');
+  const { gaps: lodgingGaps } = useLodgingGaps(tripId ?? '');
   const filterCount = activeFilterCount(filters);
   const [detailId,       setDetailId]       = useState<string | null>(wishParam ?? null);
   /* Planifier une envie → page « Au planning » (choix du jour et de l'heure) */
@@ -1195,15 +1217,25 @@ export default function EnviesScreen() {
   }, [plannedSlots]);
 
   const handleRowStatus = useCallback((w: Wish, kind: ValidatedStatusKind) => {
-    if (kind === 'book' && w.link_url) { void Linking.openURL(w.link_url); return; }
+    if (kind === 'book' && w.link_url) { openLodgingListing(w.link_url, w.trip_id); return; }
     if (kind === 'plan') { planWish(w.id); return; }
     setDetailId(w.id);
   }, [planWish]);
 
 
   /* ── À voter / Toutes : inspirations (vidéos, liens) et lieux ── */
-  const inspirations = useMemo(() => filtered.filter(w => w.type !== 'place'), [filtered]);
-  const places = useMemo(() => filtered.filter(w => w.type === 'place'), [filtered]);
+  const lodgings = useMemo(() => filtered.filter(w => w.category === 'hotel'), [filtered]);
+  const inspirations = useMemo(() => filtered.filter(w => w.type !== 'place' && w.category !== 'hotel'), [filtered]);
+  const places = useMemo(() => filtered.filter(w => w.type === 'place' && w.category !== 'hotel'), [filtered]);
+  // Étape sans logement et sans aucune proposition : on invite à en proposer un
+  const lodgingToPropose = useMemo(
+    () => lodgingGaps.find(g => !wishes.some(w => w.category === 'hotel' && w.stop_id === g.id && w.status !== 'archived')) ?? null,
+    [lodgingGaps, wishes],
+  );
+  const proposeLodging = (stopId?: string) => router.push({
+    pathname: '/trip/[id]/lodging-new',
+    params: stopId ? { id: tripId ?? '', stop: stopId } : { id: tripId ?? '' },
+  });
   const inspirationWidth = Math.round(width * INSPIRATION_WIDTH_RATIO);
 
   const renderVoteCard = (w: Wish, style?: { width: number }) => (
@@ -1333,6 +1365,27 @@ export default function EnviesScreen() {
             /* À voter / Toutes : deux sections — les inspirations (vidéos) en
                slider horizontal, puis les lieux en cartes de vote */
             <>
+              {(lodgings.length > 0 || lodgingToPropose) && (
+                <View style={sc.group}>
+                  <View style={sc.groupHeader}>
+                    <Text style={sc.groupTitle}>LOGEMENTS</Text>
+                    <TouchableOpacity onPress={() => proposeLodging(lodgingToPropose?.id)} hitSlop={10} accessibilityRole="button">
+                      <Text style={sc.groupAction}>+ Proposer</Text>
+                    </TouchableOpacity>
+                  </View>
+                  {lodgingToPropose && (
+                    <TouchableOpacity style={sc.lodgingPrompt} onPress={() => proposeLodging(lodgingToPropose.id)} activeOpacity={0.85}>
+                      <View style={sc.lodgingIcon}><Ionicons name="bed-outline" size={18} color={Colors.accent} /></View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={sc.lodgingTitle}>Où dort-on à {lodgingToPropose.place_name} ?</Text>
+                        <Text style={sc.lodgingSub}>Propose une annonce Booking ou Hostelworld, le groupe vote.</Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+                    </TouchableOpacity>
+                  )}
+                  {lodgings.map(w => renderVoteCard(w))}
+                </View>
+              )}
               {inspirations.length > 0 && (
                 <View style={sc.group}>
                   <View style={sc.groupHeader}>
@@ -1426,6 +1479,14 @@ const sc = StyleSheet.create({
   groupHeader:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   groupTitle:    { ...Typography.displayLabel, color: Colors.textPrimary },
   groupCount:    { ...Typography.bodySmall, color: Colors.textMuted },
+  groupAction:   { ...Typography.chip, color: Colors.accent },
+  lodgingPrompt: {
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.sm2, padding: Spacing.sm2,
+    borderRadius: Radii.lg, borderWidth: 1, borderStyle: 'dashed', borderColor: Colors.accent, backgroundColor: Colors.surface,
+  },
+  lodgingIcon:   { width: TICKET_ICON, height: TICKET_ICON, borderRadius: Radii.full, backgroundColor: Colors.background, alignItems: 'center', justifyContent: 'center' },
+  lodgingTitle:  { ...Typography.rowTitle, color: Colors.textInk },
+  lodgingSub:    { ...Typography.bodySmall, color: Colors.textMuted },
   chip:          { paddingHorizontal: 14, paddingVertical: 9, borderRadius: Radii.full, backgroundColor: '#F0F0F0' },
   chipActive:    { backgroundColor: Colors.primary },
   chipText:      { fontSize: 13, fontWeight: '600', color: Colors.textPrimary },

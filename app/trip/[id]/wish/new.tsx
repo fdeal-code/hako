@@ -102,6 +102,12 @@ export default function NewWishScreen() {
                   onPress={() => w.goTo('place')}
                 />
                 <OptionRow
+                  icon="bed-outline"
+                  title="Un logement"
+                  subtitle="Une annonce Booking, Hostelworld… à voter"
+                  onPress={() => router.replace({ pathname: '/trip/[id]/lodging-new', params: { id: tripId } })}
+                />
+                <OptionRow
                   icon="sparkles-outline"
                   title="Les idées Hako"
                   subtitle="Logements & activités à vos dates"

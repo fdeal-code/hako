@@ -229,12 +229,16 @@ export default function HelpScreen() {
         {stop && (
           <TouchableOpacity
             style={styles.loop}
-            onPress={() => router.push(`/trip/${id}/envies`)}
+            onPress={() => (kind === 'lodging'
+              ? router.push({ pathname: '/trip/[id]/lodging-new', params: { id: id ?? '', stop: stop.id } })
+              : router.push(`/trip/${id}/envies`))}
             activeOpacity={0.85}
           >
-            <Ionicons name="heart-outline" size={20} color={Colors.accent} />
+            <Ionicons name={kind === 'lodging' ? 'bed-outline' : 'heart-outline'} size={20} color={Colors.accent} />
             <Text style={styles.loopText}>
-              Trouvé quelque chose ? Ajoute-le aux envies pour que le groupe vote.
+              {kind === 'lodging'
+                ? `Une annonce te plaît ? Colle son lien pour la proposer au groupe.`
+                : 'Trouvé quelque chose ? Ajoute-le aux envies pour que le groupe vote.'}
             </Text>
             <Ionicons name="chevron-forward" size={16} color={Colors.textPrimary} />
           </TouchableOpacity>
