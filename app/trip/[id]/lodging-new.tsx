@@ -38,6 +38,11 @@ export default function LodgingProposalScreen() {
   const l = useLodgingProposal(tripId, stopParam ?? null);
   const [error, setError] = useState<string | null>(null);
 
+  const findPhotos = async () => {
+    setError(null);
+    if (!(await l.findPhotos())) setError('Pas trouvé sur Google : vérifie le nom exact du logement.');
+  };
+
   const addScreenshot = async () => {
     setError(null);
     const err = await l.addScreenshot();
@@ -129,9 +134,15 @@ export default function LodgingProposalScreen() {
 
           {/* Photos trouvées sur l'annonce */}
           {l.photos.length > 0 && (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.photos} contentContainerStyle={styles.photosContent}>
-              {l.photos.map(uri => <Image key={uri} source={{ uri }} style={styles.photo} />)}
-            </ScrollView>
+            <>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.photos} contentContainerStyle={styles.photosContent}>
+                {l.photos.map(uri => <Image key={uri} source={{ uri }} style={styles.photo} />)}
+              </ScrollView>
+              <Text style={styles.credit}>
+                {l.photosFromGoogle ? 'Photos Google Maps' : `Photos de l’annonce${l.site && l.site !== 'other' ? ` ${LODGING_SITE_LABEL[l.site]}` : ''}`}
+                {l.rating ? ` · ★ ${String(l.rating).replace('.', ',')} sur Google` : ''}
+              </Text>
+            </>
           )}
 
           {/* Plateforme qui bloque la lecture (ex. Booking) : on passe par une capture */}
@@ -140,7 +151,7 @@ export default function LodgingProposalScreen() {
               <Ionicons name="image-outline" size={20} color={Colors.accent} />
               <View style={styles.flex}>
                 <Text style={styles.noticeText}>
-                  {l.site && l.site !== 'other' ? LODGING_SITE_LABEL[l.site] : 'Ce site'} ne laisse pas lire ses annonces automatiquement.
+                  {l.site && l.site !== 'other' ? LODGING_SITE_LABEL[l.site] : 'Ce site'} ne laisse pas lire le prix de ses annonces.
                   Fais une capture d’écran de l’annonce avec le prix : Hako le lira.
                 </Text>
                 <TouchableOpacity onPress={() => { void addScreenshot(); }} style={styles.noticeBtn} hitSlop={8}>
@@ -187,6 +198,11 @@ export default function LodgingProposalScreen() {
                 </TouchableOpacity>
               )}
               {l.address && <Text style={styles.hint}>{l.address}</Text>}
+              {l.photos.length === 0 && l.name.trim().length > 2 && !l.reading && (
+                <TouchableOpacity onPress={() => { void findPhotos(); }} hitSlop={8}>
+                  <Text style={styles.link}>Trouver les photos de « {l.name.trim()} »</Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         )}
@@ -239,4 +255,5 @@ const styles = StyleSheet.create({
   noticeBtnText: { ...Typography.chip, color: Colors.white },
   warn: { ...Typography.bodySmall, color: Colors.accent, marginLeft: Spacing.xs },
   link: { ...Typography.chip, color: Colors.accent, marginLeft: Spacing.xs },
+  credit: { ...Typography.bodySmall, color: Colors.textSecondary, marginTop: Spacing.xs, marginLeft: Spacing.xs },
 });

@@ -213,3 +213,42 @@ export async function countWishesToVote(tripId: string, userId: string): Promise
   if (error) return serviceError(error.message);
   return { data: countUnvoted((data ?? []) as { status: string; wish_votes: { user_id: string }[] | null }[], userId), error: null };
 }
+
+// ─── Logement retrouvé sur Google (photos, note, adresse, position) ─────────
+// Pour une annonce que la plateforme ne laisse pas lire (Booking…) : on part
+// du nom du logement et de la ville de l'étape.
+const LODGING_PHOTOS = 6;
+const LODGING_PHOTO_WIDTH = 900;
+const LODGING_MAX_KM = 40; // plus loin que la ville de l'étape : ce n'est pas le bon
+
+export interface LodgingFound { place: FoundPlace; photos: string[] }
+
+export async function findLodgingByName(
+  name: string,
+  city: string,
+  near: { lat: number | null; lng: number | null } | null,
+): Promise<LodgingFound | null> {
+  const query = `${name} ${city}`.trim();
+  if (!GOOGLE_API_KEY || name.trim().length < MIN_QUERY_LENGTH) return null;
+  const params = new URLSearchParams({ input: query, inputtype: 'textquery', fields: 'place_id,types,geometry', language: 'fr', key: GOOGLE_API_KEY });
+  if (near?.lat != null && near.lng != null) params.set('locationbias', `circle:${BIAS_RADIUS_M}@${near.lat},${near.lng}`);
+  try {
+    const found = await fetch(`${PLACES_URL}/findplacefromtext/json?${params.toString()}`);
+    const search = (await found.json()) as { status?: string; candidates?: PlaceResult[] };
+    const candidate = search.status === STATUS_OK ? search.candidates?.find(c => (c.types ?? []).includes('lodging')) : undefined;
+    if (!candidate?.place_id) return null;
+    const loc = candidate.geometry?.location;
+    if (loc && near?.lat != null && near.lng != null && distanceKm(near.lat, near.lng, loc.lat, loc.lng) > LODGING_MAX_KM) return null;
+
+    const details = await fetch(`${PLACES_URL}/details/json?${new URLSearchParams({ place_id: candidate.place_id, fields: DETAIL_FIELDS, language: 'fr', key: GOOGLE_API_KEY }).toString()}`);
+    const json = (await details.json()) as { status?: string; result?: PlaceResult };
+    if (json.status !== STATUS_OK || !json.result) return null;
+    const place = toFoundPlace(json.result);
+    if (!place) return null;
+    const photos = (json.result.photos ?? []).slice(0, LODGING_PHOTOS)
+      .map(p => `${PLACES_URL}/photo?maxwidth=${LODGING_PHOTO_WIDTH}&photo_reference=${p.photo_reference}&key=${GOOGLE_API_KEY}`);
+    return { place, photos };
+  } catch {
+    return null;
+  }
+}

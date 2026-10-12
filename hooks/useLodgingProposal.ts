@@ -14,7 +14,8 @@ import { useClipboardLink } from '@/hooks/useClipboardLink';
 import { useLodgingGaps } from '@/hooks/useLodgingGaps';
 import { useTripOverview } from '@/hooks/useTripOverview';
 import { readListingScreenshot, readListingUrl } from '@/services/listingService';
-import { createWish } from '@/services/wishService';
+import { createWish, findLodgingByName } from '@/services/wishService';
+import { FoundPlace } from '@/types/wishDraft';
 import { partnerLinks } from '@/utils/affiliateLinks';
 import { parseAmount } from '@/utils/expenseForm';
 import { LODGING_SITE_LABEL, lodgingNameFromUrl, lodgingSite } from '@/utils/lodgingLinks';
@@ -45,6 +46,8 @@ export function useLodgingProposal(tripId: string, initialStopId: string | null)
   const [blocked, setBlocked] = useState(false);
   const [priceFromScreenshot, setPriceFromScreenshot] = useState(false);
   const lastRead = useRef<string | null>(null);
+  const [place, setPlace] = useState<FoundPlace | null>(null); // logement retrouvé sur Google
+  const [photosFromGoogle, setPhotosFromGoogle] = useState(false);
 
   // Étape : celle demandée, sinon la première sans logement, sinon la première
   const stop = stops.find(s => s.id === stopId) ?? gaps[0] ?? stops[0] ?? null;
@@ -63,6 +66,19 @@ export function useLodgingProposal(tripId: string, initialStopId: string | null)
     });
   }, [stop, travelers, overview]);
 
+  /** Retrouve le logement sur Google (photos, note, adresse, position) à partir de son nom. */
+  const findOnGoogle = useCallback(async (lodgingName: string) => {
+    if (!stop || lodgingName.trim().length < 3) return false;
+    setReading(true);
+    const found = await findLodgingByName(lodgingName, stop.place_name, stop);
+    setReading(false);
+    if (!found) return false;
+    setPlace(found.place);
+    if (found.photos.length > 0) { setPhotos(found.photos); setPhotosFromGoogle(true); }
+    setAddress(prev => prev ?? (found.place.address || null));
+    return true;
+  }, [stop]);
+
   /** Lit l'annonce et pré-remplit ce qui n'a pas été tapé à la main. */
   const readUrl = useCallback(async (url: string) => {
     lastRead.current = url;
@@ -71,24 +87,30 @@ export function useLodgingProposal(tripId: string, initialStopId: string | null)
     const { data } = await readListingUrl(tripId, url);
     if (lastRead.current !== url) return; // un autre lien a été collé entre-temps
     setReading(false);
-    if (!data) return;
+    const guessed = lodgingNameFromUrl(url);
+    if (!data) { if (guessed) void findOnGoogle(guessed); return; }
     setBlocked(data.blocked);
     const listing = data.listing;
-    if (!listing) return;
-    setPhotos(listing.photos);
+    // Page illisible ou sans photos : on retrouve le logement sur Google par son nom
+    if (!listing || listing.photos.length === 0) {
+      const byName = listing?.name ?? guessed;
+      if (byName) void findOnGoogle(byName);
+      if (!listing) return;
+    }
+    if (listing.photos.length > 0) { setPhotos(listing.photos); setPhotosFromGoogle(false); }
     setAddress(listing.address);
     if (listing.name && !nameTouched) setName(listing.name);
     if (listing.priceTotal !== null && !priceTouched) {
       setTotalTextRaw(String(listing.priceTotal).replace('.', ','));
       setCurrency(listing.currency);
     }
-  }, [tripId, nameTouched, priceTouched]);
+  }, [tripId, nameTouched, priceTouched, findOnGoogle]);
 
   /** Lien collé ou tapé : nom deviné depuis l'adresse, puis lecture de l'annonce. */
   const setLink = useCallback((value: string) => {
     setLinkRaw(value);
     const url = extractUrl(value);
-    if (!url) { setPhotos([]); setAddress(null); setBlocked(false); lastRead.current = null; return; }
+    if (!url) { setPhotos([]); setAddress(null); setBlocked(false); setPlace(null); lastRead.current = null; return; }
     if (!nameTouched) setName(lodgingNameFromUrl(url) ?? '');
     if (url !== lastRead.current) void readUrl(url);
   }, [nameTouched, readUrl]);
@@ -104,6 +126,7 @@ export function useLodgingProposal(tripId: string, initialStopId: string | null)
     if (error !== null) return error;
     if (!data) return 'Rien trouvé sur cette capture.';
     if (data.name && !nameTouched && !name.trim()) setName(data.name);
+    if (data.name && photos.length === 0) void findOnGoogle(data.name);
     if (data.priceTotal !== null) {
       setTotalTextRaw(String(data.priceTotal).replace('.', ','));
       setCurrency(data.currency);
@@ -112,7 +135,7 @@ export function useLodgingProposal(tripId: string, initialStopId: string | null)
       return null;
     }
     return 'Le prix n’apparaît pas sur cette capture.';
-  }, [tripId, nights, nameTouched, name]);
+  }, [tripId, nights, nameTouched, name, photos.length, findOnGoogle]);
 
   const paste = useCallback(async () => {
     const url = await readLink();
@@ -138,7 +161,7 @@ export function useLodgingProposal(tripId: string, initialStopId: string | null)
       description: [site && site !== 'other' ? `Annonce ${LODGING_SITE_LABEL[site]}` : null, address].filter(Boolean).join(' · ') || null,
       linkUrl: url,
       imageUrl: null,
-      place: null,
+      place, // position sur la carte, note et adresse quand le logement a été retrouvé
       category: 'hotel',
       stopId: stop.id,
       vibes: [],
@@ -150,7 +173,7 @@ export function useLodgingProposal(tripId: string, initialStopId: string | null)
     if (error !== null) return error;
     tripEvents.emit();
     return null;
-  }, [session?.user?.id, stop, url, tripId, name, site, address, perPerson, photos]);
+  }, [session?.user?.id, stop, url, tripId, name, site, address, perPerson, photos, place]);
 
   return {
     stops, gaps, stop, setStopId, travelers, nights, searches,
@@ -158,6 +181,7 @@ export function useLodgingProposal(tripId: string, initialStopId: string | null)
     name, setName: (v: string) => { setNameTouched(true); setName(v); },
     totalText, setTotalText: (v: string) => { setPriceTouched(true); setPriceFromScreenshot(false); setTotalTextRaw(v); },
     perPerson, canSave, saving, save,
-    reading, photos, address, currency, blocked, priceFromScreenshot, addScreenshot,
+    reading, photos, photosFromGoogle, rating: place?.rating ?? null, address, currency, blocked, priceFromScreenshot, addScreenshot,
+    findPhotos: () => findOnGoogle(name),
   };
 }
