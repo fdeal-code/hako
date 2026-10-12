@@ -1,0 +1,403 @@
+<title>Confidentialité Hako</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&display=swap">
+<style>
+  /* Mise en page : une colonne de lecture, sommaire collant à gauche sur grand écran,
+     encart « En bref » en tête, tableaux pour les données et les prestataires. */
+  :root {
+    --bg: #FBF8F2;
+    --surface: #FFFFFF;
+    --ink: #1A1815;
+    --muted: #6B6155;
+    --line: #E6DED2;
+    --accent: #E4572E;
+    --accent-soft: #FBE3DA;
+    --todo-bg: #FFF1B8;
+    --todo-ink: #5C4600;
+    --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+    --font-body: "Atkinson Hyperlegible", "Segoe UI", system-ui, -apple-system, sans-serif;
+    --step-0: 1rem;
+    --step-1: 1.125rem;
+    --step-2: 1.4rem;
+    --step-3: 2rem;
+    --step-4: clamp(2.2rem, 6vw, 3.2rem);
+    --radius: 18px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #17140F; --surface: #211D17; --ink: #F3EDE3; --muted: #B8AD9F; --line: #3A332A;
+      --accent: #FF7A52; --accent-soft: #3D231A; --todo-bg: #4A3D10; --todo-ink: #FFE7A0;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #17140F; --surface: #211D17; --ink: #F3EDE3; --muted: #B8AD9F; --line: #3A332A;
+    --accent: #FF7A52; --accent-soft: #3D231A; --todo-bg: #4A3D10; --todo-ink: #FFE7A0;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 400 var(--step-0)/1.65 var(--font-body);
+    padding-inline: 16px;
+    padding-block: 32px 64px;
+  }
+  .page {
+    max-width: 1080px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 40px;
+  }
+  @media (min-width: 960px) {
+    .page { grid-template-columns: 220px minmax(0, 1fr); }
+    nav.toc { position: sticky; top: calc(24px + env(safe-area-inset-top, 0px)); align-self: start; }
+  }
+
+  header.hero { grid-column: 1 / -1; display: grid; gap: 12px; max-width: 760px; }
+  .brand {
+    font: 700 var(--step-1)/1 var(--font-display);
+    letter-spacing: 0.02em;
+    color: var(--accent);
+  }
+  h1 {
+    font: 700 var(--step-4)/1.05 var(--font-display);
+    margin: 0;
+    text-wrap: balance;
+  }
+  .updated { color: var(--muted); margin: 0; }
+
+  nav.toc { font-size: 0.95rem; }
+  nav.toc p {
+    margin: 0 0 8px;
+    font: 700 0.75rem/1 var(--font-body);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+  }
+  nav.toc ol { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; }
+  nav.toc a { color: var(--ink); text-decoration: none; }
+  nav.toc a:hover, nav.toc a:focus-visible { color: var(--accent); text-decoration: underline; }
+
+  main { min-width: 0; max-width: 720px; display: grid; gap: 40px; }
+  section { display: grid; gap: 12px; scroll-margin-top: 24px; }
+  h2 {
+    font: 600 var(--step-3)/1.15 var(--font-display);
+    margin: 0;
+    text-wrap: balance;
+  }
+  h3 { font: 600 var(--step-1)/1.3 var(--font-display); margin: 8px 0 0; }
+  p, ul { margin: 0; }
+  ul { padding-left: 1.2em; display: grid; gap: 6px; }
+  a { color: var(--accent); }
+  a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+  strong { font-weight: 700; }
+
+  .brief {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 20px 22px;
+    display: grid;
+    gap: 12px;
+  }
+  .brief h2 { font-size: var(--step-2); }
+  .brief ul { list-style: none; padding: 0; gap: 10px; }
+  .brief li { display: grid; grid-template-columns: 22px 1fr; gap: 10px; align-items: start; }
+  .brief li::before {
+    content: "";
+    width: 10px; height: 10px; margin-top: 0.55em;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+
+  .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+  table { width: 100%; border-collapse: collapse; min-width: 560px; font-size: 0.95rem; }
+  th, td { text-align: left; vertical-align: top; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+  tr:last-child td { border-bottom: 0; }
+  th {
+    font: 700 0.75rem/1.2 var(--font-body);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    background: var(--bg);
+  }
+  td:first-child { font-weight: 700; }
+  .basis { display: inline-block; padding: 2px 10px; border-radius: 999px; background: var(--accent-soft); font-size: 0.85rem; white-space: nowrap; }
+
+  .callout {
+    border-left: 4px solid var(--accent);
+    background: var(--surface);
+    padding: 14px 16px;
+    border-radius: 0 12px 12px 0;
+  }
+  mark.todo {
+    background: var(--todo-bg);
+    color: var(--todo-ink);
+    padding: 1px 6px;
+    border-radius: 6px;
+    font-weight: 700;
+  }
+  .contact { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  footer { color: var(--muted); font-size: 0.9rem; border-top: 1px solid var(--line); padding-top: 16px; }
+</style>
+
+<div class="page">
+  <header class="hero">
+    <span class="brand">hako</span>
+    <h1>Politique de confidentialité</h1>
+    <p class="updated">Dernière mise à jour : 12 octobre 2026</p>
+  </header>
+
+  <nav class="toc" aria-label="Sommaire">
+    <p>Sommaire</p>
+    <ol>
+      <li><a href="#qui">Qui sommes-nous</a></li>
+      <li><a href="#donnees">Données collectées</a></li>
+      <li><a href="#telephone">Accès au téléphone</a></li>
+      <li><a href="#visibilite">Qui voit quoi</a></li>
+      <li><a href="#ia">Fonctions avec IA</a></li>
+      <li><a href="#prestataires">Prestataires</a></li>
+      <li><a href="#transferts">Transferts hors UE</a></li>
+      <li><a href="#conservation">Conservation</a></li>
+      <li><a href="#securite">Sécurité</a></li>
+      <li><a href="#droits">Tes droits</a></li>
+      <li><a href="#mineurs">Âge minimum</a></li>
+      <li><a href="#changements">Modifications</a></li>
+    </ol>
+  </nav>
+
+  <main>
+    <div class="brief" aria-labelledby="brief-title">
+      <h2 id="brief-title">En bref</h2>
+      <ul>
+        <li>Hako sert à organiser des voyages entre amis. Tes données servent à faire fonctionner l’app, rien d’autre.</li>
+        <li>Pas de publicité, pas de revente de données, pas de profil publicitaire.</li>
+        <li>Tes données sont hébergées en France (Paris) chez notre hébergeur Supabase.</li>
+        <li>Ce que tu ajoutes à un voyage est visible des membres de ce voyage. Tes documents « Perso » et tes tâches « Rien que pour moi » ne sont visibles que par toi.</li>
+        <li>L’IA ne lit une confirmation de réservation que lorsque tu lances l’import toi-même.</li>
+        <li>On mesure l’usage de l’app sans jamais enregistrer le contenu de tes voyages.</li>
+      </ul>
+    </div>
+
+    <section id="qui">
+      <h2>1. Qui sommes-nous</h2>
+      <p>Le responsable du traitement de tes données est <mark class="todo">[Nom de la société ou de l’éditeur]</mark>, <mark class="todo">[forme juridique, capital, n° SIREN]</mark>, dont le siège est situé <mark class="todo">[adresse postale]</mark>.</p>
+      <div class="contact">
+        <span>Pour toute question sur tes données :</span>
+        <mark class="todo">[adresse e-mail de contact, ex. confidentialite@…]</mark>
+      </div>
+    </section>
+
+    <section id="donnees">
+      <h2>2. Les données que nous collectons</h2>
+      <p>Nous ne collectons que ce dont l’app a besoin. La « base légale » indique la raison qui nous autorise à traiter ces données au sens du RGPD.</p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th scope="col">Catégorie</th><th scope="col">Exemples</th><th scope="col">Pourquoi</th><th scope="col">Base légale</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Compte</td>
+              <td>Adresse e-mail, mot de passe (stocké chiffré, jamais lisible, même par nous), pseudo, photo de profil</td>
+              <td>Te connecter, te reconnaître dans les voyages</td>
+              <td><span class="basis">Contrat</span></td>
+            </tr>
+            <tr>
+              <td>Voyages</td>
+              <td>Nom, destination, dates, étapes, photo de couverture, membres</td>
+              <td>Organiser le voyage à plusieurs</td>
+              <td><span class="basis">Contrat</span></td>
+            </tr>
+            <tr>
+              <td>Envies et décisions</td>
+              <td>Liens (TikTok, Reels, YouTube, sites), lieux, prix, durées, ambiances, votes, commentaires</td>
+              <td>Proposer des idées et décider ensemble</td>
+              <td><span class="basis">Contrat</span></td>
+            </tr>
+            <tr>
+              <td>Planning et préparatifs</td>
+              <td>Créneaux du planning, tâches (partagées ou privées), checklist de départ</td>
+              <td>Organiser les journées et les préparatifs</td>
+              <td><span class="basis">Contrat</span></td>
+            </tr>
+            <tr>
+              <td>Budget</td>
+              <td>Dépenses, montants, qui a payé, répartition entre membres</td>
+              <td>Calculer qui doit quoi à qui</td>
+              <td><span class="basis">Contrat</span></td>
+            </tr>
+            <tr>
+              <td>Documents</td>
+              <td>Billets, réservations, confirmations importées, et si tu choisis de les ajouter : passeport, visa, assurance</td>
+              <td>Retrouver tes documents pendant le voyage, y compris hors connexion</td>
+              <td><span class="basis">Contrat</span></td>
+            </tr>
+            <tr>
+              <td>Photos et souvenirs</td>
+              <td>Photos de l’album du voyage, avis sur les activités, demande d’album imprimé (format, nombre de photos)</td>
+              <td>Créer les souvenirs du groupe</td>
+              <td><span class="basis">Contrat</span></td>
+            </tr>
+            <tr>
+              <td>Trip Match</td>
+              <td>Tes réponses au questionnaire : dates possibles, durée, budget, périmètre, envies</td>
+              <td>Proposer des destinations qui conviennent au groupe</td>
+              <td><span class="basis">Contrat</span></td>
+            </tr>
+            <tr>
+              <td>Amis et invitations</td>
+              <td>Liste d’amis, demandes d’ami, adresses e-mail des personnes que tu invites, liens d’invitation</td>
+              <td>Inviter tes proches dans un voyage</td>
+              <td><span class="basis">Contrat</span></td>
+            </tr>
+            <tr>
+              <td>Notifications</td>
+              <td>Notifications dans l’app (nouvelle envie, vote, dépense…) et tes préférences</td>
+              <td>Te tenir au courant de ce qui bouge</td>
+              <td><span class="basis">Contrat</span></td>
+            </tr>
+            <tr>
+              <td>Mesure d’usage</td>
+              <td>Étapes réalisées (voyage créé, vote, invitation…), écrans vus, type d’appareil, version de l’app. Jamais de titre, de texte ni de contenu.</td>
+              <td>Comprendre ce qui est utile, améliorer l’app</td>
+              <td><span class="basis">Intérêt légitime</span></td>
+            </tr>
+            <tr>
+              <td>Plantages</td>
+              <td>Message d’erreur technique, écran concerné, type d’appareil, version de l’app</td>
+              <td>Corriger les bugs</td>
+              <td><span class="basis">Intérêt légitime</span></td>
+            </tr>
+            <tr>
+              <td>Données techniques</td>
+              <td>Journaux de connexion de notre hébergeur (adresse IP, date, requête)</td>
+              <td>Sécurité et bon fonctionnement du service</td>
+              <td><span class="basis">Intérêt légitime</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Quand tu invites quelqu’un par e-mail, nous enregistrons son adresse pour qu’il retrouve l’invitation en s’inscrivant. N’invite que des personnes d’accord pour rejoindre ton voyage.</p>
+    </section>
+
+    <section id="telephone">
+      <h2>3. Ce que l’app utilise sur ton téléphone</h2>
+      <ul>
+        <li><strong>Photos</strong> : seulement celles que tu choisis (photo de profil, album, capture d’un billet).</li>
+        <li><strong>Appareil photo</strong> : pour scanner un billet ou un document, quand tu le demandes.</li>
+        <li><strong>Presse-papiers</strong> : quand tu ouvres l’ajout d’une envie ou l’import d’une réservation, l’app regarde si tu as copié un lien ou un texte, pour te proposer de le coller. Ton téléphone peut t’en avertir.</li>
+        <li><strong>Menu Partager</strong> : quand tu partages un lien, un PDF ou une capture vers Hako depuis une autre app.</li>
+      </ul>
+      <p>Hako n’accède <strong>pas</strong> à ta position, à tes contacts ni à ton micro, et ne te suit pas d’une app à l’autre.</p>
+    </section>
+
+    <section id="visibilite">
+      <h2>4. Qui voit tes données</h2>
+      <ul>
+        <li><strong>Les membres d’un voyage</strong> voient ce qui y est ajouté : envies, votes, commentaires, planning, dépenses, documents partagés, photos.</li>
+        <li><strong>Toi seul</strong> vois tes documents marqués « Perso » (passeport par exemple) et tes tâches « Rien que pour moi ». Cette règle est appliquée par notre base de données, pas seulement par l’app.</li>
+        <li><strong>Les autres utilisateurs connectés de Hako</strong> peuvent voir ton pseudo, ta photo de profil et ton adresse e-mail, ce qui leur permet de te retrouver et de t’ajouter en ami.</li>
+        <li><strong>Une personne qui reçoit un lien d’invitation</strong> voit un aperçu du voyage (nom, destination, dates, membres) avant de le rejoindre.</li>
+        <li><strong>Quand tu partages un document</strong>, le lien envoyé reste valable 24 heures.</li>
+      </ul>
+      <p>Nous ne vendons ni ne louons tes données. Nous ne les communiquons qu’aux prestataires listés plus bas, ou si la loi nous y oblige.</p>
+    </section>
+
+    <section id="ia">
+      <h2>5. Les fonctions qui utilisent l’IA</h2>
+      <p>Deux fonctions envoient des informations à Claude, le modèle d’IA de la société Anthropic :</p>
+      <ul>
+        <li><strong>Import de réservation</strong> : le texte de l’e-mail, le PDF ou la capture d’écran que tu choisis d’importer, avec le nom, la destination et les dates du voyage. Uniquement quand tu appuies sur « Lire la réservation ». Rien n’est ajouté au voyage sans ta validation.</li>
+        <li><strong>Trip Match</strong> : les réponses du groupe au questionnaire (dates, durée, budget, envies), sans nom ni e-mail, pour proposer trois destinations.</li>
+      </ul>
+      <p>Selon les conditions commerciales d’Anthropic en vigueur à la date de cette politique, les données envoyées via son API ne servent pas à entraîner ses modèles.</p>
+    </section>
+
+    <section id="prestataires">
+      <h2>6. Nos prestataires</h2>
+      <p>Pour faire fonctionner Hako, nous faisons appel à ces services. Chacun ne reçoit que ce qui est nécessaire à sa mission.</p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th scope="col">Prestataire</th><th scope="col">Rôle</th><th scope="col">Ce qu’il reçoit</th><th scope="col">Lieu</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Supabase</td><td>Hébergement de la base de données, des fichiers et des comptes</td><td>L’ensemble des données de l’app</td><td>Union européenne (Paris)</td></tr>
+            <tr><td>Anthropic (Claude)</td><td>Import de réservations, propositions Trip Match</td><td>Voir la section 5</td><td>États-Unis</td></tr>
+            <tr><td>Google (Places, Maps)</td><td>Recherche et détails des lieux, cartes sur Android</td><td>Ta recherche de lieu, la zone affichée</td><td>États-Unis</td></tr>
+            <tr><td>Apple (Plans)</td><td>Cartes sur iPhone</td><td>La zone affichée</td><td>États-Unis</td></tr>
+            <tr><td>Unsplash</td><td>Photos de couverture des voyages</td><td>Le nom de la destination</td><td>États-Unis, Canada</td></tr>
+            <tr><td>TikTok, YouTube</td><td>Aperçu des vidéos ajoutées en envie</td><td>L’adresse de la vidéo</td><td>Selon le service</td></tr>
+            <tr><td>Ticketmaster</td><td>Idées d’événements pendant le voyage</td><td>Les villes et dates du voyage, depuis notre serveur</td><td>États-Unis</td></tr>
+            <tr><td>Apple, Google (stores)</td><td>Téléchargement et mises à jour de l’app</td><td>Selon leurs propres conditions</td><td>États-Unis</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <h3>Liens partenaires</h3>
+      <p>Hako peut te proposer des logements, des activités, une eSIM ou une assurance chez des partenaires (par exemple Booking.com, Hostelworld, GetYourGuide, Viator, Airalo, Heymondo). Si tu ouvres un de ces liens, tu quittes Hako : le site du partenaire applique sa propre politique de confidentialité et peut nous verser une commission si tu réserves. Nous ne lui transmettons aucune de tes données.</p>
+      <h3>Partage vers d’autres apps</h3>
+      <p>Quand tu partages une invitation ou un lien (WhatsApp, Messages…), le contenu partagé est transmis à l’app que tu choisis, selon ses propres conditions.</p>
+    </section>
+
+    <section id="transferts">
+      <h2>7. Transferts hors de l’Union européenne</h2>
+      <p>Certains prestataires sont situés aux États-Unis. Ces transferts sont encadrés par le cadre de protection des données UE–États-Unis (Data Privacy Framework) lorsque le prestataire y adhère, ou par les clauses contractuelles types de la Commission européenne.</p>
+    </section>
+
+    <section id="conservation">
+      <h2>8. Combien de temps nous gardons tes données</h2>
+      <ul>
+        <li><strong>Compte et contenu</strong> : tant que ton compte existe. Si tu le supprimes, tes données personnelles sont effacées sous 30 jours. Les dépenses que tu as payées pour le groupe peuvent être conservées sous forme anonyme pour que les comptes des autres membres restent justes.</li>
+        <li><strong>Voyage supprimé</strong> : son contenu (envies, planning, dépenses, documents, photos) est effacé.</li>
+        <li><strong>Mesure d’usage</strong> : 13 mois au maximum.</li>
+        <li><strong>Rapports de plantage</strong> : 6 mois au maximum.</li>
+        <li><strong>Copies hors connexion</strong> : les documents que tu enregistres hors connexion restent sur ton téléphone jusqu’à ce que tu les retires ou supprimes l’app.</li>
+      </ul>
+    </section>
+
+    <section id="securite">
+      <h2>9. Sécurité</h2>
+      <ul>
+        <li>Tous les échanges entre l’app et nos serveurs sont chiffrés (HTTPS).</li>
+        <li>Les mots de passe sont stockés sous forme chiffrée par notre hébergeur.</li>
+        <li>Chaque table de la base est protégée par des règles d’accès : on ne lit que les voyages dont on est membre.</li>
+        <li>Les documents sont stockés de façon privée et ne s’ouvrent qu’avec des liens temporaires.</li>
+      </ul>
+    </section>
+
+    <section id="droits">
+      <h2>10. Tes droits</h2>
+      <p>Conformément au RGPD et à la loi Informatique et Libertés, tu peux à tout moment :</p>
+      <ul>
+        <li>accéder à tes données et en obtenir une copie ;</li>
+        <li>les corriger (la plupart se modifient directement dans l’app) ;</li>
+        <li>les faire effacer, en supprimant ton compte ;</li>
+        <li>les récupérer dans un format lisible (portabilité) ;</li>
+        <li>t’opposer à la mesure d’usage ou en demander la limitation ;</li>
+        <li>définir des directives sur le sort de tes données après ton décès.</li>
+      </ul>
+      <p>Pour exercer ces droits, écris-nous à <mark class="todo">[adresse e-mail de contact]</mark>. Nous répondons sous un mois. <mark class="todo">[À compléter quand la suppression du compte sera disponible dans l’app : Profil → Supprimer mon compte.]</mark></p>
+      <p class="callout">Si tu estimes que tes droits ne sont pas respectés, tu peux adresser une réclamation à la CNIL : <a href="https://www.cnil.fr/fr/plaintes" rel="noopener">www.cnil.fr/fr/plaintes</a>.</p>
+    </section>
+
+    <section id="mineurs">
+      <h2>11. Âge minimum</h2>
+      <p>Hako est destiné aux personnes de 15 ans et plus. En dessous de 15 ans, l’inscription nécessite l’accord d’un parent ou tuteur légal.</p>
+    </section>
+
+    <section id="changements">
+      <h2>12. Modifications de cette politique</h2>
+      <p>Nous pouvons faire évoluer cette politique, par exemple quand une nouvelle fonction arrive. La date en haut de page indique la dernière version. En cas de changement important, nous te prévenons dans l’app.</p>
+    </section>
+
+    <footer>
+      <p><mark class="todo">[Nom de l’éditeur]</mark> · Politique de confidentialité de l’application Hako · 12 octobre 2026</p>
+    </footer>
+  </main>
+</div>
