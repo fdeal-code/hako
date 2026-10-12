@@ -3,9 +3,12 @@
 // migration rls_core_tables) ; on le complète ici (avatar) quand une session
 // existe déjà. Pattern service : ServiceResult<T> (voir tripService.ts).
 
+import * as Linking from 'expo-linking';
+
 import { supabase } from '@/services/supabase';
 import { fileExtension, uploadLocalFile } from '@/services/storageService';
 import { serviceError, ServiceResult } from '@/services/tripService';
+import { parseAuthRedirect } from '@/utils/authLinks';
 import { authErrorMessage } from '@/utils/authValidation';
 
 export async function signInWithEmail(email: string, password: string): Promise<ServiceResult<true>> {
@@ -36,8 +39,36 @@ export async function signUpAccount(input: SignUpInput): Promise<ServiceResult<{
   return { data: { needsConfirmation: false }, error: null };
 }
 
+/** Page de l'app ouverte par le lien de l'e-mail (hako://reset-password). */
+export const RESET_PASSWORD_PATH = '/reset-password';
+
 export async function sendPasswordReset(email: string): Promise<ServiceResult<true>> {
-  const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase());
+  const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+    redirectTo: Linking.createURL(RESET_PASSWORD_PATH),
+  });
+  if (error) return serviceError(authErrorMessage(error.message));
+  return { data: true, error: null };
+}
+
+/** Ouvre la session de récupération à partir du lien reçu par e-mail. */
+export async function startRecoverySession(url: string): Promise<ServiceResult<true>> {
+  const link = parseAuthRedirect(url);
+  if (link.error) return serviceError('Ce lien a expiré ou a déjà servi. Redemande un e-mail depuis l’écran de connexion.');
+  if (link.accessToken && link.refreshToken) {
+    const { error } = await supabase.auth.setSession({ access_token: link.accessToken, refresh_token: link.refreshToken });
+    if (error) return serviceError(authErrorMessage(error.message));
+    return { data: true, error: null };
+  }
+  if (link.code) {
+    const { error } = await supabase.auth.exchangeCodeForSession(link.code);
+    if (error) return serviceError(authErrorMessage(error.message));
+    return { data: true, error: null };
+  }
+  return serviceError('Lien incomplet. Ouvre le lien reçu par e-mail depuis ce téléphone.');
+}
+
+export async function updatePassword(password: string): Promise<ServiceResult<true>> {
+  const { error } = await supabase.auth.updateUser({ password });
   if (error) return serviceError(authErrorMessage(error.message));
   return { data: true, error: null };
 }

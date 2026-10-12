@@ -30,6 +30,8 @@ export function authErrorMessage(raw: string): string {
   if (m.includes('already registered') || m.includes('already been registered')) return 'Un compte existe déjà avec cet e-mail. Connecte-toi plutôt.';
   if (m.includes('password should be at least')) return `Le mot de passe doit faire au moins ${MIN_PASSWORD} caractères.`;
   if (m.includes('rate limit') || m.includes('too many')) return 'Trop de tentatives. Réessaie dans quelques minutes.';
+  if (m.includes('different from the old password') || m.includes('same password')) return 'Choisis un mot de passe différent de l’ancien.';
+  if (m.includes('expired') || m.includes('invalid refresh token')) return 'Ce lien a expiré. Redemande un e-mail depuis l’écran de connexion.';
   if (m.includes('network')) return 'Pas de connexion internet.';
   return raw;
 }

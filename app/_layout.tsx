@@ -43,8 +43,10 @@ function AuthGate() {
     const inAuthGroup = segments[0] === '(auth)';
     // Lien d'invitation : l'aperçu du voyage est visible sans compte
     const inJoinFlow  = segments[0] === 'join';
+    // Lien « Mot de passe oublié » : la session s'ouvre sur cette page même
+    const inPasswordReset = segments[0] === 'reset-password';
 
-    if (!session && !inAuthGroup && !inJoinFlow) {
+    if (!session && !inAuthGroup && !inJoinFlow && !inPasswordReset) {
       // Pas connecté → login
       router.replace('/(auth)/login');
     } else if (session && inAuthGroup) {
@@ -102,6 +104,7 @@ function AuthGate() {
       <Stack.Screen name="account/edit"              options={{ headerShown: false }} />
       <Stack.Screen name="account/add-friend"        options={{ headerShown: false }} />
       <Stack.Screen name="notifications"             options={{ headerShown: false }} />
+      <Stack.Screen name="reset-password"            options={{ headerShown: false }} />
       <Stack.Screen name="share"                     options={{ headerShown: false, presentation: 'fullScreenModal' }} />
       <Stack.Screen
         name="match/create"
