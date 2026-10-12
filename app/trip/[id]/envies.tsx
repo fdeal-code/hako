@@ -1123,12 +1123,14 @@ export default function EnviesScreen() {
       const existing     = w.wish_votes.find(v => v.user_id === currentUserId);
       const shouldRemove = existing?.vote === vote;
 
+      // Une fois le vote enregistré, l'accueil et le dashboard recomptent « à voter »
+      const voted = () => tripEvents.emit();
       if (shouldRemove && existing) {
-        supabase.from('wish_votes').delete().eq('id', existing.id).then(() => {});
+        supabase.from('wish_votes').delete().eq('id', existing.id).then(voted);
       } else if (existing) {
-        supabase.from('wish_votes').update({ vote }).eq('id', existing.id).then(() => {});
+        supabase.from('wish_votes').update({ vote }).eq('id', existing.id).then(voted);
       } else {
-        supabase.from('wish_votes').insert({ wish_id: wishId, user_id: currentUserId, vote }).then(() => {});
+        supabase.from('wish_votes').insert({ wish_id: wishId, user_id: currentUserId, vote }).then(voted);
       }
 
       const newVotes = shouldRemove

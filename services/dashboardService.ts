@@ -5,6 +5,7 @@
 import { supabase } from '@/services/supabase';
 import { serviceError, ServiceResult } from '@/services/tripService';
 import { BudgetSummary, ExpenseForSummary, summarizeBudget } from '@/utils/dashboardSummary';
+import { countUnvoted } from '@/utils/wishVotes';
 
 const RECENT_DOCS = 3;
 const OPEN_STATUSES = ['pending', 'debate'];
@@ -26,7 +27,8 @@ export async function getDashboardSummary(tripId: string, userId: string | null)
     // Envies = ce qui se vote : les tâches d'orga (Préparatifs) ne comptent pas
     supabase.from('wishes').select('id', { count: 'exact', head: true })
       .eq('trip_id', tripId).neq('status', 'archived').or('type.is.null,type.neq.orga'),
-    supabase.from('wishes').select('id', { count: 'exact', head: true })
+    // « À voter » : les envies ouvertes où MOI je n'ai pas encore voté
+    supabase.from('wishes').select('status, wish_votes(user_id)')
       .eq('trip_id', tripId).in('status', OPEN_STATUSES).or('type.is.null,type.neq.orga'),
     supabase.from('expenses').select('amount, paid_by, expense_splits(user_id, amount)').eq('trip_id', tripId),
     supabase.from('planning_items').select('id', { count: 'exact', head: true }).eq('trip_id', tripId),
@@ -39,7 +41,9 @@ export async function getDashboardSummary(tripId: string, userId: string | null)
       recentDocTitles: ((docs.data ?? []) as { title: string }[]).map(d => d.title),
       docCount: docCount.count ?? 0,
       wishCount: wishes.count ?? 0,
-      toVoteCount: toVote.count ?? 0,
+      toVoteCount: userId
+        ? countUnvoted((toVote.data ?? []) as { status: string; wish_votes: { user_id: string }[] | null }[], userId)
+        : 0,
       budget: summarizeBudget((expenses.data ?? []) as ExpenseForSummary[], userId),
       plannedCount: planned.count ?? 0,
     },

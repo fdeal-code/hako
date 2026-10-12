@@ -26,3 +26,14 @@ export function computeWishStatus(
   if (ups === 0 && downs === 0) return 'pending';
   return 'debate';
 }
+
+/** Envies encore ouvertes au vote (À voter, En débat) où `userId` n'a pas voté. */
+export function countUnvoted(
+  wishes: readonly { status: string; wish_votes: readonly { user_id: string }[] | null }[],
+  userId: string,
+): number {
+  return wishes.filter(w =>
+    (w.status === 'pending' || w.status === 'debate')
+    && !(w.wish_votes ?? []).some(v => v.user_id === userId),
+  ).length;
+}

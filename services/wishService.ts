@@ -7,6 +7,7 @@ import { supabase } from '@/services/supabase';
 import { serviceError, ServiceResult } from '@/services/tripService';
 import { FoundPlace, LinkPreview, NewWishInput, PlaceSuggestion } from '@/types/wishDraft';
 import { captionToQuery, detectLinkSource, distanceKm } from '@/utils/wishLinks';
+import { countUnvoted } from '@/utils/wishVotes';
 import { track } from '@/services/telemetryService';
 
 const GOOGLE_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ?? '';
@@ -198,4 +199,16 @@ export async function getWishFacets(tripId: string): Promise<ServiceResult<WishF
     .neq('status', 'archived');
   if (error) return serviceError(error.message);
   return { data: (data ?? []) as WishFacet[], error: null };
+}
+
+/** Nombre d'envies où cet utilisateur n'a pas encore voté (accueil, dashboard). */
+export async function countWishesToVote(tripId: string, userId: string): Promise<ServiceResult<number>> {
+  const { data, error } = await supabase
+    .from('wishes')
+    .select('status, wish_votes(user_id)')
+    .eq('trip_id', tripId)
+    .in('status', ['pending', 'debate'])
+    .or('type.is.null,type.neq.orga'); // sans les tâches d'orga
+  if (error) return serviceError(error.message);
+  return { data: countUnvoted((data ?? []) as { status: string; wish_votes: { user_id: string }[] | null }[], userId), error: null };
 }
