@@ -11,7 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Colors, Radii, Shadows, Spacing, Typography } from '@/constants/theme';
-import { CreateTripHeader } from '@/components/createTrip/CreateTripChrome';
+import { BackBar, CreateTripHeader } from '@/components/createTrip/CreateTripChrome';
 import { setPendingImport } from '@/hooks/useBookingImport';
 import { useShareIntake } from '@/hooks/useShareIntake';
 import { MyTrip } from '@/services/myTripsService';
@@ -48,9 +48,9 @@ export default function ShareScreen() {
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
-      <CreateTripHeader title="Partager vers Hako" onClose={close} />
+      <CreateTripHeader title="Partager vers Hako" />
 
-      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + Spacing.xl }]} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: Spacing.xl }]} showsVerticalScrollIndicator={false}>
         <View style={styles.titleBlock}>
           <Text style={styles.title}>{booking ? 'Une réservation ?' : 'Ajouter à quel voyage ?'}</Text>
           <Text style={styles.subtitle}>
@@ -129,6 +129,7 @@ export default function ShareScreen() {
           </View>
         )}
       </ScrollView>
+      <BackBar onBack={close} bottomInset={insets.bottom} />
     </View>
   );
 }

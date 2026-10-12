@@ -15,7 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Colors, Motion, Radii, Shadows, Spacing, Typography } from '@/constants/theme';
-import { CreateTripHeader, SectionLabel, StepTitle, createCardStyles } from '@/components/createTrip/CreateTripChrome';
+import { BackBar, CreateTripHeader, SectionLabel, StepTitle, createCardStyles } from '@/components/createTrip/CreateTripChrome';
 import { EssentialRow, TaskRow, VisibilityToggle } from '@/components/preparation/PrepParts';
 import { AnimatedPressable } from '@/components/ui/AnimatedPressable';
 import { usePreparation } from '@/hooks/usePreparation';
@@ -82,10 +82,10 @@ export default function PreparationScreen() {
 
   return (
     <KeyboardAvoidingView style={[styles.root, { paddingTop: insets.top }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <CreateTripHeader title="Préparatifs" onClose={() => router.back()} />
+      <CreateTripHeader title="Préparatifs" />
 
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + Spacing.xl }]}
+        contentContainerStyle={[styles.content, { paddingBottom: Spacing.xl }]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
@@ -198,6 +198,7 @@ export default function PreparationScreen() {
 
         {p.error ? <Text style={styles.error}>{p.error}</Text> : null}
       </ScrollView>
+      <BackBar onBack={() => router.back()} bottomInset={insets.bottom} />
     </KeyboardAvoidingView>
   );
 }

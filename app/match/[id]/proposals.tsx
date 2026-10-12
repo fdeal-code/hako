@@ -8,7 +8,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Colors, Radii, Spacing, Typography } from '@/constants/theme';
-import { CreateTripHeader, StepTitle } from '@/components/createTrip/CreateTripChrome';
+import { BackBar, CreateTripHeader, StepTitle } from '@/components/createTrip/CreateTripChrome';
 import { CelebrationOverlay } from '@/components/match/CelebrationOverlay';
 import { PROPOSAL_GRADIENTS, ProposalCard, pickWinner } from '@/components/match/ProposalCard';
 import { ProposalsFooter } from '@/components/match/ProposalsFooter';
@@ -78,7 +78,7 @@ export default function MatchProposalsScreen() {
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
-      <CreateTripHeader title="Trip Match" onClose={() => router.back()} />
+      <CreateTripHeader title="Trip Match" />
 
       <View style={styles.head}>
         <View style={styles.flex}>
@@ -134,11 +134,12 @@ export default function MatchProposalsScreen() {
           isCreator={isCreator}
           creating={creating}
           winnerDestination={winner.destination}
-          bottomPadding={insets.bottom + Spacing.md}
+          bottomPadding={Spacing.sm}
           onCreateTrip={() => { void handleCreateTrip(); }}
         />
       )}
 
+      <BackBar onBack={() => router.back()} bottomInset={insets.bottom} />
       {celebrating && <CelebrationOverlay />}
     </View>
   );

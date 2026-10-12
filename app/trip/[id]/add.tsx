@@ -11,7 +11,7 @@ import Animated, { FadeInDown, ReduceMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Colors, Motion, Spacing, Typography } from '@/constants/theme';
-import { CreateTripHeader } from '@/components/createTrip/CreateTripChrome';
+import { BackBar, CreateTripHeader } from '@/components/createTrip/CreateTripChrome';
 import { ClipboardBanner, OptionRow, SectionTitle } from '@/components/envies/NewWishParts';
 import { HeroShortcut, ShortcutTile, TileGrid } from '@/components/trip/AddShortcuts';
 import { useClipboardLink } from '@/hooks/useClipboardLink';
@@ -40,10 +40,10 @@ export default function AddToTripScreen() {
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
-      <CreateTripHeader title="Ajouter" onClose={() => router.back()} />
+      <CreateTripHeader title="Ajouter" />
 
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + Spacing.xl }]}
+        contentContainerStyle={[styles.content, { paddingBottom: Spacing.xl }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.titleBlock}>
@@ -158,6 +158,7 @@ export default function AddToTripScreen() {
         </Animated.View>
       </ScrollView>
 
+      <BackBar onBack={() => router.back()} bottomInset={insets.bottom} />
     </View>
   );
 }

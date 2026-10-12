@@ -103,7 +103,7 @@ export default function CreateTripScreen() {
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
-      <CreateTripHeader onClose={() => router.back()} />
+      <CreateTripHeader />
       <ProgressSegments total={visibleSteps.length} current={progress} />
 
       <Animated.View style={[styles.slides, { width: width * TOTAL_SLIDES }, slideStyle]}>

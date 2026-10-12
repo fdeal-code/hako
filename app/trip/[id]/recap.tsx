@@ -58,7 +58,7 @@ export default function RecapScreen() {
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
-      <CreateTripHeader title="Récap" onClose={() => router.back()} />
+      <CreateTripHeader title="Récap" />
 
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: ACTIONS_SPACE + insets.bottom }]} showsVerticalScrollIndicator={false}>
         <Text style={styles.intro}>

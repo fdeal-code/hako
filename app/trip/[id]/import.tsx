@@ -12,7 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Colors, Motion, Radii, Shadows, Spacing, Typography } from '@/constants/theme';
-import { CreateTripHeader, SectionLabel, StepActions, StepTitle, createCardStyles } from '@/components/createTrip/CreateTripChrome';
+import { BackBar, CreateTripHeader, SectionLabel, StepActions, StepTitle, createCardStyles } from '@/components/createTrip/CreateTripChrome';
 import { OptionRow } from '@/components/envies/NewWishParts';
 import { BookingCard } from '@/components/import/BookingCard';
 import { AnimatedPressable } from '@/components/ui/AnimatedPressable';
@@ -58,7 +58,7 @@ export default function ImportBookingScreen() {
     const r = x.result;
     return (
       <View style={[styles.root, { paddingTop: insets.top }]}>
-        <CreateTripHeader title="Import" onClose={() => router.back()} />
+        <CreateTripHeader title="Import" />
         <ScrollView contentContainerStyle={[styles.content, styles.doneContent]}>
           <Animated.View entering={ZoomIn.springify()} style={[styles.bigIcon, styles.bigIconDone]}>
             <Ionicons name="checkmark" size={36} color={Colors.white} />
@@ -79,6 +79,7 @@ export default function ImportBookingScreen() {
             <OptionRow icon="add-circle-outline" title="Importer une autre réservation" subtitle="E-mail, PDF ou capture" onPress={x.restart} />
           </View>
         </ScrollView>
+        <BackBar onBack={() => router.back()} bottomInset={insets.bottom} />
       </View>
     );
   }
@@ -88,7 +89,7 @@ export default function ImportBookingScreen() {
     const n = x.drafts.length;
     return (
       <View style={[styles.root, { paddingTop: insets.top }]}>
-        <CreateTripHeader title="Import" onClose={() => router.back()} />
+        <CreateTripHeader title="Import" />
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <StepTitle
             title={n > 1 ? `${n} réservations trouvées` : 'Réservation trouvée'}
@@ -117,7 +118,7 @@ export default function ImportBookingScreen() {
   // ─── Source : texte collé, PDF ou capture ─────────────────────────────────
   return (
     <KeyboardAvoidingView style={[styles.root, { paddingTop: insets.top }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <CreateTripHeader title="Import" onClose={() => router.back()} />
+      <CreateTripHeader title="Import" />
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         <StepTitle
           title="Importer une réservation"

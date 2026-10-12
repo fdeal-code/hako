@@ -12,7 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 
 import { Colors, Spacing, Typography } from '@/constants/theme';
-import { CreateTripHeader } from '@/components/createTrip/CreateTripChrome';
+import { BackBar, CreateTripHeader } from '@/components/createTrip/CreateTripChrome';
 import { StyleBudgetStep } from '@/components/createTrip/StyleBudgetStep';
 import {
   CoverEditor, Divider, MemberRow, NameRow, SettingsGroup, SettingsRow, ShiftStepper,
@@ -102,11 +102,11 @@ export default function TripSettingsScreen() {
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
-      <CreateTripHeader title="Paramètres" onClose={() => router.back()} />
+      <CreateTripHeader title="Paramètres" />
 
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView
-          contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + Spacing.xl }]}
+          contentContainerStyle={[styles.content, { paddingBottom: Spacing.xl }]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
@@ -199,6 +199,7 @@ export default function TripSettingsScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
+      <BackBar onBack={() => router.back()} bottomInset={insets.bottom} />
     </View>
   );
 }

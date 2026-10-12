@@ -56,7 +56,7 @@ export default function AlbumScreen() {
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
-      <CreateTripHeader title="Album" onClose={() => router.back()} />
+      <CreateTripHeader title="Album" />
 
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: ACTIONS_SPACE + insets.bottom }]} showsVerticalScrollIndicator={false}>
         <View style={styles.titleBlock}>
@@ -146,9 +146,9 @@ function PhotoViewer({ photos, index, members, currentUserId, onClose, onDelete 
             <Image source={{ uri: item.photoUrl }} style={{ width, height }} resizeMode="contain" />
           )}
         />
-        <View style={[styles.viewerTop, { top: insets.top + Spacing.sm }]}>
-          <TouchableOpacity style={styles.viewerBtn} onPress={onClose} accessibilityLabel="Fermer">
-            <Ionicons name="close" size={22} color={Colors.white} />
+        <View style={[styles.viewerActions, { bottom: insets.bottom + Spacing.md }]}>
+          <TouchableOpacity style={styles.viewerBtn} onPress={onClose} accessibilityLabel="Retour">
+            <Ionicons name="caret-back" size={22} color={Colors.white} />
           </TouchableOpacity>
           {photo && photo.uploadedBy === currentUserId && (
             <TouchableOpacity style={styles.viewerBtn} onPress={() => onDelete(photo)} accessibilityLabel="Retirer la photo">
@@ -157,7 +157,7 @@ function PhotoViewer({ photos, index, members, currentUserId, onClose, onDelete 
           )}
         </View>
         {photo && (
-          <View style={[styles.viewerInfo, { bottom: insets.bottom + Spacing.md }]}>
+          <View style={[styles.viewerInfo, { bottom: insets.bottom + Spacing.md + VIEWER_BTN + Spacing.sm2 }]}>
             <Avatar name={author?.nickname ?? 'Membre'} uri={author?.avatarUrl ?? undefined} size={32} />
             <Text style={styles.viewerText} numberOfLines={1}>
               {author?.nickname ?? 'Membre'} · {addedOn(photo.createdAt)}
@@ -169,6 +169,8 @@ function PhotoViewer({ photos, index, members, currentUserId, onClose, onDelete 
     </Modal>
   );
 }
+
+const VIEWER_BTN = 48;
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.background },
@@ -190,12 +192,12 @@ const styles = StyleSheet.create({
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: GRID_GAP },
   cell: { borderRadius: Radii.sm / 2, backgroundColor: Colors.line },
   viewer: { flex: 1, backgroundColor: Colors.primary },
-  viewerTop: {
+  viewerActions: {
     position: 'absolute', left: Spacing.md2, right: Spacing.md2,
     flexDirection: 'row', justifyContent: 'space-between',
   },
   viewerBtn: {
-    width: 44, height: 44, borderRadius: Radii.full, backgroundColor: Colors.overlay,
+    width: VIEWER_BTN, height: VIEWER_BTN, borderRadius: Radii.full, backgroundColor: Colors.overlay,
     alignItems: 'center', justifyContent: 'center',
   },
   viewerInfo: {

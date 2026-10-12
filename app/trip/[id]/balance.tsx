@@ -8,7 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Colors, Radii, Shadows, Spacing, Typography } from '@/constants/theme';
-import { CreateTripHeader } from '@/components/createTrip/CreateTripChrome';
+import { BackBar, CreateTripHeader } from '@/components/createTrip/CreateTripChrome';
 import { Avatar } from '@/components/ui/Avatar';
 import { useBudgetSummary } from '@/hooks/useBudgetSummary';
 import { BudgetMember, categoryMeta } from '@/types/budget';
@@ -34,12 +34,12 @@ export default function BalanceScreen() {
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
-      <CreateTripHeader title="Équilibre" onClose={() => router.back()} />
+      <CreateTripHeader title="Équilibre" />
 
       {!b.loaded ? (
         <ActivityIndicator color={Colors.primary} style={styles.loader} />
       ) : (
-        <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + Spacing.xl }]} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={[styles.content, { paddingBottom: Spacing.xl }]} showsVerticalScrollIndicator={false}>
           {/* Résumé */}
           <View style={styles.hero}>
             <Text style={styles.heroLabel}>TOTAL DU GROUPE</Text>
@@ -162,6 +162,7 @@ export default function BalanceScreen() {
           )}
         </ScrollView>
       )}
+      <BackBar onBack={() => router.back()} bottomInset={insets.bottom} />
     </View>
   );
 }

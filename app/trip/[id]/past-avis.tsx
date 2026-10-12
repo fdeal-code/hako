@@ -12,7 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Colors, Radii, Shadows, Spacing, Typography } from '@/constants/theme';
-import { CreateTripHeader } from '@/components/createTrip/CreateTripChrome';
+import { BackBar, CreateTripHeader } from '@/components/createTrip/CreateTripChrome';
 import { StarRating } from '@/components/past/StarRating';
 import { usePastTrip } from '@/hooks/usePastTrip';
 import { PastMember, ReviewableItem, ReviewRow } from '@/types/pastTrip';
@@ -53,11 +53,11 @@ export default function ReviewsScreen() {
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
-      <CreateTripHeader title="Avis" onClose={() => router.back()} />
+      <CreateTripHeader title="Avis" />
 
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView
-          contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + Spacing.xl }]}
+          contentContainerStyle={[styles.content, { paddingBottom: Spacing.xl }]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
@@ -89,6 +89,7 @@ export default function ReviewsScreen() {
           )}
         </ScrollView>
       </KeyboardAvoidingView>
+      <BackBar onBack={() => router.back()} bottomInset={insets.bottom} />
     </View>
   );
 }

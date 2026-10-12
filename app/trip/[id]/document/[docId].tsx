@@ -133,7 +133,7 @@ export default function DocumentDetailScreen() {
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
-      <CreateTripHeader title={meta.isTicket ? 'Billet' : 'Document'} onClose={() => router.back()} />
+      <CreateTripHeader title={meta.isTicket ? 'Billet' : 'Document'} />
 
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: ACTIONS_SPACE + insets.bottom }]} showsVerticalScrollIndicator={false}>
         <View style={styles.titleBlock}>

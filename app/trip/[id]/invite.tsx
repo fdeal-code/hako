@@ -12,7 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Colors, Radii, Shadows, Spacing, Typography } from '@/constants/theme';
-import { CreateTripHeader, SectionLabel, StepTitle, createCardStyles } from '@/components/createTrip/CreateTripChrome';
+import { BackBar, CreateTripHeader, SectionLabel, StepTitle, createCardStyles } from '@/components/createTrip/CreateTripChrome';
 import { MemberAvatar } from '@/components/ui/MemberAvatar';
 import { EmailIssue, useTripInvite } from '@/hooks/useTripInvite';
 import { InvitationStatus } from '@/services/invitationService';
@@ -46,9 +46,9 @@ export default function InviteScreen() {
 
   return (
     <KeyboardAvoidingView style={[styles.root, { paddingTop: insets.top }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <CreateTripHeader title="Inviter des amis" onClose={() => router.back()} />
+      <CreateTripHeader title="Inviter des amis" />
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + Spacing.xl }]}
+        contentContainerStyle={[styles.content, { paddingBottom: Spacing.xl }]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
@@ -182,6 +182,7 @@ export default function InviteScreen() {
           </View>
         ) : null}
       </ScrollView>
+      <BackBar onBack={() => router.back()} bottomInset={insets.bottom} />
     </KeyboardAvoidingView>
   );
 }

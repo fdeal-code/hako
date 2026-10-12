@@ -54,7 +54,7 @@ export default function PrintAlbumScreen() {
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
-      <CreateTripHeader title="Album imprimé" onClose={() => router.back()} />
+      <CreateTripHeader title="Album imprimé" />
 
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: ACTIONS_SPACE + insets.bottom }]} showsVerticalScrollIndicator={false}>
         <View style={styles.titleBlock}>

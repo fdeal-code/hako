@@ -65,7 +65,7 @@ export default function MatchCreateScreen() {
 
   return (
     <KeyboardAvoidingView style={[styles.root, { paddingTop: insets.top }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <CreateTripHeader title="Trip Match" onClose={() => router.back()} />
+      <CreateTripHeader title="Trip Match" />
 
       <View style={styles.body}>
         <StepTitle title="On part où ?" subtitle="6 questions chacun, et l’IA trouve la destination qui met tout le monde d’accord." />

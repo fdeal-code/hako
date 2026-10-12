@@ -141,7 +141,7 @@ export default function LoginScreen() {
 
   return (
     <KeyboardAvoidingView style={[styles.root, { paddingTop: insets.top }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <CreateTripHeader title={signin ? 'Connexion' : 'Inscription'} onClose={() => switchTo('welcome')} />
+      <CreateTripHeader title={signin ? 'Connexion' : 'Inscription'} />
       {!signin && <ProgressSegments total={SIGNUP_STEPS} current={step} />}
 
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>

@@ -108,9 +108,6 @@ export default function ActivityScreen() {
             : <View style={[StyleSheet.absoluteFill, styles.heroEmpty]} />}
           <View style={styles.heroDim} />
           <View style={[styles.heroContent, { paddingTop: insets.top + Spacing.sm }]}>
-            <TouchableOpacity style={styles.closeBtn} onPress={() => router.back()} accessibilityLabel="Fermer">
-              <Ionicons name="close" size={22} color={Colors.textPrimary} />
-            </TouchableOpacity>
             <View>
               <Text style={styles.heroWord} numberOfLines={1} adjustsFontSizeToFit>{word}</Text>
               <View style={styles.heroMeta}>
@@ -309,11 +306,7 @@ const styles = StyleSheet.create({
   hero: { height: HERO_HEIGHT, overflow: 'hidden' },
   heroEmpty: { backgroundColor: Colors.primary },
   heroDim: { ...StyleSheet.absoluteFill, backgroundColor: Colors.overlay },
-  heroContent: { flex: 1, paddingHorizontal: Spacing.md2, paddingBottom: Spacing.xl + Spacing.sm, justifyContent: 'space-between' },
-  closeBtn: {
-    alignSelf: 'flex-end', width: 48, height: 48, borderRadius: Radii.full,
-    backgroundColor: Colors.background, alignItems: 'center', justifyContent: 'center', ...Shadows.lg,
-  },
+  heroContent: { flex: 1, paddingHorizontal: Spacing.md2, paddingBottom: Spacing.xl + Spacing.sm, justifyContent: 'flex-end' },
   heroWord: { fontFamily: Fonts.displayBold, fontSize: 80, lineHeight: 92, color: Colors.white, opacity: 0.88 },
   heroMeta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.sm },
   badge: {

@@ -72,7 +72,7 @@ export default function WishFiltersScreen() {
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
-      <CreateTripHeader title="Filtres" onClose={() => router.back()} />
+      <CreateTripHeader title="Filtres" />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.titleRow}>
           <View style={styles.flex}><StepTitle title="On cherche quoi ?" /></View>

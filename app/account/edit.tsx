@@ -29,7 +29,7 @@ export default function EditProfileScreen() {
 
   return (
     <KeyboardAvoidingView style={[styles.root, { paddingTop: insets.top }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <CreateTripHeader title="Mon profil" onClose={() => router.back()} />
+      <CreateTripHeader title="Mon profil" />
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         <StepTitle title="Modifier le profil" subtitle="Ce que voient tes potes dans les voyages." />
 

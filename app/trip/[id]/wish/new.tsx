@@ -73,7 +73,7 @@ export default function NewWishScreen() {
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
-      <CreateTripHeader title="Nouvelle envie" onClose={() => router.back()} />
+      <CreateTripHeader title="Nouvelle envie" />
 
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView

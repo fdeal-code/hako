@@ -10,6 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Colors, Radii, Shadows, Spacing, Typography } from '@/constants/theme';
+import { BackBar } from '@/components/createTrip/CreateTripChrome';
 import { useInbox } from '@/hooks/useInbox';
 import { FriendRequest, PendingInvitation } from '@/types/inbox';
 import { AppNotification, TripActivityNotification, isTripActivity } from '@/types/notifications';
@@ -17,7 +18,7 @@ import { AppNotification, TripActivityNotification, isTripActivity } from '@/typ
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
 const LEAD_SIZE = 40;
-const CLOSE_SIZE = 56;
+const HEADER_HEIGHT = 56;
 const UNREAD_DOT = 8;
 const MONTHS_SHORT = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
 
@@ -152,12 +153,9 @@ export default function NotificationsScreen() {
 
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Notifications</Text>
-        <TouchableOpacity style={styles.closeBtn} onPress={() => router.back()} activeOpacity={0.85} accessibilityLabel="Fermer">
-          <Ionicons name="close" size={24} color={Colors.textPrimary} />
-        </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + Spacing.xl }]} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: Spacing.xl }]} showsVerticalScrollIndicator={false}>
         {todoCount > 0 && (
           <View style={styles.section}>
             <View style={styles.sectionRow}>
@@ -231,6 +229,7 @@ export default function NotificationsScreen() {
           <Text style={styles.settingsText}>Réglages des notifications</Text>
         </TouchableOpacity>
       </ScrollView>
+      <BackBar onBack={() => router.back()} bottomInset={insets.bottom} />
     </View>
   );
 }
@@ -239,14 +238,9 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.background },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: Spacing.md2, marginTop: Spacing.sm,
+    minHeight: HEADER_HEIGHT, paddingHorizontal: Spacing.md2, marginTop: Spacing.sm,
   },
   headerTitle: { ...Typography.headerSmall, color: Colors.textMuted },
-  closeBtn: {
-    width: CLOSE_SIZE, height: CLOSE_SIZE, borderRadius: Radii.full,
-    borderWidth: 1, borderColor: Colors.primary, backgroundColor: Colors.background,
-    alignItems: 'center', justifyContent: 'center', ...Shadows.md,
-  },
   content: { paddingHorizontal: Spacing.md2, paddingTop: Spacing.lg, gap: Spacing.lg },
   section: { gap: Spacing.sm2 - 2 },
   sectionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },

@@ -12,7 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Colors, Radii, Shadows, Spacing, Typography } from '@/constants/theme';
-import { CreateTripHeader, StepTitle, createCardStyles } from '@/components/createTrip/CreateTripChrome';
+import { BackBar, CreateTripHeader, StepTitle, createCardStyles } from '@/components/createTrip/CreateTripChrome';
 import { MemberAvatar } from '@/components/ui/MemberAvatar';
 import { useAddFriend } from '@/hooks/useAddFriend';
 
@@ -32,9 +32,9 @@ export default function AddFriendScreen() {
 
   return (
     <KeyboardAvoidingView style={[styles.root, { paddingTop: insets.top }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <CreateTripHeader title="Ajouter un ami" onClose={() => router.back()} />
+      <CreateTripHeader title="Ajouter un ami" />
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + Spacing.xl }]}
+        contentContainerStyle={[styles.content, { paddingBottom: Spacing.xl }]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
@@ -106,6 +106,7 @@ export default function AddFriendScreen() {
           </Animated.View>
         )}
       </ScrollView>
+      <BackBar onBack={() => router.back()} bottomInset={insets.bottom} />
     </KeyboardAvoidingView>
   );
 }

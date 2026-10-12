@@ -48,7 +48,7 @@ export default function NewExpenseScreen() {
 
   return (
     <KeyboardAvoidingView style={[styles.root, { paddingTop: insets.top }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <CreateTripHeader title="Nouvelle dépense" onClose={() => router.back()} />
+      <CreateTripHeader title="Nouvelle dépense" />
       <ProgressSegments total={EXPENSE_STEPS} current={x.step} />
 
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>

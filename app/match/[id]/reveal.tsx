@@ -38,7 +38,7 @@ export default function MatchRevealScreen() {
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
-      <CreateTripHeader title="Trip Match" onClose={() => router.back()} />
+      <CreateTripHeader title="Trip Match" />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <StepTitle title="Votre match de groupe" subtitle="Ce qui vous rassemble, et là où il faudra négocier." />

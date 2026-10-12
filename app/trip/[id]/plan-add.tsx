@@ -57,7 +57,7 @@ export default function PlanAddScreen() {
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
-      <CreateTripHeader title="Au planning" onClose={() => router.back()} />
+      <CreateTripHeader title="Au planning" />
 
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView

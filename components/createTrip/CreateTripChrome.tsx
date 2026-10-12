@@ -10,26 +10,19 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors, Motion, Radii, Shadows, Spacing, Typography } from '@/constants/theme';
 import { AnimatedPressable } from '@/components/ui/AnimatedPressable';
 
-const CLOSE_SIZE = 56;
+const HEADER_HEIGHT = 56; // hauteur de l'ancien bouton croix : la mise en page ne bouge pas
 const ACTION_SIZE = 64;
 const SEGMENT_HEIGHT = 4;
 const SEGMENT_GAP = 6;
 const CTA_MIN_WIDTH = 207;
 
 // ─── En-tête ─────────────────────────────────────────────────────────────────
-export function CreateTripHeader({ onClose, title = 'Nouveau voyage' }: { onClose: () => void; title?: string }) {
+// Titre seul : on revient en arrière avec la flèche en bas (StepActions ou
+// BackBar), jamais avec une croix en haut — une seule action pour sortir.
+export function CreateTripHeader({ title = 'Nouveau voyage' }: { title?: string }) {
   return (
     <View style={styles.header}>
       <Text style={styles.headerTitle}>{title}</Text>
-      <AnimatedPressable
-        style={styles.closeBtn}
-        onPress={onClose}
-        scaleTo={Motion.pressScaleSmall}
-        accessibilityRole="button"
-        accessibilityLabel="Fermer"
-      >
-        <Ionicons name="close" size={24} color={Colors.textPrimary} />
-      </AnimatedPressable>
     </View>
   );
 }
@@ -123,6 +116,25 @@ export function StepActions({
   );
 }
 
+// ─── Barre du bas avec seulement la flèche retour ────────────────────────────
+// Pages sans action principale (réglages, invitations…) : même place et même
+// bouton que la flèche de StepActions.
+export function BackBar({ onBack, bottomInset }: { onBack: () => void; bottomInset: number }) {
+  return (
+    <View style={[styles.actions, { paddingBottom: Math.max(bottomInset, Spacing.md) }]}>
+      <AnimatedPressable
+        style={styles.backBtn}
+        onPress={onBack}
+        scaleTo={Motion.pressScaleSmall}
+        accessibilityRole="button"
+        accessibilityLabel="Retour"
+      >
+        <Ionicons name="caret-back" size={22} color={Colors.textPrimary} />
+      </AnimatedPressable>
+    </View>
+  );
+}
+
 // ─── Styles partagés des cartes blanches (champs, listes) ────────────────────
 export const createCardStyles = StyleSheet.create({
   whiteCard: {
@@ -157,23 +169,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    minHeight: HEADER_HEIGHT,
     paddingHorizontal: Spacing.md2,
     marginTop: Spacing.sm,
   },
   headerTitle: {
     ...Typography.headerSmall,
     color: Colors.textMuted,
-  },
-  closeBtn: {
-    width: CLOSE_SIZE,
-    height: CLOSE_SIZE,
-    borderRadius: Radii.full,
-    borderWidth: 1,
-    borderColor: Colors.primary,
-    backgroundColor: Colors.background,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...Shadows.md,
   },
   segments: {
     flexDirection: 'row',

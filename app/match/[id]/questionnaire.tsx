@@ -98,7 +98,7 @@ export default function MatchQuestionnaireScreen() {
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
-      <CreateTripHeader title={`Trip Match · ${q.step}/${q.totalSteps}`} onClose={() => router.back()} />
+      <CreateTripHeader title={`Trip Match · ${q.step}/${q.totalSteps}`} />
       <ProgressSegments total={q.totalSteps} current={q.step} />
 
       {/* ── Question courante (slide + fade) ── */}

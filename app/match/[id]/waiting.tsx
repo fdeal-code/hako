@@ -46,7 +46,7 @@ export default function MatchWaitingScreen() {
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
-      <CreateTripHeader title="Trip Match" onClose={() => router.back()} />
+      <CreateTripHeader title="Trip Match" />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <StepTitle

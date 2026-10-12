@@ -136,7 +136,7 @@ export default function AddDocumentScreen() {
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
-      <CreateTripHeader title="Nouveau document" onClose={() => router.back()} />
+      <CreateTripHeader title="Nouveau document" />
 
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: ACTIONS_SPACE + insets.bottom }]}

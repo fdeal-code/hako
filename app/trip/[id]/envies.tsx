@@ -459,9 +459,6 @@ function DetailSheet({
               : <View style={[StyleSheet.absoluteFill, dv.heroEmpty]} />}
             <View style={dv.heroDim} />
             <View style={[dv.heroContent, { paddingTop: insets.top + Spacing.sm }]}>
-              <TouchableOpacity style={dv.closeBtn} onPress={onClose} activeOpacity={0.85} accessibilityLabel="Fermer">
-                <Ionicons name="close" size={22} color={Colors.textPrimary} />
-              </TouchableOpacity>
               <View>
                 <Text style={dv.heroWord} adjustsFontSizeToFit numberOfLines={1}>{heroWord}</Text>
                 <View style={dv.heroMeta}>
@@ -1541,11 +1538,7 @@ const dv = StyleSheet.create({
   hero: { height: DETAIL_HERO_HEIGHT, overflow: 'hidden' },
   heroEmpty: { backgroundColor: Colors.primary },
   heroDim: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.34)' },
-  heroContent: { flex: 1, paddingHorizontal: Spacing.md2, paddingBottom: Spacing.xl + Spacing.sm, justifyContent: 'space-between' },
-  closeBtn: {
-    alignSelf: 'flex-end', width: 48, height: 48, borderRadius: Radii.full,
-    backgroundColor: Colors.background, alignItems: 'center', justifyContent: 'center', ...Shadows.lg,
-  },
+  heroContent: { flex: 1, paddingHorizontal: Spacing.md2, paddingBottom: Spacing.xl + Spacing.sm, justifyContent: 'flex-end' },
   heroWord: { fontFamily: Fonts.displayBold, fontSize: 88, lineHeight: 100, color: 'rgba(255,255,255,0.85)' },
   heroMeta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.sm },
   badge: {
