@@ -21,7 +21,7 @@ type EventName =
   | 'invite_link_shared' | 'invite_email_sent'
   | 'wish_added' | 'wish_voted' | 'planning_added' | 'expense_added' | 'document_added'
   | 'prep_task_added' | 'booking_import_parsed' | 'booking_import_saved' | 'booking_import_failed'
-  | 'share_received' | 'match_created';
+  | 'share_received' | 'match_created' | 'partner_opened';
 
 interface QueuedEvent {
   name: string;

@@ -17,6 +17,7 @@ import { PREP_STRIP_HEIGHT, PrepStrip } from '@/components/preparation/PrepParts
 import { MapEmptyState } from '@/components/map/MapEmptyState';
 import { StopMarkers } from '@/components/map/StopMarkers';
 import { useFutureDashboard } from '@/hooks/useFutureDashboard';
+import { useLodgingGaps } from '@/hooks/useLodgingGaps';
 import { TripStop } from '@/types/tripStops';
 import { Region } from '@/utils/mapRegion';
 import { balanceLabel, formatEuros, plural } from '@/utils/dashboardSummary';
@@ -59,12 +60,13 @@ export function FutureBento({
     ? TILE_HEIGHT
     : Math.max(TILE_MIN_HEIGHT, Math.min(TILE_HEIGHT, Math.floor((tilesHeight - ROW_GAP * (ROWS - 1)) / ROWS)));
   const { recentDocTitles, docCount, wishCount, toVoteCount, budget, plannedCount } = useFutureDashboard(tripId);
+  const lodgingGap = useLodgingGaps(tripId).gaps[0] ?? null; // logement à proposer au bon moment
   const moreDocs = docCount - recentDocTitles.length;
   const hasLocatedStops = stops.some(s => s.lat !== null && s.lng !== null);
 
   return (
     <View style={styles.wrap}>
-      {showPrep && <PrepStrip tripId={tripId} />}
+      {showPrep && <PrepStrip tripId={tripId} startDate={startDate} />}
 
       {/* Documents + Planning */}
       <View style={styles.row}>
@@ -164,7 +166,11 @@ export function FutureBento({
         <HelpTile
           height={tileHeight}
           stopCount={stops.length}
-          onOpen={tab => router.push({ pathname: '/trip/[id]/help', params: { id: tripId, tab } })}
+          lodgingGapCity={lodgingGap?.place_name ?? null}
+          onOpen={tab => router.push({
+            pathname: '/trip/[id]/help',
+            params: tab === 'lodging' && lodgingGap ? { id: tripId, tab, stop: lodgingGap.id } : { id: tripId, tab },
+          })}
         />
         <GlassCard flex={1} height={tileHeight} onPress={() => router.push(`/trip/${tripId}/budget`)}>
           {budget.expenseCount === 0 ? (

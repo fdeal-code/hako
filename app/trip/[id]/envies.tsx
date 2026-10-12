@@ -38,6 +38,8 @@ import { tripEvents } from '@/utils/events';
 import { buildWishVoteReminderUrl } from '@/utils/shareLinks';
 import { useTripStops } from '@/hooks/useTripStops';
 import { useWishFilters } from '@/hooks/useWishFilters';
+import { openPartner } from '@/services/partnerService';
+import { ticketLinks } from '@/utils/affiliateLinks';
 import { track } from '@/services/telemetryService';
 import { PrepPill } from '@/components/preparation/PrepParts';
 import { activeFilterCount, compareWishes, matchesWishFilters } from '@/utils/wishFilters';
@@ -125,6 +127,8 @@ const CATEGORY_LABEL: Record<Category, string> = {
   restaurant: 'Resto', monument: 'Monument', cafe: 'Café', hotel: 'Logement', activity: 'Activité',
   photo: 'Spot photo', photo_spot: 'Spot photo', bar: 'Bar', other: 'Lieu',
 };
+const NO_TICKET_CATEGORIES: readonly string[] = ['hotel', 'restaurant', 'cafe', 'bar']; // pas de billets à proposer
+const TICKET_ICON = 36;
 const INSPIRATION_WIDTH_RATIO = 0.72; // la carte suivante dépasse : on comprend qu'on peut glisser
 const DETAIL_ACTIONS_SPACE = 120; // barre d'actions fixe de la fiche détail
 const WEEKDAY_SHORT = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
@@ -399,6 +403,8 @@ function DetailSheet({
 
   const isBooked = !!wish.booked_at;
   const canBook = isValidated && !isOrga && (isLodging || !!wish.link_url);
+  // Visites et activités validées : on propose les billets chez les partenaires
+  const needsTickets = isValidated && !isBooked && !isOrga && !NO_TICKET_CATEGORIES.includes(wish.category ?? 'other');
   const bookedByName = wish.booked_by === currentUserId
     ? 'toi'
     : tripMembers.find(m => m.user_id === wish.booked_by)?.nickname ?? 'un membre';
@@ -512,6 +518,28 @@ function DetailSheet({
                 <TouchableOpacity onPress={cancelBooking} hitSlop={8}>
                   <Text style={dv.bookedCancel}>Annuler</Text>
                 </TouchableOpacity>
+              </View>
+            )}
+            {/* Billets au bon moment : l'activité est validée, il reste à réserver */}
+            {needsTickets && (
+              <View style={dv.section}>
+                <Text style={dv.sectionLabel}>BESOIN DE BILLETS ?</Text>
+                {ticketLinks(wish.title, cityName, null).map(link => (
+                  <TouchableOpacity
+                    key={link.id}
+                    style={dv.ticketRow}
+                    onPress={() => openPartner(link.url, link.id, 'wish_tickets', wish.trip_id)}
+                    activeOpacity={0.85}
+                    accessibilityRole="link"
+                  >
+                    <View style={dv.ticketIcon}><Ionicons name={link.icon} size={18} color={Colors.textInk} /></View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={dv.ticketName}>{link.name}</Text>
+                      <Text style={dv.ticketTagline}>{link.tagline}</Text>
+                    </View>
+                    <Ionicons name="open-outline" size={16} color={Colors.textMuted} />
+                  </TouchableOpacity>
+                ))}
               </View>
             )}
             {canBook && !isBooked && (
@@ -1610,6 +1638,13 @@ const dv = StyleSheet.create({
   linkTitle: { flex: 1, ...Typography.cardTitle, color: Colors.textInk },
   linkSource: { ...Typography.bodySmall, color: Colors.textMuted },
   section: { gap: Spacing.sm2 - 2 },
+  ticketRow: {
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.sm2, padding: Spacing.sm2,
+    borderRadius: Radii.lg, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.borderDark,
+  },
+  ticketIcon: { width: TICKET_ICON, height: TICKET_ICON, borderRadius: Radii.full, backgroundColor: Colors.background, alignItems: 'center', justifyContent: 'center' },
+  ticketName: { ...Typography.rowTitle, color: Colors.textInk },
+  ticketTagline: { ...Typography.bodySmall, color: Colors.textMuted },
   sectionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   sectionLabel: { ...Typography.displayLabel, color: Colors.textPrimary },
   sectionRight: { fontSize: 12, fontWeight: '600', color: Colors.accent },

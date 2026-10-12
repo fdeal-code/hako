@@ -13,6 +13,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Colors, Spacing, Typography } from '@/constants/theme';
 import { ArrivalBanner, DayChip, EntryRow, StopLegend, ToPlanRow } from '@/components/planning/PlanningParts';
+import { LodgingNudge } from '@/components/partners/LodgingNudge';
+import { useLodgingGaps } from '@/hooks/useLodgingGaps';
+import { stopForNight } from '@/utils/lodgingGaps';
 import { FilterButton } from '@/components/ui/FilterButton';
 import { NavButton } from '@/components/ui/NavButton';
 import { usePlanning } from '@/hooks/usePlanning';
@@ -43,6 +46,10 @@ export default function PlanningScreen() {
   }>();
   const insets = useSafeAreaInsets();
   const p = usePlanning(tripId, highlightDay);
+  // Logement à proposer si l'étape de la nuit du jour choisi n'en a pas
+  const { gaps } = useLodgingGaps(tripId ?? '');
+  const nightStop = stopForNight(p.stops, p.selectedDay);
+  const nightGap = nightStop && gaps.some(g => g.id === nightStop.id) ? nightStop : null;
   const [showFilters, setShowFilters] = useState(false);
   const [filter, setFilter] = useState<Filter>('all');
   const daysRef = useRef<ScrollView>(null);
@@ -121,6 +128,7 @@ export default function PlanningScreen() {
       {/* ── La journée ── */}
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + NAV_SPACE }]} showsVerticalScrollIndicator={false}>
         <Text style={styles.dayHeader}>{p.header}</Text>
+        {nightGap && <View style={styles.nudge}><LodgingNudge tripId={tripId ?? ''} stop={nightGap} /></View>}
 
         {!p.data && p.error ? (
           <View style={styles.empty}>
@@ -179,6 +187,7 @@ export default function PlanningScreen() {
 }
 
 const styles = StyleSheet.create({
+  nudge: { marginBottom: Spacing.sm2 },
   root: { flex: 1, backgroundColor: Colors.background },
   header: { paddingTop: Spacing.md, gap: Spacing.sm2 },
   title: { paddingHorizontal: Spacing.md2, ...Typography.displayTitle, color: Colors.textPrimary },

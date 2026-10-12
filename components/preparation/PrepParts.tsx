@@ -7,7 +7,6 @@ import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { router } from 'expo-router';
 import Animated, { FadeIn, FadeInDown, LinearTransition, ZoomIn } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
-import * as WebBrowser from 'expo-web-browser';
 
 import { Colors, Motion, Radii, Shadows, Spacing, Typography } from '@/constants/theme';
 import { AnimatedPressable } from '@/components/ui/AnimatedPressable';
@@ -16,13 +15,16 @@ import { usePrepSummary } from '@/hooks/usePrepSummary';
 import { ChecklistItemDef } from '@/types/checklist';
 import { PrepMember, PrepTask } from '@/types/preparation';
 import { checklistPartnerUrl } from '@/utils/affiliateLinks';
+import { openPartner } from '@/services/partnerService';
 import { prepSummaryLabel } from '@/utils/preparation';
+import { localDayIso, nightsBetween } from '@/utils/tripStops';
 
 const CHECK = 26;
 const AVATAR = 28;
 const PICK_AVATAR = 36;
 const STRIP_ICON = 36;
 export const PREP_STRIP_HEIGHT = 60;
+const ESIM_REMINDER_DAYS = 7;
 const PILL_BADGE = 18;
 
 // ─── Case à cocher ronde ─────────────────────────────────────────────────────
@@ -44,18 +46,34 @@ function Check({ done, onPress, label }: { done: boolean; onPress: () => void; l
 }
 
 // ─── Essentiel (papiers, billets, logements, eSIM, assurance) ────────────────
-export function EssentialRow({ item, done, onToggle, border }: { item: ChecklistItemDef; done: boolean; onToggle: () => void; border: boolean }) {
+interface EssentialRowProps {
+  item: ChecklistItemDef;
+  done: boolean;
+  onToggle: () => void;
+  border: boolean;
+  /** Remplace l'aide sous le titre (ex. « Manque : Kyoto, Osaka ») */
+  hint?: string;
+  /** Bouton d'action à droite tant que ce n'est pas coché (ex. « Trouver ») */
+  action?: { label: string; onPress: () => void };
+  tripId?: string;
+}
+
+export function EssentialRow({ item, done, onToggle, border, hint, action, tripId }: EssentialRowProps) {
   return (
     <View style={[styles.row, border && styles.rowBorder]}>
       <Check done={done} onPress={onToggle} label={item.label} />
       <View style={styles.flex}>
         <Text style={[styles.rowTitle, done && styles.rowTitleDone]}>{item.label}</Text>
-        <Text style={styles.rowSub} numberOfLines={1}>{item.hint}</Text>
+        <Text style={[styles.rowSub, !done && hint ? styles.rowSubAlert : null]} numberOfLines={1}>{!done && hint ? hint : item.hint}</Text>
       </View>
-      {!done && item.partner ? (
+      {!done && action ? (
+        <TouchableOpacity style={styles.partner} onPress={action.onPress} activeOpacity={0.85}>
+          <Text style={styles.partnerText}>{action.label}</Text>
+        </TouchableOpacity>
+      ) : !done && item.partner ? (
         <TouchableOpacity
           style={styles.partner}
-          onPress={() => { if (item.partner) void WebBrowser.openBrowserAsync(checklistPartnerUrl(item.partner)); }}
+          onPress={() => { if (item.partner) openPartner(checklistPartnerUrl(item.partner), item.partner, 'preparation', tripId); }}
           activeOpacity={0.85}
         >
           <Text style={styles.partnerText}>{item.partner === 'esim' ? 'Voir les eSIM' : 'Comparer'}</Text>
@@ -199,11 +217,15 @@ export function PrepPill({ tripId, compact = false }: { tripId: string; compact?
 }
 
 // ─── Bande résumé (dashboard, Documents) ─────────────────────────────────────
-export function PrepStrip({ tripId, hideWhenDone = false }: { tripId: string; hideWhenDone?: boolean }) {
+export function PrepStrip({ tripId, startDate = null, hideWhenDone = false }: { tripId: string; startDate?: string | null; hideWhenDone?: boolean }) {
   const s = usePrepSummary(tripId);
   if (!s) return <View style={styles.stripPlaceholder} />;
   const allDone = s.openTasks === 0 && s.essentialsDone >= s.essentialsTotal;
   if (hideWhenDone && s.openTasks === 0) return null;
+  // Rappel eSIM dans les derniers jours avant le départ, si elle n'est pas cochée
+  const today = localDayIso(new Date());
+  const daysLeft = startDate && startDate >= today ? nightsBetween(today, startDate) : null;
+  const esimReminder = !s.esimDone && daysLeft !== null && daysLeft <= ESIM_REMINDER_DAYS;
 
   return (
     <AnimatedPressable
@@ -218,10 +240,25 @@ export function PrepStrip({ tripId, hideWhenDone = false }: { tripId: string; hi
       <View style={styles.flex}>
         <Text style={styles.stripTitle}>PRÉPARATIFS</Text>
         <Text style={styles.stripSub} numberOfLines={1}>
-          {s.myOpenTasks > 0 ? `${s.myOpenTasks} pour toi · ` : ''}{prepSummaryLabel(s.openTasks, s.essentialsDone, s.essentialsTotal)}
+          {esimReminder
+            ? `Départ ${daysLeft === 0 ? 'aujourd’hui' : `dans ${daysLeft} j`} : pense à ta eSIM`
+            : `${s.myOpenTasks > 0 ? `${s.myOpenTasks} pour toi · ` : ''}${prepSummaryLabel(s.openTasks, s.essentialsDone, s.essentialsTotal)}`}
         </Text>
       </View>
-      <Ionicons name="chevron-forward" size={18} color={Colors.white} />
+      {esimReminder ? (
+        <TouchableOpacity
+          style={styles.esimChip}
+          onPress={() => openPartner(checklistPartnerUrl('esim'), 'esim', 'esim_reminder', tripId)}
+          activeOpacity={0.85}
+          accessibilityRole="link"
+          accessibilityLabel="Voir les eSIM"
+        >
+          <Ionicons name="cellular-outline" size={14} color={Colors.textPrimary} />
+          <Text style={styles.esimText}>eSIM</Text>
+        </TouchableOpacity>
+      ) : (
+        <Ionicons name="chevron-forward" size={18} color={Colors.white} />
+      )}
     </AnimatedPressable>
   );
 }
@@ -233,6 +270,7 @@ const styles = StyleSheet.create({
   rowTitle: { ...Typography.rowTitle, color: Colors.textInk },
   rowTitleDone: { color: Colors.textSecondary, textDecorationLine: 'line-through' },
   rowSub: { ...Typography.bodySmall, color: Colors.textMuted },
+  rowSubAlert: { color: Colors.accent, fontWeight: '600' },
   check: {
     width: CHECK, height: CHECK, borderRadius: Radii.full, borderWidth: 2, borderColor: Colors.borderDark,
     alignItems: 'center', justifyContent: 'center',
@@ -293,4 +331,9 @@ const styles = StyleSheet.create({
   stripIconDone: { backgroundColor: Colors.positive },
   stripTitle: { ...Typography.displayLabel, color: Colors.white },
   stripSub: { ...Typography.bodySmall, color: Colors.textOnDark },
+  esimChip: {
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.xs,
+    paddingHorizontal: Spacing.sm2, paddingVertical: Spacing.xs + 2, borderRadius: Radii.full, backgroundColor: Colors.background,
+  },
+  esimText: { ...Typography.chip, color: Colors.textPrimary },
 });

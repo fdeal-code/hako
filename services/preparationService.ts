@@ -97,6 +97,7 @@ export async function getPrepSummary(tripId: string, userId: string): Promise<Se
   return {
     data: {
       essentialsDone: new Set(((checklist.data ?? []) as { item: string }[]).map(r => r.item)).size,
+      esimDone: ((checklist.data ?? []) as { item: string }[]).some(r => r.item === 'esim'),
       essentialsTotal: CHECKLIST_ITEMS.length,
       openTasks: openRows.length,
       myOpenTasks: openRows.filter(r => r.assigned_to === userId || (r.is_private && r.added_by === userId)).length,

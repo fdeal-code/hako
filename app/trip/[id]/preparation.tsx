@@ -18,6 +18,7 @@ import { Colors, Motion, Radii, Shadows, Spacing, Typography } from '@/constants
 import { BackBar, CreateTripHeader, SectionLabel, StepTitle, createCardStyles } from '@/components/createTrip/CreateTripChrome';
 import { EssentialRow, TaskRow, VisibilityToggle } from '@/components/preparation/PrepParts';
 import { AnimatedPressable } from '@/components/ui/AnimatedPressable';
+import { useLodgingGaps } from '@/hooks/useLodgingGaps';
 import { usePreparation } from '@/hooks/usePreparation';
 import { useTripOverview } from '@/hooks/useTripOverview';
 import { CHECKLIST_ITEMS } from '@/types/checklist';
@@ -36,6 +37,8 @@ export default function PreparationScreen() {
   const tripId = id ?? '';
   const insets = useSafeAreaInsets();
   const p = usePreparation(tripId);
+  const { gaps } = useLodgingGaps(tripId);
+  const firstGap = gaps[0] ?? null;
   const { overview } = useTripOverview(tripId);
   const [title, setTitle] = useState('');
   const [showDone, setShowDone] = useState(false);
@@ -190,6 +193,13 @@ export default function PreparationScreen() {
                 done={p.essentialsDone.has(item.key)}
                 onToggle={() => { void p.toggleEssential(item.key); }}
                 border={i > 0}
+                tripId={tripId}
+                // Logements : on dit où il en manque et on ouvre la bonne étape
+                hint={item.key === 'lodging' && gaps.length > 0 ? `Manque : ${gaps.map(g => g.place_name).join(', ')}` : undefined}
+                action={item.key === 'lodging' && firstGap ? {
+                  label: 'Trouver',
+                  onPress: () => router.push({ pathname: '/trip/[id]/help', params: { id: tripId, tab: 'lodging', stop: firstGap.id } }),
+                } : undefined}
               />
             ))}
           </View>

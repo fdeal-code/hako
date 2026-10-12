@@ -233,7 +233,7 @@ export default function DocumentsScreen() {
 
       {/* Préparatifs (essentiels + tâches du groupe) — tant que le voyage n'est pas terminé */}
       {tripId && (!trip?.end_date || trip.end_date >= todayIso()) && (
-        <View style={s.prepStrip}><PrepStrip tripId={tripId} /></View>
+        <View style={s.prepStrip}><PrepStrip tripId={tripId} startDate={trip?.start_date ?? null} /></View>
       )}
 
       {/* List */}

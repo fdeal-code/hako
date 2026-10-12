@@ -115,6 +115,29 @@ export function partnerLinks(kind: PartnerKind, search: PartnerSearch): PartnerL
   ];
 }
 
+/**
+ * Billets pour une envie validée (visite, activité) : recherche de l'activité
+ * elle-même dans la ville de l'étape, à la date prévue si on la connaît.
+ */
+export function ticketLinks(activity: string, city: string | null, day: string | null): PartnerLink[] {
+  const env = process.env;
+  const query = [activity, city].filter(Boolean).join(' ');
+  return [
+    {
+      id: 'getyourguide', name: 'GetYourGuide', kind: 'activities', icon: 'ticket-outline',
+      tagline: 'Billets, coupe-files et visites guidées',
+      url: withParams('https://www.getyourguide.com/s/', {
+        q: query, date_from: day, date_to: day, partner_id: env.EXPO_PUBLIC_GETYOURGUIDE_PARTNER_ID ?? null,
+      }),
+    },
+    {
+      id: 'viator', name: 'Viator', kind: 'activities', icon: 'compass-outline',
+      tagline: 'Excursions et expériences',
+      url: withParams('https://www.viator.com/searchResults/all', { text: query, pid: env.EXPO_PUBLIC_VIATOR_PID ?? null }),
+    },
+  ];
+}
+
 /** eSIM data (checklist « Prêt pour le départ ? »). */
 export function esimUrl(ref?: string | null): string {
   return withParams('https://www.airalo.com/', { ref: ref ?? null });

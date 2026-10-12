@@ -1,5 +1,7 @@
 // HAKO — Dashboard : tuile « On t'aide » (logements + activités)
 // Point d'entrée des suggestions partenaires — utile, jamais une pub.
+// S'il manque un logement sur une étape, la ligne « Logements » le dit
+// (« Rien à Kyoto ») et ouvre directement cette étape.
 
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,6 +16,8 @@ export type HelpTab = 'lodging' | 'activities';
 
 interface HelpTileProps {
   stopCount: number;
+  /** Ville de la première étape sans logement, s'il y en a une */
+  lodgingGapCity?: string | null;
   onOpen: (tab: HelpTab) => void;
   flex?: number;
   height?: number;
@@ -23,22 +27,22 @@ const TILE_HEIGHT = 150;   // maquette « V2 · Dashboard »
 const COMPACT_BELOW = 146; // tuile réduite (petit écran) : lignes resserrées
 const ROW_RADIUS = 14;
 
-function HelpRow({ icon, title, subtitle, compact, onPress }: {
-  icon: IoniconName; title: string; subtitle: string; compact: boolean; onPress: () => void;
+function HelpRow({ icon, title, subtitle, compact, alert = false, onPress }: {
+  icon: IoniconName; title: string; subtitle: string; compact: boolean; alert?: boolean; onPress: () => void;
 }) {
   return (
     <TouchableOpacity style={[styles.row, compact && styles.rowCompact]} onPress={onPress} activeOpacity={0.85} accessibilityRole="button">
       <Ionicons name={icon} size={18} color={Colors.textPrimary} />
       <View style={styles.rowText}>
         <Text style={styles.rowTitle}>{title}</Text>
-        <Text style={styles.rowSub}>{subtitle}</Text>
+        <Text style={[styles.rowSub, alert && styles.rowSubAlert]} numberOfLines={1}>{subtitle}</Text>
       </View>
       <Ionicons name="chevron-forward" size={14} color={Colors.textPrimary} />
     </TouchableOpacity>
   );
 }
 
-export function HelpTile({ stopCount, onOpen, flex = 2, height = TILE_HEIGHT }: HelpTileProps) {
+export function HelpTile({ stopCount, lodgingGapCity, onOpen, flex = 2, height = TILE_HEIGHT }: HelpTileProps) {
   const cities = Math.max(stopCount, 1);
   const compact = height < COMPACT_BELOW;
   return (
@@ -52,7 +56,8 @@ export function HelpTile({ stopCount, onOpen, flex = 2, height = TILE_HEIGHT }: 
           <HelpRow
             icon="bed-outline"
             title="Logements"
-            subtitle={`${cities} ville${cities > 1 ? 's' : ''}`}
+            subtitle={lodgingGapCity ? `Rien de réservé à ${lodgingGapCity}` : `${cities} ville${cities > 1 ? 's' : ''}`}
+            alert={!!lodgingGapCity}
             compact={compact}
             onPress={() => onOpen('lodging')}
           />
@@ -115,5 +120,8 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '500',
     color: Colors.accent,
+  },
+  rowSubAlert: {
+    fontWeight: '700',
   },
 });

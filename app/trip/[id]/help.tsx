@@ -7,7 +7,6 @@ import { useMemo, useState } from 'react';
 import { Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import * as WebBrowser from 'expo-web-browser';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Colors, Radii, Shadows, Spacing, Typography } from '@/constants/theme';
@@ -17,6 +16,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useTripEvents } from '@/hooks/useTripEvents';
 import { useTripOverview } from '@/hooks/useTripOverview';
 import { addEventToWishes } from '@/services/eventsService';
+import { openPartner } from '@/services/partnerService';
 import { TripEvent } from '@/types/events';
 import { useTripStops } from '@/hooks/useTripStops';
 import { TRIP_VIBES } from '@/types/tripStyle';
@@ -51,7 +51,8 @@ function shortDay(day: string): string {
 }
 
 export default function HelpScreen() {
-  const { id, tab } = useLocalSearchParams<{ id: string; tab?: string }>();
+  // stop : ouvre directement l'étape concernée (ex. « pas encore de logement à Kyoto »)
+  const { id, tab, stop: stopParam } = useLocalSearchParams<{ id: string; tab?: string; stop?: string }>();
   const insets = useSafeAreaInsets();
   const { overview } = useTripOverview(id);
   const { stops } = useTripStops(id);
@@ -61,6 +62,9 @@ export default function HelpScreen() {
 
   const [kind, setKind] = useState<PartnerKind>(tab === 'activities' ? 'activities' : 'lodging');
   const [stopIndex, setStopIndex] = useState(0);
+  const wantedIndex = stopParam ? stops.findIndex(s => s.id === stopParam) : -1;
+  const [appliedParam, setAppliedParam] = useState(false);
+  if (!appliedParam && wantedIndex >= 0) { setAppliedParam(true); setStopIndex(wantedIndex); }
 
   const stop = stops[stopIndex] ?? stops[0] ?? null;
   const travelers = overview?.member_count ?? 1;
@@ -202,7 +206,7 @@ export default function HelpScreen() {
           <TouchableOpacity
             key={link.id}
             style={styles.card}
-            onPress={() => { void WebBrowser.openBrowserAsync(link.url); }}
+            onPress={() => openPartner(link.url, link.id, 'help_page', id)}
             activeOpacity={0.85}
             accessibilityRole="link"
           >

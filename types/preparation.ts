@@ -27,4 +27,6 @@ export interface PrepSummary {
   openTasks: number;
   /** Tâches qui m'attendent : assignées à moi ou dans ma liste perso */
   myOpenTasks: number;
+  /** eSIM cochée dans les essentiels */
+  esimDone: boolean;
 }
