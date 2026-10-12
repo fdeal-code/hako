@@ -13,7 +13,7 @@ import { useLocalSearchParams, router, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { Colors, Fonts, Spacing, Radii, Shadows, Typography } from '@/constants/theme';
-import { NavButton } from '@/components/ui/NavButton';
+import { BACK_ICON, NavButton, floatingNavBottom, floatingNavSpace } from '@/components/ui/NavButton';
 import { FutureBento } from '@/components/dashboard/FutureBento';
 import { PastBento } from '@/components/past/PastBento';
 import { NOW_CARD_HEIGHT, NowCard } from '@/components/ongoing/NowCard';
@@ -27,7 +27,6 @@ import { useAuth } from '@/contexts/AuthContext';
 /* ─── Constants ──────────────────────────────────────────────── */
 const AVATAR_COLORS = ['#E8C5A5', '#A5B8E0', '#A8D5B5', '#F0B0B0'];
 const REGION_DELTA = 0.5;
-const NAV_BUTTON_SIZE = 64;    // bouton + accent de la barre du bas
 /* Dashboard V2 (maquette « V2 · Dashboard ») */
 const AVATAR_OVERLAP = -16;
 const NAV_WIDTH = 287;
@@ -97,7 +96,7 @@ export default function DashboardScreen() {
   const mapCardRef = useRef<View>(null);
   /* Tuiles « à venir » : hauteur ajustée pour tenir au-dessus de la barre du bas */
   const [sheetHeight, setSheetHeight] = useState(0);
-  const navReserve = Math.max(insets.bottom, 10) + Spacing.md + NAV_BUTTON_SIZE + Spacing.md;
+  const navReserve = floatingNavSpace(insets.bottom);
 
   /* Trip & members */
   const [trip,    setTrip]    = useState<TripData | null>(null);
@@ -350,11 +349,11 @@ export default function DashboardScreen() {
 
       {/* ── BOTTOM NAV ── */}
       <View
-        style={[styles.bottomNav, { bottom: Math.max(insets.bottom, 10) + 16 }]}
+        style={[styles.bottomNav, { bottom: floatingNavBottom(insets.bottom) }]}
         pointerEvents="box-none"
       >
         <View style={styles.bottomNavInner} pointerEvents="box-none">
-          <NavButton icon="arrow-back-outline" onPress={() => router.back()} />
+          <NavButton icon={BACK_ICON} onPress={() => router.back()} />
           <View style={styles.bottomNavRight}>
             {tripStatus === 'past'
               ? <NavButton icon="share-social-outline" iconSize={24} variant="accent" onPress={past.share} />

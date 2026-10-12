@@ -6,7 +6,7 @@ import { router, Stack } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Colors, Radii, Shadows, Spacing, Typography } from '@/constants/theme';
-import { NavButton } from '@/components/ui/NavButton';
+import { BACK_ICON, NavButton, floatingNavSpace } from '@/components/ui/NavButton';
 import { useNotificationPrefs } from '@/hooks/useNotificationPrefs';
 import { NOTIFICATION_CATEGORIES, NotificationCategoryDef } from '@/types/notificationPrefs';
 
@@ -15,7 +15,6 @@ const SECTIONS: { id: NotificationCategoryDef['section']; label: string }[] = [
   { id: 'digest',  label: 'En résumé' },
   { id: 'silence', label: 'Silence' },
 ];
-const BOTTOM_NAV_SPACE = 110;
 
 export default function NotificationSettingsScreen() {
   const insets = useSafeAreaInsets();
@@ -24,7 +23,7 @@ export default function NotificationSettingsScreen() {
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
       <Stack.Screen options={{ headerShown: false }} />
-      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + BOTTOM_NAV_SPACE }]}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: floatingNavSpace(insets.bottom) }]}>
         <Text style={styles.title}>Notifications</Text>
         <Text style={styles.intro}>Seulement ce qui mérite de te déranger.</Text>
 
@@ -57,7 +56,7 @@ export default function NotificationSettingsScreen() {
       </ScrollView>
 
       <View style={[styles.bottomNav, { paddingBottom: Math.max(insets.bottom, Spacing.md) }]}>
-        <NavButton icon="chevron-back" onPress={() => router.back()} />
+        <NavButton icon={BACK_ICON} onPress={() => router.back()} />
       </View>
     </View>
   );

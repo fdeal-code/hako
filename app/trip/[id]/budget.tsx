@@ -18,7 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors, Fonts, Spacing, Radii, Shadows, Typography } from '@/constants/theme';
 import { supabase } from '@/services/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { NavButton } from '@/components/ui/NavButton';
+import { BACK_ICON, NavButton, floatingNavBottom, floatingNavSpace } from '@/components/ui/NavButton';
 import { FilterButton } from '@/components/ui/FilterButton';
 
 /* ─── Types ──────────────────────────────────────────────────────── */
@@ -210,7 +210,7 @@ export default function BudgetScreen() {
         <ScrollView
           style={{ flex: 1 }}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={[s.scroll, { paddingBottom: insets.bottom + 110 }]}
+          contentContainerStyle={[s.scroll, { paddingBottom: floatingNavSpace(insets.bottom) }]}
         >
           {/* ── Total dépensé ── */}
           <View style={s.totalCard}>
@@ -268,8 +268,8 @@ export default function BudgetScreen() {
       )}
 
       {/* ── Bottom nav ── */}
-      <View style={[s.bottomNav, { bottom: Math.max(insets.bottom, 10) + 16 }]} pointerEvents="box-none">
-        <NavButton icon="arrow-back-outline" onPress={() => router.back()} />
+      <View style={[s.bottomNav, { bottom: floatingNavBottom(insets.bottom) }]} pointerEvents="box-none">
+        <NavButton icon={BACK_ICON} onPress={() => router.back()} />
         <NavButton icon="add" iconSize={28} variant="accent" onPress={openAdd} />
         <NavButton icon="pie-chart-outline" onPress={openBalance} />
       </View>

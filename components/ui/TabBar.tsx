@@ -7,6 +7,7 @@ import Animated, { useAnimatedStyle, interpolate } from 'react-native-reanimated
 
 import { NavButton } from './NavButton';
 import { useHomeExpand } from '@/contexts/HomeExpandContext';
+import { floatingNavBottom } from '@/components/ui/NavButton';
 
 /* ─── Config des onglets ─────────────────────────────────────── */
 const TABS = {
@@ -41,7 +42,7 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
 
   return (
     <View
-      style={[styles.wrapper, { bottom: Math.max(insets.bottom, 10) + 16 }]}
+      style={[styles.wrapper, { bottom: floatingNavBottom(insets.bottom) }]}
       pointerEvents="box-none"
     >
       {/*

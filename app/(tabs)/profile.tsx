@@ -15,13 +15,13 @@ import { SectionLabel, createCardStyles } from '@/components/createTrip/CreateTr
 import { MemberAvatar } from '@/components/ui/MemberAvatar';
 import { useProfile } from '@/hooks/useProfile';
 import { Friend } from '@/services/friendService';
+import { floatingNavSpace } from '@/components/ui/NavButton';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
 
 const AVATAR = 88;
 const FRIEND_AVATAR = 44;
 const ROW_ICON = 36;
-const TAB_BAR_SPACE = 120;
 const APP_VERSION = '1.0.0';
 
 export default function ProfileScreen() {
@@ -50,7 +50,7 @@ export default function ProfileScreen() {
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
-      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + TAB_BAR_SPACE }]} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: floatingNavSpace(insets.bottom) }]} showsVerticalScrollIndicator={false}>
         <Text style={styles.pageTitle}>Profil</Text>
 
         {/* Carte d'identité */}

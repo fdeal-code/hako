@@ -23,7 +23,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { Colors, Fonts, Spacing, Radii, Shadows, Typography } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/services/supabase';
-import { NavButton } from '@/components/ui/NavButton';
+import { BACK_ICON, NavButton, floatingNavBottom, floatingNavSpace } from '@/components/ui/NavButton';
 import { FilterButton } from '@/components/ui/FilterButton';
 import { computeWishStatus, majorityThreshold } from '@/utils/wishVotes';
 import { VoteCard, VoteCardMember } from '@/components/envies/VoteCard';
@@ -130,7 +130,6 @@ const CATEGORY_LABEL: Record<Category, string> = {
 const NO_TICKET_CATEGORIES: readonly string[] = ['hotel', 'restaurant', 'cafe', 'bar']; // pas de billets à proposer
 const TICKET_ICON = 36;
 const INSPIRATION_WIDTH_RATIO = 0.72; // la carte suivante dépasse : on comprend qu'on peut glisser
-const DETAIL_ACTIONS_SPACE = 120; // barre d'actions fixe de la fiche détail
 const WEEKDAY_SHORT = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
 
 interface PlannedSlot { day_date: string; start_time: string | null }
@@ -457,7 +456,7 @@ function DetailSheet({
         <ScrollView
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
-          contentContainerStyle={{ paddingBottom: DETAIL_ACTIONS_SPACE + insets.bottom }}
+          contentContainerStyle={{ paddingBottom: floatingNavSpace(insets.bottom) }}
         >
           {/* ── Hero (maquette « Envie · Détail vote ») ── */}
           <View style={dv.hero}>
@@ -925,7 +924,7 @@ function DetailSheet({
         {/* ── Actions (⟵ · Bof · Partant ! / Ajouter au planning / Fait) ── */}
         <View style={[dv.actions, { paddingBottom: Math.max(insets.bottom, Spacing.md) }]}>
           <TouchableOpacity style={dv.roundBtn} onPress={onClose} activeOpacity={0.85} accessibilityLabel="Retour">
-            <Ionicons name="caret-back" size={22} color={Colors.textPrimary} />
+            <Ionicons name={BACK_ICON} size={24} color={Colors.textPrimary} />
           </TouchableOpacity>
           {canBook && !isBooked && bookingOpen ? (
             <View style={dv.amountRow}>
@@ -1304,7 +1303,7 @@ export default function EnviesScreen() {
         <ScrollView
           style={{ flex: 1 }}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={[sc.listContent, { paddingBottom: Math.max(insets.bottom, 16) + 110 }]}
+          contentContainerStyle={[sc.listContent, { paddingBottom: floatingNavSpace(insets.bottom) }]}
         >
           {statusFilter === 'validated' || statusFilter === 'archived' ? (
             /* Validées (ou écartées), groupées par ville */
@@ -1368,10 +1367,10 @@ export default function EnviesScreen() {
 
       {/* ── Bottom nav ── */}
       <View
-        style={[sc.bottomNav, { bottom: Math.max(insets.bottom, 10) + 16 }]}
+        style={[sc.bottomNav, { bottom: floatingNavBottom(insets.bottom) }]}
         pointerEvents="box-none"
       >
-        <NavButton icon="arrow-back-outline" onPress={() => router.back()} />
+        <NavButton icon={BACK_ICON} onPress={() => router.back()} />
         <NavButton icon="add" iconSize={28} variant="accent" onPress={() => router.push({ pathname: '/trip/[id]/wish/new', params: { id: tripId ?? '' } })} />
         <NavButton
           icon="options-outline"

@@ -11,7 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Colors, Radii, Shadows, Spacing, Typography } from '@/constants/theme';
 import { FilterButton } from '@/components/ui/FilterButton';
-import { NavButton } from '@/components/ui/NavButton';
+import { BACK_ICON, NavButton, floatingNavSpace } from '@/components/ui/NavButton';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTripEvents } from '@/hooks/useTripEvents';
 import { useTripOverview } from '@/hooks/useTripOverview';
@@ -43,7 +43,6 @@ function eventWhen(event: TripEvent): string {
     : null;
   return `${weekday} ${String(d ?? '').padStart(2, '0')}${time ? ` · ${time}` : ''}`;
 }
-const BOTTOM_NAV_SPACE = 110;
 
 function shortDay(day: string): string {
   const [, m, d] = day.split('-').map(Number);
@@ -113,7 +112,7 @@ export default function HelpScreen() {
       <Stack.Screen options={{ headerShown: false }} />
 
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + BOTTOM_NAV_SPACE }]}
+        contentContainerStyle={[styles.content, { paddingBottom: floatingNavSpace(insets.bottom) }]}
         showsVerticalScrollIndicator={false}
       >
         <Text style={styles.title}>On t’aide</Text>
@@ -247,7 +246,7 @@ export default function HelpScreen() {
       </ScrollView>
 
       <View style={[styles.bottomNav, { paddingBottom: Math.max(insets.bottom, Spacing.md) }]}>
-        <NavButton icon="chevron-back" onPress={() => router.back()} />
+        <NavButton icon={BACK_ICON} onPress={() => router.back()} />
       </View>
     </View>
   );

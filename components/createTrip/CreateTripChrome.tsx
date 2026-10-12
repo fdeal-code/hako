@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { Colors, Motion, Radii, Shadows, Spacing, Typography } from '@/constants/theme';
 import { AnimatedPressable } from '@/components/ui/AnimatedPressable';
+import { BACK_ICON } from '@/components/ui/NavButton';
 
 const HEADER_HEIGHT = 56; // hauteur de l'ancien bouton croix : la mise en page ne bouge pas
 const ACTION_SIZE = 64;
@@ -93,7 +94,7 @@ export function StepActions({
         accessibilityRole="button"
         accessibilityLabel="Retour"
       >
-        <Ionicons name="caret-back" size={22} color={Colors.textPrimary} />
+        <Ionicons name={BACK_ICON} size={24} color={Colors.textPrimary} />
       </AnimatedPressable>
       <AnimatedPressable
         style={[styles.cta, variant === 'accent' && styles.ctaAccent, (disabled || loading) && styles.ctaDisabled]}
@@ -129,7 +130,7 @@ export function BackBar({ onBack, bottomInset }: { onBack: () => void; bottomIns
         accessibilityRole="button"
         accessibilityLabel="Retour"
       >
-        <Ionicons name="caret-back" size={22} color={Colors.textPrimary} />
+        <Ionicons name={BACK_ICON} size={24} color={Colors.textPrimary} />
       </AnimatedPressable>
     </View>
   );

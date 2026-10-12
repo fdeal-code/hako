@@ -28,6 +28,7 @@ import { supabase } from '@/services/supabase';
 import { tripEvents } from '@/utils/events';
 import { splitHomeTrips } from '@/utils/homeTrips';
 import { localDayIso } from '@/utils/tripStops';
+import { floatingNavSpace } from '@/components/ui/NavButton';
 
 const SLIDER_VISIBLE_CARDS = 2.3; // la carte coupée à droite invite à faire glisser
 const BELL_SIZE = 56;
@@ -147,7 +148,7 @@ export default function HomeScreen() {
     <View style={styles.root}>
       <ScrollView
         style={{ paddingTop: insets.top }}
-        contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 120 }]}
+        contentContainerStyle={[styles.scroll, { paddingBottom: floatingNavSpace(insets.bottom) }]}
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}

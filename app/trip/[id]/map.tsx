@@ -17,7 +17,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Colors, Fonts, Radii, Spacing, Typography } from '@/constants/theme';
-import { NavButton } from '@/components/ui/NavButton';
+import { BACK_ICON, NavButton } from '@/components/ui/NavButton';
 import { StopMarkers } from '@/components/map/StopMarkers';
 import { CARD_WIDTH_RATIO, CityChip, LegCard, LegPin, PlaceCard, PlacePin } from '@/components/map/TripMapParts';
 import { useTripMap } from '@/hooks/useTripMap';
@@ -196,7 +196,7 @@ export default function TripMapScreen() {
         </ScrollView>
 
         <View style={styles.nav}>
-          <NavButton icon="arrow-back-outline" onPress={() => router.back()} />
+          <NavButton icon={BACK_ICON} onPress={() => router.back()} />
           <NavButton
             icon="add"
             iconSize={28}

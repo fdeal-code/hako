@@ -38,6 +38,22 @@ const VARIANTS: Record<NavButtonVariant, VariantSpec> = {
   accent: { background: Colors.accent,     border: Colors.accent,     content: Colors.white },
 };
 
+/* ─── Barre flottante du bas : une seule règle pour toutes les pages ─── */
+export const NAV_BUTTON_SIZE = SIZE;
+/** Symbole « retour » unique de l'app (celui du dashboard) */
+export const BACK_ICON = 'arrow-back-outline' as const;
+const NAV_MIN_BOTTOM = 10;
+
+/** Hauteur de la barre flottante au-dessus du bas de l'écran */
+export function floatingNavBottom(bottomInset: number): number {
+  return Math.max(bottomInset, NAV_MIN_BOTTOM) + Spacing.md;
+}
+
+/** Espace à laisser sous le contenu pour que la barre ne le recouvre jamais */
+export function floatingNavSpace(bottomInset: number): number {
+  return floatingNavBottom(bottomInset) + SIZE + Spacing.xl;
+}
+
 /* ─── Props ───────────────────────────────────────────────────── */
 export interface NavButtonProps {
   icon: keyof typeof Ionicons.glyphMap;

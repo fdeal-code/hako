@@ -20,7 +20,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Colors, Radii, Shadows, Spacing, Typography } from '@/constants/theme';
 import { NightsSplit } from '@/components/createTrip/NightsSplit';
-import { NavButton } from '@/components/ui/NavButton';
+import { BACK_ICON, NavButton, floatingNavSpace } from '@/components/ui/NavButton';
 import { useTripOverview } from '@/hooks/useTripOverview';
 import { useTripStops } from '@/hooks/useTripStops';
 import { CitySuggestion, geocodeDestination, searchCities } from '@/services/placesService';
@@ -38,7 +38,6 @@ import {
 const SEARCH_DEBOUNCE_MS = 300;
 const MIN_QUERY_LENGTH = 2;
 const BADGE_SIZE = 28;
-const BOTTOM_NAV_SPACE = 110;
 
 function shortDate(day: string): string {
   const [, m, d] = day.split('-');
@@ -178,7 +177,7 @@ export default function ItineraryScreen() {
     <View style={[styles.root, { paddingTop: insets.top }]}>
       <Stack.Screen options={{ headerShown: false }} />
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + BOTTOM_NAV_SPACE }]}
+        contentContainerStyle={[styles.content, { paddingBottom: floatingNavSpace(insets.bottom) }]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
@@ -275,7 +274,7 @@ export default function ItineraryScreen() {
       </ScrollView>
 
       <View style={[styles.bottomNav, { paddingBottom: Math.max(insets.bottom, Spacing.md) }]}>
-        <NavButton icon="chevron-back" onPress={() => router.back()} />
+        <NavButton icon={BACK_ICON} onPress={() => router.back()} />
       </View>
     </View>
   );

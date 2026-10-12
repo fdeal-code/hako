@@ -15,7 +15,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Colors, Fonts, Radii, Shadows, Spacing, Typography } from '@/constants/theme';
-import { NavButton } from '@/components/ui/NavButton';
+import { BACK_ICON, NavButton, floatingNavBottom, floatingNavSpace } from '@/components/ui/NavButton';
 import { placeMeta } from '@/components/map/TripMapParts';
 import { useActivity } from '@/hooks/useActivity';
 import { ActivityMember } from '@/types/activity';
@@ -33,7 +33,6 @@ const MAX_HERO_AVATARS = 4;
 const MAP_HEIGHT = 150;
 const MAP_DELTA = 0.01;
 const STEP = 15;
-const NAV_SPACE = 120;
 const OS: 'ios' | 'android' | 'other' = Platform.OS === 'ios' ? 'ios' : Platform.OS === 'android' ? 'android' : 'other';
 
 function Avatar({ member, size, overlap }: { member: ActivityMember; size: number; overlap?: boolean }) {
@@ -100,7 +99,7 @@ export default function ActivityScreen() {
 
   return (
     <View style={styles.root}>
-      <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + NAV_SPACE }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ paddingBottom: floatingNavSpace(insets.bottom) }} showsVerticalScrollIndicator={false}>
         {/* ── Photo + grand mot ── */}
         <View style={styles.hero}>
           {wish?.image_url
@@ -290,8 +289,8 @@ export default function ActivityScreen() {
       </ScrollView>
 
       {/* ── Barre du bas ── */}
-      <View style={[styles.nav, { bottom: Math.max(insets.bottom, 10) + Spacing.md }]} pointerEvents="box-none">
-        <NavButton icon="arrow-back-outline" onPress={() => router.back()} />
+      <View style={[styles.nav, { bottom: floatingNavBottom(insets.bottom) }]} pointerEvents="box-none">
+        <NavButton icon={BACK_ICON} onPress={() => router.back()} />
         {goUrl && <NavButton icon="navigate" iconSize={24} variant="accent" onPress={() => { void Linking.openURL(goUrl); }} />}
         {!locked && <NavButton icon="trash-outline" onPress={confirmRemove} />}
       </View>

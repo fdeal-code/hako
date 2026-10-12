@@ -27,7 +27,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 
 import { Colors, Fonts, Radii, Spacing } from '@/constants/theme';
-import { NavButton } from '@/components/ui/NavButton';
+import { BACK_ICON, NavButton, floatingNavBottom, floatingNavSpace } from '@/components/ui/NavButton';
 import { MemberAvatar } from '@/components/ui/MemberAvatar';
 import { Trip } from '@/constants/types';
 import { useHomeExpand } from '@/contexts/HomeExpandContext';
@@ -35,7 +35,6 @@ import { supabase } from '@/services/supabase';
 
 /* ─── Constants ──────────────────────────────────────────────── */
 const REGION_DELTA = 0.5;
-const NAV_BUTTON_SIZE = 64;    // bouton + accent de la barre du bas
 
 /* Hero V2 : bandeau photo en haut, crème dessous. Ratio réduit pour que le
    cover se cale sur la LARGEUR des photos paysage (pas de crop latéral). */
@@ -128,7 +127,7 @@ export function ExpandedDashboard({ trip, cardLayout, progress }: Props) {
   /* Tuiles « à venir » : hauteur ajustée pour tenir entre le haut de la
      feuille et la barre du bas, sans scroll */
   const [sheetHeight, setSheetHeight] = useState(0);
-  const navReserve = Math.max(insets.bottom, 10) + Spacing.md + NAV_BUTTON_SIZE + Spacing.md;
+  const navReserve = floatingNavSpace(insets.bottom);
   const [members,      setMembers]      = useState<any[]>([]);
 
   /* ── Région de la carte : coordonnées stockées (Trip Match), sinon
@@ -417,10 +416,10 @@ export function ExpandedDashboard({ trip, cardLayout, progress }: Props) {
 
         {/* ── Bottom nav ── */}
         <Animated.View
-          style={[styles.bottomNav, { bottom: Math.max(insets.bottom, 10) + 16 }, bentoStyle]}
+          style={[styles.bottomNav, { bottom: floatingNavBottom(insets.bottom) }, bentoStyle]}
           pointerEvents="box-none"
         >
-          <NavButton icon="arrow-back-outline" onPress={handleBack} />
+          <NavButton icon={BACK_ICON} onPress={handleBack} />
           {tripStatus === 'past'
             ? <NavButton icon="share-social-outline" iconSize={24} variant="accent" onPress={past.share} />
             : <NavButton icon="add" iconSize={28} variant="accent" onPress={() => router.push({ pathname: '/trip/[id]/add', params: { id: trip.id } })} />

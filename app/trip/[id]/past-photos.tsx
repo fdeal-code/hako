@@ -18,6 +18,7 @@ import { PrintAlbumBanner } from '@/components/past/PrintAlbumBanner';
 import { usePastTrip } from '@/hooks/usePastTrip';
 import { PastMember, TripPhoto } from '@/types/pastTrip';
 import { plural } from '@/utils/dashboardSummary';
+import { BACK_ICON } from '@/components/ui/NavButton';
 
 const COLUMNS = 3;
 const GRID_GAP = Spacing.xs;
@@ -148,7 +149,7 @@ function PhotoViewer({ photos, index, members, currentUserId, onClose, onDelete 
         />
         <View style={[styles.viewerActions, { bottom: insets.bottom + Spacing.md }]}>
           <TouchableOpacity style={styles.viewerBtn} onPress={onClose} accessibilityLabel="Retour">
-            <Ionicons name="caret-back" size={22} color={Colors.white} />
+            <Ionicons name={BACK_ICON} size={24} color={Colors.white} />
           </TouchableOpacity>
           {photo && photo.uploadedBy === currentUserId && (
             <TouchableOpacity style={styles.viewerBtn} onPress={() => onDelete(photo)} accessibilityLabel="Retirer la photo">

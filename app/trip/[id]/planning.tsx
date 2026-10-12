@@ -17,7 +17,7 @@ import { LodgingNudge } from '@/components/partners/LodgingNudge';
 import { useLodgingGaps } from '@/hooks/useLodgingGaps';
 import { stopForNight } from '@/utils/lodgingGaps';
 import { FilterButton } from '@/components/ui/FilterButton';
-import { NavButton } from '@/components/ui/NavButton';
+import { BACK_ICON, NavButton, floatingNavBottom, floatingNavSpace } from '@/components/ui/NavButton';
 import { usePlanning } from '@/hooks/usePlanning';
 import { PlanningEntry } from '@/types/planning';
 import { toMinutes, ticketFor } from '@/utils/ongoingTrip';
@@ -26,7 +26,6 @@ import { stopColor } from '@/utils/tripStops';
 
 const DAY_CHIP_GAP = 5;
 const DAY_CHIP_STEP = 40 + DAY_CHIP_GAP; // largeur pastille + écart (défilement auto vers le jour choisi)
-const NAV_SPACE = 120;
 const MAX_TO_PLAN = 4;
 const MINUTES_PER_HOUR = 60;
 
@@ -126,7 +125,7 @@ export default function PlanningScreen() {
       </View>
 
       {/* ── La journée ── */}
-      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + NAV_SPACE }]} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: floatingNavSpace(insets.bottom) }]} showsVerticalScrollIndicator={false}>
         <Text style={styles.dayHeader}>{p.header}</Text>
         {nightGap && <View style={styles.nudge}><LodgingNudge tripId={tripId ?? ''} stop={nightGap} /></View>}
 
@@ -176,8 +175,8 @@ export default function PlanningScreen() {
       </ScrollView>
 
       {/* ── Barre du bas ── */}
-      <View style={[styles.nav, { bottom: Math.max(insets.bottom, 10) + Spacing.md }]} pointerEvents="box-none">
-        <NavButton icon="arrow-back-outline" onPress={() => router.back()} />
+      <View style={[styles.nav, { bottom: floatingNavBottom(insets.bottom) }]} pointerEvents="box-none">
+        <NavButton icon={BACK_ICON} onPress={() => router.back()} />
         <NavButton icon="add" iconSize={28} variant="accent" onPress={() => router.push({ pathname: '/trip/[id]/plan-add', params: { id: tripId ?? '', day: p.selectedDay } })} />
         <NavButton icon="filter-outline" onPress={() => { setShowFilters(v => !v); if (showFilters) setFilter('all'); }} />
       </View>

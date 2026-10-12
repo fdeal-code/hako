@@ -17,7 +17,7 @@ import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { Colors, Spacing, Radii, Shadows, Typography } from '@/constants/theme';
-import { NavButton } from '@/components/ui/NavButton';
+import { BACK_ICON, NavButton, floatingNavBottom, floatingNavSpace } from '@/components/ui/NavButton';
 import { FilterButton } from '@/components/ui/FilterButton';
 import { supabase } from '@/services/supabase';
 import { PrepStrip } from '@/components/preparation/PrepParts';
@@ -186,8 +186,7 @@ export default function DocumentsScreen() {
     return result;
   })();
 
-  const navBottom = Math.max(insets.bottom, 10) + 16;
-  const navH      = 64;
+  const navBottom = floatingNavBottom(insets.bottom);
 
   /* ── Navigation : ajout et détail (billet) sont des pages plein écran ── */
   const openDoc = (doc: Doc) => {
@@ -250,7 +249,7 @@ export default function DocumentsScreen() {
       ) : (
         <ScrollView
           style={{ flex: 1 }}
-          contentContainerStyle={[s.list, { paddingBottom: navH + navBottom + 20 }]}
+          contentContainerStyle={[s.list, { paddingBottom: floatingNavSpace(insets.bottom) }]}
           showsVerticalScrollIndicator={false}
         >
           {groups.map(group => (
@@ -292,7 +291,7 @@ export default function DocumentsScreen() {
 
       {/* Bottom nav */}
       <View style={[s.bottomNav, { bottom: navBottom }]} pointerEvents="box-none">
-        <NavButton icon="arrow-back-outline" onPress={() => router.back()} />
+        <NavButton icon={BACK_ICON} onPress={() => router.back()} />
         <NavButton icon="add" iconSize={28} variant="accent" onPress={() => router.push({ pathname: '/trip/[id]/document/new', params: { id: tripId ?? '' } })} />
         <NavButton icon="options-outline" onPress={() => {}} />
       </View>
