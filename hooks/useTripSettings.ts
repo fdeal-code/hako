@@ -8,6 +8,7 @@ import { useFocusEffect } from 'expo-router';
 
 import { useAuth } from '@/contexts/AuthContext';
 import { getOrCreateInviteToken } from '@/services/inviteLinkService';
+import { track } from '@/services/telemetryService';
 import { uploadCoverImage } from '@/services/tripService';
 import {
   deleteTrip, getTripSettings, removeTripMember, shiftTripDates, updateTripSettings,
@@ -146,6 +147,7 @@ export function useTripSettings(tripId: string | undefined) {
     if (!settings || !userId) return { error: 'Connecte-toi pour inviter.' };
     const { data, error: tokenError } = await getOrCreateInviteToken(settings.id, userId);
     if (tokenError !== null) return { error: tokenError };
+    track('invite_link_shared', { from: 'settings' }, settings.id);
     return { message: buildTripInviteMessage(data, settings.name) };
   }, [settings, userId]);
 

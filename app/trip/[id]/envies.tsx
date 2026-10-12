@@ -38,6 +38,7 @@ import { tripEvents } from '@/utils/events';
 import { buildWishVoteReminderUrl } from '@/utils/shareLinks';
 import { useTripStops } from '@/hooks/useTripStops';
 import { useWishFilters } from '@/hooks/useWishFilters';
+import { track } from '@/services/telemetryService';
 import { PrepPill } from '@/components/preparation/PrepParts';
 import { activeFilterCount, compareWishes, matchesWishFilters } from '@/utils/wishFilters';
 
@@ -1107,6 +1108,7 @@ export default function EnviesScreen() {
         : [...w.wish_votes.filter(v => v.user_id !== currentUserId),
            { id: existing?.id ?? `${wishId}-${currentUserId}`, wish_id: wishId, user_id: currentUserId, vote }];
 
+      if (!shouldRemove) track('wish_voted', { vote }, w.trip_id);
       const newStatus = computeStatus(newVotes, memberCount);
       if (newStatus !== w.status)
         supabase.from('wishes').update({ status: newStatus }).eq('id', wishId).then(() => {});

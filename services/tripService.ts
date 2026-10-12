@@ -8,6 +8,7 @@
 import { supabase } from '@/services/supabase';
 import { fileExtension, uploadLocalFile } from '@/services/storageService';
 import { UserRole } from '@/constants/types';
+import { track } from '@/services/telemetryService';
 
 export type ServiceResult<T> =
   | { data: T; error: null }
@@ -103,6 +104,7 @@ export async function createTrip(input: CreateTripInput): Promise<ServiceResult<
     return serviceError(`Voyage créé mais ajout du propriétaire impossible : ${memberError.message}`);
   }
 
+  track('trip_created', {}, trip.id);
   return { data: trip, error: null };
 }
 
@@ -158,5 +160,6 @@ export async function inviteByEmails(
     emails.map(email => ({ trip_id: tripId, invited_email: email, invited_by: invitedBy, status: 'pending' })),
   );
   if (error) return serviceError(error.message);
+  track('invite_email_sent', { count: emails.length, at_creation: true }, tripId);
   return { data: true, error: null };
 }

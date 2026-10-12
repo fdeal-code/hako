@@ -22,6 +22,7 @@ import {
   TripMatch,
   TripMatchDetail,
 } from '@/types/tripMatch';
+import { track } from '@/services/telemetryService';
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 const FN_GENERATE_PROPOSALS = 'generate-match-proposals';
@@ -74,6 +75,7 @@ export async function createMatch(
     void notifyMatchInvite(match.id, title.trim(), others, userId);
   }
 
+  track('match_created', { friends: participantIds.length });
   return { data: match, error: null };
 }
 

@@ -3,6 +3,7 @@
 
 import { supabase } from '@/services/supabase';
 import { serviceError, ServiceResult } from '@/services/tripService';
+import { track } from '@/services/telemetryService';
 
 export type InvitationStatus = 'pending' | 'accepted' | 'declined';
 export interface TripInvitation { id: string; invited_email: string; status: InvitationStatus; created_at: string }
@@ -38,6 +39,7 @@ export async function inviteByEmail(tripId: string, invitedBy: string, email: st
     .select('id, invited_email, status, created_at')
     .single();
   if (error) return serviceError(error.message);
+  track('invite_email_sent', { count: 1 }, tripId);
   return { data: data as TripInvitation, error: null };
 }
 

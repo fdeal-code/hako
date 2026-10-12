@@ -11,6 +11,7 @@ import { uploadPrivateFile } from '@/services/storageService';
 import { serviceError, ServiceResult } from '@/services/tripService';
 import { DocCategory, TicketDetails, TripDocumentRow } from '@/types/documents';
 import { storagePath } from '@/utils/storagePath';
+import { track } from '@/services/telemetryService';
 
 const BUCKET = 'documents';
 const OFFLINE_DIR = 'hako-documents';
@@ -60,6 +61,7 @@ export async function uploadDocument(input: NewDocumentInput): Promise<ServiceRe
     .select()
     .single();
   if (error || !data) return serviceError(error?.message ?? 'Ajout du document impossible.');
+  track('document_added', { category: input.category, shared: input.isShared }, input.tripId);
   return { data: data as TripDocumentRow, error: null };
 }
 

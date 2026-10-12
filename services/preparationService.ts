@@ -5,6 +5,7 @@ import { supabase } from '@/services/supabase';
 import { serviceError, ServiceResult } from '@/services/tripService';
 import { CHECKLIST_ITEMS } from '@/types/checklist';
 import { PrepMember, PrepSummary, PrepTask } from '@/types/preparation';
+import { track } from '@/services/telemetryService';
 
 const TASK_TYPE = 'orga';
 const TASK_COLUMNS = 'id, title, description, done, assigned_to, added_by, created_at, is_private';
@@ -64,6 +65,7 @@ export async function addPrepTask(tripId: string, userId: string, title: string,
     .select(TASK_COLUMNS)
     .single();
   if (error) return serviceError(error.message);
+  track('prep_task_added', { private: isPrivate }, tripId);
   return { data: toTask(data as TaskRowDb), error: null };
 }
 

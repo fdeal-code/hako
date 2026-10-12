@@ -1,8 +1,8 @@
 import { takePendingInvite } from '@/utils/pendingInvite';
-import React, { useEffect } from 'react';
-import { View, ActivityIndicator } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { View, ActivityIndicator, Text, TouchableOpacity } from 'react-native';
 import { DefaultTheme, ThemeProvider } from 'expo-router/react-navigation';
-import { Stack, useRouter, useSegments } from 'expo-router';
+import { ErrorBoundaryProps, Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -15,7 +15,9 @@ import {
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { ShareIntentProvider, useShareIntentContext } from 'expo-share-intent';
 
-import { Colors } from '@/constants/theme';
+import { Colors, Radii, Spacing, Typography } from '@/constants/theme';
+import { installTelemetry, reportError, track } from '@/services/telemetryService';
+import { routeName } from '@/utils/telemetry';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 
 const hakoTheme = {
@@ -36,6 +38,16 @@ function AuthGate() {
   const { hasShareIntent } = useShareIntentContext();
   const segments = useSegments();
   const router   = useRouter();
+
+  // Mesure d'usage : une ouverture par lancement (une fois connecté), puis
+  // chaque écran vu (sans identifiant : « /trip/[id]/envies »)
+  const opened = useRef(false);
+  const route = routeName(segments);
+  useEffect(() => {
+    if (!session) return;
+    if (!opened.current) { opened.current = true; track('app_open'); }
+    track('screen_view', { route });
+  }, [session, route]);
 
   useEffect(() => {
     if (loading) return;
@@ -122,6 +134,28 @@ function AuthGate() {
 export const unstable_settings = {
   anchor: '(tabs)',
 };
+
+installTelemetry(); // erreurs non rattrapées + envoi des événements en arrière-plan
+
+/* ─── Écran d'erreur (remplace l'écran rouge) : signale le plantage ───── */
+export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+  useEffect(() => { void reportError(error, { fatal: true }); }, [error]);
+  return (
+    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.md, padding: Spacing.xl, backgroundColor: Colors.background }}>
+      <Text style={{ ...Typography.displayTitle, color: Colors.textPrimary, textAlign: 'center' }}>Oups…</Text>
+      <Text style={{ ...Typography.body, color: Colors.textMuted, textAlign: 'center' }}>
+        Quelque chose s’est mal passé. On a prévenu l’équipe, tu peux réessayer.
+      </Text>
+      <TouchableOpacity
+        onPress={() => { void retry(); }}
+        style={{ paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md, borderRadius: Radii.full, backgroundColor: Colors.accent }}
+        accessibilityRole="button"
+      >
+        <Text style={{ ...Typography.button, color: Colors.white }}>Réessayer</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
 
 export default function RootLayout() {
   // Titres des maquettes V2 (Fonts.display / Fonts.displayBold dans constants/theme)

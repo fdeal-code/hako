@@ -7,6 +7,7 @@ import { supabase } from '@/services/supabase';
 import { serviceError, ServiceResult } from '@/services/tripService';
 import { FoundPlace, LinkPreview, NewWishInput, PlaceSuggestion } from '@/types/wishDraft';
 import { captionToQuery, detectLinkSource, distanceKm } from '@/utils/wishLinks';
+import { track } from '@/services/telemetryService';
 
 const GOOGLE_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ?? '';
 const PLACES_URL = 'https://maps.googleapis.com/maps/api/place';
@@ -182,6 +183,7 @@ export async function createWish(input: NewWishInput): Promise<ServiceResult<{ i
     ({ data, error } = await supabase.from('wishes').insert(row).select('id').single());
   }
   if (error) return serviceError(error.message);
+  track('wish_added', { kind: input.kind, has_link: !!input.linkUrl, has_price: input.pricePerPerson !== null }, input.tripId);
   return { data: { id: (data as { id: string }).id }, error: null };
 }
 

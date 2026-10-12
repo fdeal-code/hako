@@ -5,6 +5,7 @@
 import { supabase } from '@/services/supabase';
 import { serviceError, ServiceResult } from '@/services/tripService';
 import { TripEvent } from '@/types/events';
+import { track } from '@/services/telemetryService';
 
 const FUNCTION_NAME = 'fetch-trip-events';
 
@@ -44,5 +45,6 @@ export async function addEventToWishes(event: TripEvent, userId: string): Promis
     event_id:  event.id,
   });
   if (error) return serviceError(error.message);
+  track('wish_added', { kind: 'place', source: 'event' }, event.trip_id);
   return { data: true, error: null };
 }

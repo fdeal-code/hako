@@ -5,6 +5,7 @@ import { supabase } from '@/services/supabase';
 import { serviceError, ServiceResult } from '@/services/tripService';
 import { BudgetMember } from '@/types/budget';
 import { BudgetExpense } from '@/utils/budgetSummary';
+import { track } from '@/services/telemetryService';
 
 interface MemberRowDb {
   user_id: string;
@@ -68,5 +69,6 @@ export async function addExpense(input: NewExpense): Promise<ServiceResult<strin
     await supabase.from('expenses').delete().eq('id', expenseId);
     return serviceError(splitError.message);
   }
+  track('expense_added', { category: input.category, people: input.splits.length }, input.tripId);
   return { data: expenseId, error: null };
 }

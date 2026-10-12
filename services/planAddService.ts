@@ -4,6 +4,7 @@
 
 import { supabase } from '@/services/supabase';
 import { serviceError, ServiceResult } from '@/services/tripService';
+import { track } from '@/services/telemetryService';
 
 export interface PlanCandidate {
   id: string;
@@ -86,5 +87,6 @@ export async function createPlanningEntry(input: NewPlanningEntry): Promise<Serv
     is_locked: false,
   }).select('id').single();
   if (error) return serviceError(error.message);
+  track('planning_added', { from_wish: !!input.wishId }, input.tripId);
   return { data: { id: (data as { id: string }).id }, error: null };
 }

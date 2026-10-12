@@ -10,10 +10,12 @@ import { fileExtension, uploadLocalFile } from '@/services/storageService';
 import { serviceError, ServiceResult } from '@/services/tripService';
 import { parseAuthRedirect } from '@/utils/authLinks';
 import { authErrorMessage } from '@/utils/authValidation';
+import { track } from '@/services/telemetryService';
 
 export async function signInWithEmail(email: string, password: string): Promise<ServiceResult<true>> {
   const { error } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
   if (error) return serviceError(authErrorMessage(error.message));
+  track('login');
   return { data: true, error: null };
 }
 
@@ -36,6 +38,7 @@ export async function signUpAccount(input: SignUpInput): Promise<ServiceResult<{
     if (url) await supabase.auth.updateUser({ data: { avatar_url: url } });
   }
   await supabase.from('profiles').upsert({ id: user.id, email, nickname, avatar_url: avatarUrl });
+  track('signup_completed', { with_photo: !!input.photoUri });
   return { data: { needsConfirmation: false }, error: null };
 }
 

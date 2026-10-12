@@ -174,6 +174,7 @@ Tables principales :
 - Test : `npx supabase db query --linked -f supabase/tests/rls_core_test.sql` (21 scénarios, tout est annulé à la fin).
 - Préparatifs : les tâches d'orga sont des `wishes` de type `orga` ; `is_private = true` → visibles/modifiables seulement par leur auteur (RLS `wishes_*`, migration `20261009180000`). Test : `supabase/tests/private_tasks_test.sql` (11 scénarios).
 - Documents (migration `20261012100000`) : bucket `documents` **privé** ; `documents.file_url` = chemin `<trip_id>/<fichier>`, ouvert par lien signé (`fileLink` dans `services/documentService.ts`) ; fichier lisible seulement par les membres qui voient le document ; document « Perso » (`is_shared = false`) visible par son auteur seul. Test : `supabase/tests/private_documents_test.sql` (12 vérifications).
+- Mesure d'usage et plantages (migration `20261012110000`) : tables `app_events` / `app_errors`, écriture seule depuis l'app (aucune relecture), jamais de contenu personnel. `track()` / `reportError()` dans `services/telemetryService.ts` ; écran d'erreur `ErrorBoundary` dans `app/_layout.tsx`. Chiffres : `npx supabase db query --linked -f supabase/queries/beta_metrics.sql`. Test : `supabase/tests/telemetry_test.sql`.
 - La clé publique (anon) ne lit plus rien sans connexion : les scripts de démo passent par `npx supabase db query --linked`.
 - `.env` non tracké par git → recréer avec :
   - `EXPO_PUBLIC_SUPABASE_URL` + `EXPO_PUBLIC_SUPABASE_ANON_KEY`

@@ -9,6 +9,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Friend, getAcceptedFriends } from '@/services/friendService';
 import { cancelInvitation, getInviteContext, inviteByEmail, TripInvitation } from '@/services/invitationService';
 import { getOrCreateInviteToken } from '@/services/inviteLinkService';
+import { track } from '@/services/telemetryService';
 import { isValidEmail } from '@/utils/authValidation';
 import { buildTripInviteMessage } from '@/utils/shareLinks';
 
@@ -98,6 +99,7 @@ export function useTripInvite(tripId: string) {
     const { data: token, error: err } = await getOrCreateInviteToken(tripId, userId);
     setBusyId(null);
     if (err !== null) { setError(err); return; }
+    track('invite_link_shared', { from: 'invite' }, tripId);
     await Share.share({ message: buildTripInviteMessage(token, tripName || 'notre voyage') });
   }, [tripId, userId, tripName]);
 

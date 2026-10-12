@@ -20,6 +20,7 @@ import {
 } from '@/utils/bookingImport';
 import { splitEqually } from '@/utils/expenseForm';
 import { localDayIso, stopForDay } from '@/utils/tripStops';
+import { track } from '@/services/telemetryService';
 
 const FN_PARSE_BOOKING = 'parse-booking';
 const BUCKET = 'documents';
@@ -53,7 +54,11 @@ export async function parseBookings(tripId: string, source: ImportSource): Promi
     body = { trip_id: tripId, file: { base64, media_type: source.mimeType } };
   }
   const { data, error } = await supabase.functions.invoke<{ bookings: ParsedBooking[] }>(FN_PARSE_BOOKING, { body });
-  if (error) return serviceError(await functionError(error));
+  if (error) {
+    track('booking_import_failed', { source: source.type === 'text' ? 'text' : source.mimeType.includes('pdf') ? 'pdf' : 'image' }, tripId);
+    return serviceError(await functionError(error));
+  }
+  track('booking_import_parsed', { count: data?.bookings.length ?? 0, source: source.type === 'text' ? 'text' : source.mimeType.includes('pdf') ? 'pdf' : 'image' }, tripId);
   return { data: data?.bookings ?? [], error: null };
 }
 
@@ -170,5 +175,6 @@ export async function importBookings(input: ImportInput): Promise<ServiceResult<
       result.expenses += 1;
     }
   }
+  track('booking_import_saved', { documents: result.documents, planning: result.planning, expenses: result.expenses }, input.tripId);
   return { data: result, error: null };
 }

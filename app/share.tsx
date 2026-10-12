@@ -14,6 +14,7 @@ import { Colors, Radii, Shadows, Spacing, Typography } from '@/constants/theme';
 import { BackBar, CreateTripHeader } from '@/components/createTrip/CreateTripChrome';
 import { setPendingImport } from '@/hooks/useBookingImport';
 import { useShareIntake } from '@/hooks/useShareIntake';
+import { track } from '@/services/telemetryService';
 import { MyTrip } from '@/services/myTripsService';
 import { LINK_SOURCE_META } from '@/types/wishDraft';
 import { TripMoment } from '@/utils/shareIntake';
@@ -31,6 +32,7 @@ export default function ShareScreen() {
   const close = () => { s.done(); router.replace('/(tabs)'); };
   const booking = s.bookingSource;
   const pick = (trip: MyTrip) => {
+    track('share_received', { mode: s.mode }, trip.id);
     if (booking) {
       setPendingImport(booking);
       s.done();

@@ -6,6 +6,7 @@ import * as Crypto from 'expo-crypto';
 import { supabase } from '@/services/supabase';
 import { serviceError, ServiceResult } from '@/services/tripService';
 import { InvitePreview } from '@/types/invite';
+import { track } from '@/services/telemetryService';
 
 const TABLE = 'trip_invite_links';
 const INVALID_TOKEN = 'invalid_token';
@@ -47,5 +48,6 @@ export async function joinTripWithToken(token: string): Promise<ServiceResult<st
       ? 'Ce lien d’invitation n’est plus valide.'
       : error.message);
   }
+  track('trip_joined', { via: 'link' }, data as string);
   return { data: data as string, error: null };
 }

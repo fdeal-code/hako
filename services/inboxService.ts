@@ -5,6 +5,7 @@
 import { supabase } from '@/services/supabase';
 import { serviceError, ServiceResult } from '@/services/tripService';
 import { FriendRequest, PendingInvitation } from '@/types/inbox';
+import { track } from '@/services/telemetryService';
 
 export async function getPendingInvitations(email: string): Promise<ServiceResult<PendingInvitation[]>> {
   const { data, error } = await supabase
@@ -26,6 +27,7 @@ export async function acceptInvitation(invitation: PendingInvitation, userId: st
     .from('trip_members')
     .insert({ trip_id: invitation.trip_id, user_id: userId, role: 'member' });
   if (error) return serviceError(error.message);
+  track('trip_joined', { via: 'invitation' }, invitation.trip_id);
   return { data: true, error: null };
 }
 
